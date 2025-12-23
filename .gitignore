@@ -1,0 +1,5 @@
+dataset/google_streetview/test
+dataset/google_streetview/node_modules
+dataset/google_streetview/package-lock.json
+dataset/google_streetview/package.json
+dataset/google_streetview/tsconfig.json
