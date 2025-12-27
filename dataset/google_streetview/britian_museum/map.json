@@ -1,0 +1,1473 @@
+{
+  "objects": [
+    {
+      "name": "10",
+      "records": [
+        {
+          "level": "0",
+          "description": "a",
+          "id": "1",
+          "nearest_other_place": [
+            "7"
+          ],
+          "lat": 51.5187723,
+          "lng": -0.1273409,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "a",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5188455,
+          "lng": -0.1274177,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "a",
+          "id": "3",
+          "nearest_other_place": [
+            "b"
+          ],
+          "lat": 51.5188819,
+          "lng": -0.1275383,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "a",
+          "id": "4",
+          "nearest_other_place": [
+            "c"
+          ],
+          "lat": 51.5189064,
+          "lng": -0.1275902,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "b",
+          "id": "5",
+          "nearest_other_place": [
+            "a"
+          ],
+          "lat": 51.5189073,
+          "lng": -0.1274805,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "b",
+          "id": "6",
+          "nearest_other_place": [
+            "c"
+          ],
+          "lat": 51.5189715,
+          "lng": -0.1275259,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "c",
+          "id": "7",
+          "nearest_other_place": [
+            "a",
+            "b"
+          ],
+          "lat": 51.5189763,
+          "lng": -0.127609,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "c",
+          "id": "8",
+          "nearest_other_place": [
+            "23"
+          ],
+          "lat": 51.519035,
+          "lng": -0.1276697,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "11",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "6",
+            "12"
+          ],
+          "lat": 51.5186329,
+          "lng": -0.127073,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "12",
+      "records": [
+        {
+          "level": "0",
+          "description": "a",
+          "id": "1",
+          "nearest_other_place": [
+            "11"
+          ],
+          "lat": 51.5185955,
+          "lng": -0.1271603,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5185775,
+          "lng": -0.1272337,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "b",
+          "id": "3",
+          "nearest_other_place": [
+            "13"
+          ],
+          "lat": 51.5185216,
+          "lng": -0.1273363,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "out",
+          "id": "1",
+          "nearest_other_place": [
+            "stairs",
+            "pizzeria",
+            "toilets",
+            "level access lift"
+          ],
+          "lat": 51.5184864,
+          "lng": -0.1274185,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "13",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [],
+          "lat": 51.518649,
+          "lng": -0.1271954,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "stairs down"
+          ],
+          "lat": 51.5186469,
+          "lng": -0.1273079,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "12"
+          ],
+          "lat": 51.5185694,
+          "lng": -0.1273871,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [],
+          "lat": 51.5186984,
+          "lng": -0.1272558,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "5",
+          "nearest_other_place": [
+            "14"
+          ],
+          "lat": 51.5186254,
+          "lng": -0.1274493,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "14",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "13",
+            "15"
+          ],
+          "lat": 51.5186601,
+          "lng": -0.1274834,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "15",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "14"
+          ],
+          "lat": 51.5186943,
+          "lng": -0.1275213,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5187817,
+          "lng": -0.1275423,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [],
+          "lat": 51.5187489,
+          "lng": -0.1276234,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "16"
+          ],
+          "lat": 51.5188365,
+          "lng": -0.127681,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "16",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "15"
+          ],
+          "lat": 51.5188507,
+          "lng": -0.1277345,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.518884,
+          "lng": -0.1276603,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "stairs up",
+            "17"
+          ],
+          "lat": 51.5188528,
+          "lng": -0.1277712,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "17",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [],
+          "lat": 51.5189084,
+          "lng": -0.1277306,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "16"
+          ],
+          "lat": 51.51888,
+          "lng": -0.1278011,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [],
+          "lat": 51.5189862,
+          "lng": -0.1278393,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "23"
+          ],
+          "lat": 51.5190307,
+          "lng": -0.1278403,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "5",
+          "nearest_other_place": [
+            "18"
+          ],
+          "lat": 51.518978,
+          "lng": -0.1279072,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "6",
+          "nearest_other_place": [],
+          "lat": 51.5190757,
+          "lng": -0.1279454,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "7",
+          "nearest_other_place": [
+            "19"
+          ],
+          "lat": 51.519166,
+          "lng": -0.1280478,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "19",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "17"
+          ],
+          "lat": 51.5192091,
+          "lng": -0.1280875,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "20"
+          ],
+          "lat": 51.5192469,
+          "lng": -0.1281584,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "18",
+      "records": [
+        {
+          "level": "0",
+          "description": "small",
+          "id": "1",
+          "nearest_other_place": [
+            "17",
+            "a",
+            "b",
+            "mid"
+          ],
+          "lat": 51.5189666,
+          "lng": -0.127993,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "a",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5188423,
+          "lng": -0.1278574,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "a",
+          "id": "3",
+          "nearest_other_place": [
+            "small"
+          ],
+          "lat": 51.5189084,
+          "lng": -0.1279295,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "b",
+          "id": "4",
+          "nearest_other_place": [
+            "small"
+          ],
+          "lat": 51.5190238,
+          "lng": -0.1280504,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "b",
+          "id": "5",
+          "nearest_other_place": [],
+          "lat": 51.5190792,
+          "lng": -0.1281112,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "bot",
+          "id": "6",
+          "nearest_other_place": [
+            "mid"
+          ],
+          "lat": 51.5187096,
+          "lng": -0.1278836,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "7",
+          "nearest_other_place": [],
+          "lat": 51.5188254,
+          "lng": -0.1280066,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "8",
+          "nearest_other_place": [
+            "small"
+          ],
+          "lat": 51.5189354,
+          "lng": -0.1280535,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "9",
+          "nearest_other_place": [],
+          "lat": 51.5189611,
+          "lng": -0.1281506,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "top",
+          "id": "10",
+          "nearest_other_place": [
+            "mid"
+          ],
+          "lat": 51.5191337,
+          "lng": -0.1283333,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "19",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "17"
+          ],
+          "lat": 51.5192091,
+          "lng": -0.1280875,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "20"
+          ],
+          "lat": 51.5192469,
+          "lng": -0.1281584,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "20",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "19"
+          ],
+          "lat": 51.5193082,
+          "lng": -0.1282133,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "21"
+          ],
+          "lat": 51.5193953,
+          "lng": -0.1282356,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "stairs up 0.5",
+            "20a"
+          ],
+          "lat": 51.519374,
+          "lng": -0.1282907,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "20a",
+      "records": [
+        {
+          "level": "0.5",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "stairs down 0",
+            "20"
+          ],
+          "lat": 51.5194081,
+          "lng": -0.1282627,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0.5",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5192792,
+          "lng": -0.1281239,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "21",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "22"
+          ],
+          "lat": 51.5193028,
+          "lng": -0.1280477,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "west stairs",
+            "lift",
+            "shop",
+            "stairs down b1",
+            "77"
+          ],
+          "lat": 51.5194353,
+          "lng": -0.1281012,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "20"
+          ],
+          "lat": 51.5193932,
+          "lng": -0.1281458,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "22",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "23"
+          ],
+          "lat": 51.5191282,
+          "lng": -0.1278253,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.519184,
+          "lng": -0.1278428,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "21"
+          ],
+          "lat": 51.5192489,
+          "lng": -0.1278696,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "23",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "10"
+          ],
+          "lat": 51.5190428,
+          "lng": -0.1276828,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "8"
+          ],
+          "lat": 51.5190761,
+          "lng": -0.1276694,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "17"
+          ],
+          "lat": 51.5190563,
+          "lng": -0.127778,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "22"
+          ],
+          "lat": 51.5191041,
+          "lng": -0.1277468,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "4",
+      "records": [
+        {
+          "level": "0",
+          "description": "bot",
+          "id": "1",
+          "nearest_other_place": [
+            "6"
+          ],
+          "lat": 51.5188178,
+          "lng": -0.1270997,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "bot",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5188878,
+          "lng": -0.1271997,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "bot",
+          "id": "3",
+          "nearest_other_place": [],
+          "lat": 51.5189514,
+          "lng": -0.1273088,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "bot",
+          "id": "4",
+          "nearest_other_place": [
+            "mid"
+          ],
+          "lat": 51.5190593,
+          "lng": -0.1274029,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "5",
+          "nearest_other_place": [
+            "bot"
+          ],
+          "lat": 51.5191307,
+          "lng": -0.1274777,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "6",
+          "nearest_other_place": [
+            "great court",
+            "toilets",
+            "collections shop",
+            "court cafe"
+          ],
+          "lat": 51.5191994,
+          "lng": -0.1274436,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "7",
+          "nearest_other_place": [
+            "8"
+          ],
+          "lat": 51.5191487,
+          "lng": -0.1275591,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "mid",
+          "id": "8",
+          "nearest_other_place": [
+            "top"
+          ],
+          "lat": 51.5192132,
+          "lng": -0.1275342,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "top",
+          "id": "9",
+          "nearest_other_place": [
+            "mid"
+          ],
+          "lat": 51.5192882,
+          "lng": -0.12758,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "top",
+          "id": "10",
+          "nearest_other_place": [],
+          "lat": 51.5193489,
+          "lng": -0.1276883,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "top",
+          "id": "11",
+          "nearest_other_place": [
+            "west stairs",
+            "lift"
+          ],
+          "lat": 51.5194879,
+          "lng": -0.1278369,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "top",
+          "id": "12",
+          "nearest_other_place": [
+            "9"
+          ],
+          "lat": 51.5194784,
+          "lng": -0.1278906,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "6",
+      "records": [
+        {
+          "level": "0",
+          "description": "small",
+          "id": "1",
+          "nearest_other_place": [
+            "South cloakroom"
+          ],
+          "lat": 51.5187024,
+          "lng": -0.1269008,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "small",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5186807,
+          "lng": -0.1269666,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "small",
+          "id": "3",
+          "nearest_other_place": [
+            "11"
+          ],
+          "lat": 51.5186609,
+          "lng": -0.1269992,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "big",
+          "id": "4",
+          "nearest_other_place": [],
+          "lat": 51.5187865,
+          "lng": -0.1269039,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "big",
+          "id": "5",
+          "nearest_other_place": [
+            "4"
+          ],
+          "lat": 51.5187674,
+          "lng": -0.1270438,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "big",
+          "id": "6",
+          "nearest_other_place": [],
+          "lat": 51.5187214,
+          "lng": -0.1271083,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "big",
+          "id": "7",
+          "nearest_other_place": [
+            "7"
+          ],
+          "lat": 51.5187117,
+          "lng": -0.1271558,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "7",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "6"
+          ],
+          "lat": 51.5187726,
+          "lng": -0.1272266,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "10"
+          ],
+          "lat": 51.5188021,
+          "lng": -0.1272564,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [],
+          "lat": 51.5189015,
+          "lng": -0.1273638,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "8"
+          ],
+          "lat": 51.5190157,
+          "lng": -0.1274895,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "77",
+      "records": [
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [],
+          "lat": 51.5193175,
+          "lng": -0.1279399,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5193711,
+          "lng": -0.1279953,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "78"
+          ],
+          "lat": 51.5193322,
+          "lng": -0.128076,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "stairs up 0",
+            "21"
+          ],
+          "lat": 51.5194365,
+          "lng": -0.1281459,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "78",
+      "records": [
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "77"
+          ],
+          "lat": 51.5192931,
+          "lng": -0.1281694,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "b1",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.519324,
+          "lng": -0.1282067,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "8",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "7"
+          ],
+          "lat": 51.5190457,
+          "lng": -0.1275289,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [
+            "7"
+          ],
+          "lat": 51.5190788,
+          "lng": -0.1275862,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "4"
+          ],
+          "lat": 51.5191337,
+          "lng": -0.1275962,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "23"
+          ],
+          "lat": 51.5191167,
+          "lng": -0.1276369,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "5",
+          "nearest_other_place": [
+            "9"
+          ],
+          "lat": 51.5191948,
+          "lng": -0.127693,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "9",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "8"
+          ],
+          "lat": 51.5192073,
+          "lng": -0.1277104,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5193004,
+          "lng": -0.1278044,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "4",
+            "west stairs"
+          ],
+          "lat": 51.519434,
+          "lng": -0.1279488,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "Main entrance",
+      "records": [
+        {
+          "level": "0",
+          "description": "out",
+          "id": "1",
+          "nearest_other_place": [
+            "great russell street"
+          ],
+          "lat": 51.5186924,
+          "lng": -0.1260562,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "out",
+          "id": "2",
+          "nearest_other_place": [
+            "in"
+          ],
+          "lat": 51.5187992,
+          "lng": -0.1262167,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "out"
+          ],
+          "lat": 51.5188718,
+          "lng": -0.1264037,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "4",
+          "nearest_other_place": [
+            "South cloakroom"
+          ],
+          "lat": 51.5188998,
+          "lng": -0.1264377,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    },
+    {
+      "name": "South cloakroom",
+      "records": [
+        {
+          "level": "0",
+          "description": "in",
+          "id": "1",
+          "nearest_other_place": [
+            "Main entrance"
+          ],
+          "lat": 51.5188514,
+          "lng": -0.1265562,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "2",
+          "nearest_other_place": [],
+          "lat": 51.5187774,
+          "lng": -0.1267305,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        },
+        {
+          "level": "0",
+          "description": "in",
+          "id": "3",
+          "nearest_other_place": [
+            "6"
+          ],
+          "lat": 51.5187323,
+          "lng": -0.1268364,
+          "heading": "",
+          "panoId": "",
+          "zoom": ""
+        }
+      ]
+    }
+  ]
+}
