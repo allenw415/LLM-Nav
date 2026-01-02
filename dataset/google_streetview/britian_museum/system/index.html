@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Street View Graph Navigator (330/60/150/240)</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      #wrap { height: 100%; display: grid; grid-template-rows: auto 1fr; }
+      #toolbar{
+        display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+        padding:10px; border-bottom:1px solid #333;
+        font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;
+      }
+      #toolbar button{ padding:6px 10px; }
+      #toolbar select{ padding:6px 10px; max-width:560px; }
+      #status{ margin-left:auto; font-size:14px; opacity:.9; }
+      #pano{ height:100%; width:100%; }
+      .hint{ opacity:.75; font-size:12px; }
+      .group{ display:inline-flex; gap:6px; align-items:center; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="toolbar">
+        <div class="group">
+          <span>Node</span>
+          <select id="nodeSelect"></select>
+        </div>
+
+        <div class="group">
+          <button id="moveFront">前進</button>
+          <button id="moveLeft">左移</button>
+          <button id="moveBack">後退</button>
+          <button id="moveRight">右移</button>
+        </div>
+
+        <div class="group">
+          <button id="turnLeft">左轉</button>
+          <button id="turnRight">右轉</button>
+        </div>
+
+        <div class="group">
+          <button id="pitchUp">向上 (60)</button>
+          <button id="pitchLevel">水平 (90)</button>
+          <button id="pitchDown">向下 (120)</button>
+        </div>
+
+        <div class="group">
+          <button id="zoomIn">Zoom +</button>
+          <button id="zoomOut">Zoom -</button>
+        </div>
+
+        <span class="hint">
+          快捷鍵：↑↓←→ 移動，A/D 轉向，W/S 俯仰(60/90/120)，+/- 縮放
+        </span>
+
+        <div id="status"></div>
+      </div>
+
+      <div id="pano"></div>
+    </div>
+
+    <!-- 你自己準備的：window.GMAPS_API_KEY = "..." -->
+    <script src="../../../../config/env.js"></script>
+
+    <!-- 你自己準備的：window.SV_INIT = { startNodeId, startHeadingIdx }（可選） -->
+    <script src="../../../../config/init.js"></script>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

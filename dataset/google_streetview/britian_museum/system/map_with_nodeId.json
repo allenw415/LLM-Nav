@@ -4,7 +4,7 @@
       "name": "10",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "a",
           "id": "1",
           "nearest_other_place": [
@@ -14,10 +14,11 @@
           "lng": -0.1273409,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "a",
           "id": "2",
           "nearest_other_place": [],
@@ -25,10 +26,11 @@
           "lng": -0.1274177,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "a",
           "id": "3",
           "nearest_other_place": [
@@ -38,10 +40,11 @@
           "lng": -0.1275383,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "a",
           "id": "4",
           "nearest_other_place": [
@@ -51,10 +54,11 @@
           "lng": -0.1275902,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "b",
           "id": "5",
           "nearest_other_place": [
@@ -64,10 +68,11 @@
           "lng": -0.1274805,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__5"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "b",
           "id": "6",
           "nearest_other_place": [
@@ -77,10 +82,11 @@
           "lng": -0.1275259,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__6"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "c",
           "id": "7",
           "nearest_other_place": [
@@ -91,10 +97,11 @@
           "lng": -0.127609,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__7"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "c",
           "id": "8",
           "nearest_other_place": [
@@ -104,7 +111,8 @@
           "lng": -0.1276697,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "10__0__8"
         }
       ]
     },
@@ -112,7 +120,7 @@
       "name": "11",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -123,7 +131,8 @@
           "lng": -0.127073,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "11__0__1"
         }
       ]
     },
@@ -131,7 +140,7 @@
       "name": "12",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "a",
           "id": "1",
           "nearest_other_place": [
@@ -141,10 +150,11 @@
           "lng": -0.1271603,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "12__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "mid",
           "id": "2",
           "nearest_other_place": [],
@@ -152,10 +162,11 @@
           "lng": -0.1272337,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "12__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "b",
           "id": "3",
           "nearest_other_place": [
@@ -165,12 +176,13 @@
           "lng": -0.1273363,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "12__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "out",
-          "id": "1",
+          "id": "4",
           "nearest_other_place": [
             "stairs",
             "pizzeria",
@@ -181,7 +193,8 @@
           "lng": -0.1274185,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "12__0__4"
         }
       ]
     },
@@ -189,7 +202,7 @@
       "name": "13",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [],
@@ -197,10 +210,11 @@
           "lng": -0.1271954,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "13__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -210,10 +224,11 @@
           "lng": -0.1273079,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "13__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -223,10 +238,11 @@
           "lng": -0.1273871,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "13__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [],
@@ -234,10 +250,11 @@
           "lng": -0.1272558,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "13__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "5",
           "nearest_other_place": [
@@ -247,7 +264,8 @@
           "lng": -0.1274493,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "13__0__5"
         }
       ]
     },
@@ -255,7 +273,7 @@
       "name": "14",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -266,7 +284,8 @@
           "lng": -0.1274834,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "14__0__1"
         }
       ]
     },
@@ -274,7 +293,7 @@
       "name": "15",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -284,10 +303,11 @@
           "lng": -0.1275213,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "15__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -295,10 +315,11 @@
           "lng": -0.1275423,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "15__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [],
@@ -306,10 +327,11 @@
           "lng": -0.1276234,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "15__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -319,7 +341,8 @@
           "lng": -0.127681,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "15__0__4"
         }
       ]
     },
@@ -327,7 +350,7 @@
       "name": "16",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -337,10 +360,11 @@
           "lng": -0.1277345,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "16__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -348,10 +372,11 @@
           "lng": -0.1276603,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "16__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -362,7 +387,8 @@
           "lng": -0.1277712,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "16__0__3"
         }
       ]
     },
@@ -370,7 +396,7 @@
       "name": "17",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [],
@@ -378,10 +404,11 @@
           "lng": -0.1277306,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -391,10 +418,11 @@
           "lng": -0.1278011,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [],
@@ -402,10 +430,11 @@
           "lng": -0.1278393,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -415,10 +444,11 @@
           "lng": -0.1278403,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "5",
           "nearest_other_place": [
@@ -428,10 +458,11 @@
           "lng": -0.1279072,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__5"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "6",
           "nearest_other_place": [],
@@ -439,10 +470,11 @@
           "lng": -0.1279454,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__6"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "7",
           "nearest_other_place": [
@@ -452,38 +484,8 @@
           "lng": -0.1280478,
           "heading": "",
           "panoId": "",
-          "zoom": ""
-        }
-      ]
-    },
-    {
-      "name": "19",
-      "records": [
-        {
-          "level": "0",
-          "description": "in",
-          "id": "1",
-          "nearest_other_place": [
-            "17"
-          ],
-          "lat": 51.5192091,
-          "lng": -0.1280875,
-          "heading": "",
-          "panoId": "",
-          "zoom": ""
-        },
-        {
-          "level": "0",
-          "description": "in",
-          "id": "2",
-          "nearest_other_place": [
-            "20"
-          ],
-          "lat": 51.5192469,
-          "lng": -0.1281584,
-          "heading": "",
-          "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "17__0__7"
         }
       ]
     },
@@ -504,7 +506,8 @@
           "lng": -0.127993,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__1"
         },
         {
           "level": "0",
@@ -515,7 +518,8 @@
           "lng": -0.1278574,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__2"
         },
         {
           "level": "0",
@@ -528,7 +532,8 @@
           "lng": -0.1279295,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__3"
         },
         {
           "level": "0",
@@ -541,7 +546,8 @@
           "lng": -0.1280504,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__4"
         },
         {
           "level": "0",
@@ -552,7 +558,8 @@
           "lng": -0.1281112,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__5"
         },
         {
           "level": "0",
@@ -565,7 +572,8 @@
           "lng": -0.1278836,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__6"
         },
         {
           "level": "0",
@@ -576,7 +584,8 @@
           "lng": -0.1280066,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__7"
         },
         {
           "level": "0",
@@ -589,7 +598,8 @@
           "lng": -0.1280535,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__8"
         },
         {
           "level": "0",
@@ -600,7 +610,8 @@
           "lng": -0.1281506,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__9"
         },
         {
           "level": "0",
@@ -613,7 +624,8 @@
           "lng": -0.1283333,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "18__0__10"
         }
       ]
     },
@@ -621,7 +633,7 @@
       "name": "19",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -631,10 +643,11 @@
           "lng": -0.1280875,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "19__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -644,7 +657,8 @@
           "lng": -0.1281584,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "19__0__2"
         }
       ]
     },
@@ -652,7 +666,7 @@
       "name": "20",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -662,10 +676,11 @@
           "lng": -0.1282133,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "20__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -675,12 +690,13 @@
           "lng": -0.1282356,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "20__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
-          "id": "2",
+          "id": "3",
           "nearest_other_place": [
             "stairs up 0.5",
             "20a"
@@ -689,7 +705,8 @@
           "lng": -0.1282907,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "20__0__3"
         }
       ]
     },
@@ -697,7 +714,7 @@
       "name": "20a",
       "records": [
         {
-          "level": "0.5",
+          "floor": "0.5",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -708,10 +725,11 @@
           "lng": -0.1282627,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "20a__05__1"
         },
         {
-          "level": "0.5",
+          "floor": "0.5",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -719,7 +737,8 @@
           "lng": -0.1281239,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "20a__05__2"
         }
       ]
     },
@@ -727,7 +746,7 @@
       "name": "21",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -737,10 +756,11 @@
           "lng": -0.1280477,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "21__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -754,10 +774,11 @@
           "lng": -0.1281012,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "21__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -767,7 +788,8 @@
           "lng": -0.1281458,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "21__0__3"
         }
       ]
     },
@@ -775,7 +797,7 @@
       "name": "22",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -785,10 +807,11 @@
           "lng": -0.1278253,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "22__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -796,10 +819,11 @@
           "lng": -0.1278428,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "22__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -809,7 +833,8 @@
           "lng": -0.1278696,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "22__0__3"
         }
       ]
     },
@@ -817,7 +842,7 @@
       "name": "23",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -827,10 +852,11 @@
           "lng": -0.1276828,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "23__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -840,10 +866,11 @@
           "lng": -0.1276694,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "23__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -853,10 +880,11 @@
           "lng": -0.127778,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "23__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -866,7 +894,8 @@
           "lng": -0.1277468,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "23__0__4"
         }
       ]
     },
@@ -874,7 +903,7 @@
       "name": "4",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "bot",
           "id": "1",
           "nearest_other_place": [
@@ -884,10 +913,11 @@
           "lng": -0.1270997,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "bot",
           "id": "2",
           "nearest_other_place": [],
@@ -895,10 +925,11 @@
           "lng": -0.1271997,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "bot",
           "id": "3",
           "nearest_other_place": [],
@@ -906,10 +937,11 @@
           "lng": -0.1273088,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "bot",
           "id": "4",
           "nearest_other_place": [
@@ -919,10 +951,11 @@
           "lng": -0.1274029,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "mid",
           "id": "5",
           "nearest_other_place": [
@@ -932,10 +965,11 @@
           "lng": -0.1274777,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__5"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "mid",
           "id": "6",
           "nearest_other_place": [
@@ -948,10 +982,11 @@
           "lng": -0.1274436,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__6"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "mid",
           "id": "7",
           "nearest_other_place": [
@@ -961,10 +996,11 @@
           "lng": -0.1275591,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__7"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "mid",
           "id": "8",
           "nearest_other_place": [
@@ -974,10 +1010,11 @@
           "lng": -0.1275342,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__8"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "top",
           "id": "9",
           "nearest_other_place": [
@@ -987,10 +1024,11 @@
           "lng": -0.12758,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__9"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "top",
           "id": "10",
           "nearest_other_place": [],
@@ -998,10 +1036,11 @@
           "lng": -0.1276883,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__10"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "top",
           "id": "11",
           "nearest_other_place": [
@@ -1012,10 +1051,11 @@
           "lng": -0.1278369,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__11"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "top",
           "id": "12",
           "nearest_other_place": [
@@ -1025,7 +1065,8 @@
           "lng": -0.1278906,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "4__0__12"
         }
       ]
     },
@@ -1033,7 +1074,7 @@
       "name": "6",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "small",
           "id": "1",
           "nearest_other_place": [
@@ -1043,10 +1084,11 @@
           "lng": -0.1269008,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "small",
           "id": "2",
           "nearest_other_place": [],
@@ -1054,10 +1096,11 @@
           "lng": -0.1269666,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "small",
           "id": "3",
           "nearest_other_place": [
@@ -1067,10 +1110,11 @@
           "lng": -0.1269992,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "big",
           "id": "4",
           "nearest_other_place": [],
@@ -1078,10 +1122,11 @@
           "lng": -0.1269039,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "big",
           "id": "5",
           "nearest_other_place": [
@@ -1091,10 +1136,11 @@
           "lng": -0.1270438,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__5"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "big",
           "id": "6",
           "nearest_other_place": [],
@@ -1102,10 +1148,11 @@
           "lng": -0.1271083,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__6"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "big",
           "id": "7",
           "nearest_other_place": [
@@ -1115,7 +1162,8 @@
           "lng": -0.1271558,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "6__0__7"
         }
       ]
     },
@@ -1123,7 +1171,7 @@
       "name": "7",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -1133,10 +1181,11 @@
           "lng": -0.1272266,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "7__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -1146,10 +1195,11 @@
           "lng": -0.1272564,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "7__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [],
@@ -1157,10 +1207,11 @@
           "lng": -0.1273638,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "7__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -1170,7 +1221,8 @@
           "lng": -0.1274895,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "7__0__4"
         }
       ]
     },
@@ -1178,7 +1230,7 @@
       "name": "77",
       "records": [
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "1",
           "nearest_other_place": [],
@@ -1186,10 +1238,11 @@
           "lng": -0.1279399,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "77__b1__1"
         },
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -1197,10 +1250,11 @@
           "lng": -0.1279953,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "77__b1__2"
         },
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -1210,10 +1264,11 @@
           "lng": -0.128076,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "77__b1__3"
         },
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -1224,7 +1279,8 @@
           "lng": -0.1281459,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "77__b1__4"
         }
       ]
     },
@@ -1232,7 +1288,7 @@
       "name": "78",
       "records": [
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -1242,10 +1298,11 @@
           "lng": -0.1281694,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "78__b1__1"
         },
         {
-          "level": "b1",
+          "floor": "b1",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -1253,7 +1310,8 @@
           "lng": -0.1282067,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "78__b1__2"
         }
       ]
     },
@@ -1261,7 +1319,7 @@
       "name": "8",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -1271,10 +1329,11 @@
           "lng": -0.1275289,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "8__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [
@@ -1284,10 +1343,11 @@
           "lng": -0.1275862,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "8__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -1297,10 +1357,11 @@
           "lng": -0.1275962,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "8__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -1310,10 +1371,11 @@
           "lng": -0.1276369,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "8__0__4"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "5",
           "nearest_other_place": [
@@ -1323,7 +1385,8 @@
           "lng": -0.127693,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "8__0__5"
         }
       ]
     },
@@ -1331,7 +1394,7 @@
       "name": "9",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -1341,10 +1404,11 @@
           "lng": -0.1277104,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "9__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -1352,10 +1416,11 @@
           "lng": -0.1278044,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "9__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -1366,7 +1431,8 @@
           "lng": -0.1279488,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "9__0__3"
         }
       ]
     },
@@ -1374,7 +1440,7 @@
       "name": "Main entrance",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "out",
           "id": "1",
           "nearest_other_place": [
@@ -1384,10 +1450,11 @@
           "lng": -0.1260562,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "Main_entrance__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "out",
           "id": "2",
           "nearest_other_place": [
@@ -1397,10 +1464,11 @@
           "lng": -0.1262167,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "Main_entrance__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -1410,10 +1478,11 @@
           "lng": -0.1264037,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "Main_entrance__0__3"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "4",
           "nearest_other_place": [
@@ -1423,7 +1492,8 @@
           "lng": -0.1264377,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "Main_entrance__0__4"
         }
       ]
     },
@@ -1431,7 +1501,7 @@
       "name": "South cloakroom",
       "records": [
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "1",
           "nearest_other_place": [
@@ -1441,10 +1511,11 @@
           "lng": -0.1265562,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "South_cloakroom__0__1"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "2",
           "nearest_other_place": [],
@@ -1452,10 +1523,11 @@
           "lng": -0.1267305,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "South_cloakroom__0__2"
         },
         {
-          "level": "0",
+          "floor": "0",
           "description": "in",
           "id": "3",
           "nearest_other_place": [
@@ -1465,7 +1537,8 @@
           "lng": -0.1268364,
           "heading": "",
           "panoId": "",
-          "zoom": ""
+          "zoom": "",
+          "nodeId": "South_cloakroom__0__3"
         }
       ]
     }

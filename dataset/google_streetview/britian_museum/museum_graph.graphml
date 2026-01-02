@@ -1,0 +1,1331 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd">
+  <key id="d10" for="edge" attr.name="source" attr.type="string" />
+  <key id="d9" for="edge" attr.name="weight" attr.type="double" />
+  <key id="d8" for="edge" attr.name="dir" attr.type="string" />
+  <key id="d7" for="node" attr.name="zoom" attr.type="string" />
+  <key id="d6" for="node" attr.name="heading" attr.type="string" />
+  <key id="d5" for="node" attr.name="panoId" attr.type="string" />
+  <key id="d4" for="node" attr.name="lng" attr.type="double" />
+  <key id="d3" for="node" attr.name="lat" attr.type="double" />
+  <key id="d2" for="node" attr.name="description" attr.type="string" />
+  <key id="d1" for="node" attr.name="level" attr.type="string" />
+  <key id="d0" for="node" attr.name="name" attr.type="string" />
+  <graph edgedefault="directed">
+    <node id="10__0__1">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5187723</data>
+      <data key="d4">-0.1273409</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__2">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5188455</data>
+      <data key="d4">-0.1274177</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__3">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5188819</data>
+      <data key="d4">-0.1275383</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__4">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5189064</data>
+      <data key="d4">-0.1275902</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__5">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">b</data>
+      <data key="d3">51.5189073</data>
+      <data key="d4">-0.1274805</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__6">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">b</data>
+      <data key="d3">51.5189715</data>
+      <data key="d4">-0.1275259</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__7">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">c</data>
+      <data key="d3">51.5189763</data>
+      <data key="d4">-0.127609</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="10__0__8">
+      <data key="d0">10</data>
+      <data key="d1">0</data>
+      <data key="d2">c</data>
+      <data key="d3">51.519035</data>
+      <data key="d4">-0.1276697</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="11__0__1">
+      <data key="d0">11</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186329</data>
+      <data key="d4">-0.127073</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="12__0__1">
+      <data key="d0">12</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5185955</data>
+      <data key="d4">-0.1271603</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="12__0__2">
+      <data key="d0">12</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5185775</data>
+      <data key="d4">-0.1272337</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="12__0__3">
+      <data key="d0">12</data>
+      <data key="d1">0</data>
+      <data key="d2">b</data>
+      <data key="d3">51.5185216</data>
+      <data key="d4">-0.1273363</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="12__0__4">
+      <data key="d0">12</data>
+      <data key="d1">0</data>
+      <data key="d2">out</data>
+      <data key="d3">51.5184864</data>
+      <data key="d4">-0.1274185</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="13__0__1">
+      <data key="d0">13</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.518649</data>
+      <data key="d4">-0.1271954</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="13__0__2">
+      <data key="d0">13</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186469</data>
+      <data key="d4">-0.1273079</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="13__0__3">
+      <data key="d0">13</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5185694</data>
+      <data key="d4">-0.1273871</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="13__0__4">
+      <data key="d0">13</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186984</data>
+      <data key="d4">-0.1272558</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="13__0__5">
+      <data key="d0">13</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186254</data>
+      <data key="d4">-0.1274493</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="14__0__1">
+      <data key="d0">14</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186601</data>
+      <data key="d4">-0.1274834</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="15__0__1">
+      <data key="d0">15</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5186943</data>
+      <data key="d4">-0.1275213</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="15__0__2">
+      <data key="d0">15</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5187817</data>
+      <data key="d4">-0.1275423</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="15__0__3">
+      <data key="d0">15</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5187489</data>
+      <data key="d4">-0.1276234</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="15__0__4">
+      <data key="d0">15</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188365</data>
+      <data key="d4">-0.127681</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="16__0__1">
+      <data key="d0">16</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188507</data>
+      <data key="d4">-0.1277345</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="16__0__2">
+      <data key="d0">16</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.518884</data>
+      <data key="d4">-0.1276603</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="16__0__3">
+      <data key="d0">16</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188528</data>
+      <data key="d4">-0.1277712</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__1">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5189084</data>
+      <data key="d4">-0.1277306</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__2">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.51888</data>
+      <data key="d4">-0.1278011</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__3">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5189862</data>
+      <data key="d4">-0.1278393</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__4">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190307</data>
+      <data key="d4">-0.1278403</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__5">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.518978</data>
+      <data key="d4">-0.1279072</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__6">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190757</data>
+      <data key="d4">-0.1279454</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="17__0__7">
+      <data key="d0">17</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.519166</data>
+      <data key="d4">-0.1280478</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="19__0__1">
+      <data key="d0">19</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192091</data>
+      <data key="d4">-0.1280875</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="19__0__2">
+      <data key="d0">19</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192469</data>
+      <data key="d4">-0.1281584</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__1">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">small</data>
+      <data key="d3">51.5189666</data>
+      <data key="d4">-0.127993</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__2">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5188423</data>
+      <data key="d4">-0.1278574</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__3">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">a</data>
+      <data key="d3">51.5189084</data>
+      <data key="d4">-0.1279295</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__4">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">b</data>
+      <data key="d3">51.5190238</data>
+      <data key="d4">-0.1280504</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__5">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">b</data>
+      <data key="d3">51.5190792</data>
+      <data key="d4">-0.1281112</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__6">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">bot</data>
+      <data key="d3">51.5187096</data>
+      <data key="d4">-0.1278836</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__7">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5188254</data>
+      <data key="d4">-0.1280066</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__8">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5189354</data>
+      <data key="d4">-0.1280535</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__9">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5189611</data>
+      <data key="d4">-0.1281506</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="18__0__10">
+      <data key="d0">18</data>
+      <data key="d1">0</data>
+      <data key="d2">top</data>
+      <data key="d3">51.5191337</data>
+      <data key="d4">-0.1283333</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="20__0__1">
+      <data key="d0">20</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193082</data>
+      <data key="d4">-0.1282133</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="20__0__2">
+      <data key="d0">20</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.519374</data>
+      <data key="d4">-0.1282907</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="20a__0.5__1">
+      <data key="d0">20a</data>
+      <data key="d1">0.5</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5194081</data>
+      <data key="d4">-0.1282627</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="20a__0.5__2">
+      <data key="d0">20a</data>
+      <data key="d1">0.5</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192792</data>
+      <data key="d4">-0.1281239</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="21__0__1">
+      <data key="d0">21</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193028</data>
+      <data key="d4">-0.1280477</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="21__0__2">
+      <data key="d0">21</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5194353</data>
+      <data key="d4">-0.1281012</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="21__0__3">
+      <data key="d0">21</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193932</data>
+      <data key="d4">-0.1281458</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="22__0__1">
+      <data key="d0">22</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5191282</data>
+      <data key="d4">-0.1278253</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="22__0__2">
+      <data key="d0">22</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.519184</data>
+      <data key="d4">-0.1278428</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="22__0__3">
+      <data key="d0">22</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192489</data>
+      <data key="d4">-0.1278696</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="23__0__1">
+      <data key="d0">23</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190428</data>
+      <data key="d4">-0.1276828</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="23__0__2">
+      <data key="d0">23</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190761</data>
+      <data key="d4">-0.1276694</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="23__0__3">
+      <data key="d0">23</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190563</data>
+      <data key="d4">-0.127778</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="23__0__4">
+      <data key="d0">23</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5191041</data>
+      <data key="d4">-0.1277468</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__1">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">bot</data>
+      <data key="d3">51.5188178</data>
+      <data key="d4">-0.1270997</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__2">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">bot</data>
+      <data key="d3">51.5188878</data>
+      <data key="d4">-0.1271997</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__3">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">bot</data>
+      <data key="d3">51.5189514</data>
+      <data key="d4">-0.1273088</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__4">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">bot</data>
+      <data key="d3">51.5190593</data>
+      <data key="d4">-0.1274029</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__5">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5191307</data>
+      <data key="d4">-0.1274777</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__6">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5191994</data>
+      <data key="d4">-0.1274436</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__7">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5191487</data>
+      <data key="d4">-0.1275591</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__8">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">mid</data>
+      <data key="d3">51.5192132</data>
+      <data key="d4">-0.1275342</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__9">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">top</data>
+      <data key="d3">51.5192882</data>
+      <data key="d4">-0.12758</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__10">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">top</data>
+      <data key="d3">51.5193489</data>
+      <data key="d4">-0.1276883</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__11">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">top</data>
+      <data key="d3">51.5194879</data>
+      <data key="d4">-0.1278369</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="4__0__12">
+      <data key="d0">4</data>
+      <data key="d1">0</data>
+      <data key="d2">top</data>
+      <data key="d3">51.5194784</data>
+      <data key="d4">-0.1278906</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__1">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">small</data>
+      <data key="d3">51.5187024</data>
+      <data key="d4">-0.1269008</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__2">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">small</data>
+      <data key="d3">51.5186807</data>
+      <data key="d4">-0.1269666</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__3">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">small</data>
+      <data key="d3">51.5186609</data>
+      <data key="d4">-0.1269992</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__4">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">big</data>
+      <data key="d3">51.5187865</data>
+      <data key="d4">-0.1269039</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__5">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">big</data>
+      <data key="d3">51.5187674</data>
+      <data key="d4">-0.1270438</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__6">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">big</data>
+      <data key="d3">51.5187214</data>
+      <data key="d4">-0.1271083</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="6__0__7">
+      <data key="d0">6</data>
+      <data key="d1">0</data>
+      <data key="d2">big</data>
+      <data key="d3">51.5187117</data>
+      <data key="d4">-0.1271558</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="7__0__1">
+      <data key="d0">7</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5187726</data>
+      <data key="d4">-0.1272266</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="7__0__2">
+      <data key="d0">7</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188021</data>
+      <data key="d4">-0.1272564</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="7__0__3">
+      <data key="d0">7</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5189015</data>
+      <data key="d4">-0.1273638</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="7__0__4">
+      <data key="d0">7</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190157</data>
+      <data key="d4">-0.1274895</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="77__b1__1">
+      <data key="d0">77</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193175</data>
+      <data key="d4">-0.1279399</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="77__b1__2">
+      <data key="d0">77</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193711</data>
+      <data key="d4">-0.1279953</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="77__b1__3">
+      <data key="d0">77</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193322</data>
+      <data key="d4">-0.128076</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="77__b1__4">
+      <data key="d0">77</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5194365</data>
+      <data key="d4">-0.1281459</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="78__b1__1">
+      <data key="d0">78</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192931</data>
+      <data key="d4">-0.1281694</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="78__b1__2">
+      <data key="d0">78</data>
+      <data key="d1">b1</data>
+      <data key="d2">in</data>
+      <data key="d3">51.519324</data>
+      <data key="d4">-0.1282067</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="8__0__1">
+      <data key="d0">8</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190457</data>
+      <data key="d4">-0.1275289</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="8__0__2">
+      <data key="d0">8</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5190788</data>
+      <data key="d4">-0.1275862</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="8__0__3">
+      <data key="d0">8</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5191337</data>
+      <data key="d4">-0.1275962</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="8__0__4">
+      <data key="d0">8</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5191167</data>
+      <data key="d4">-0.1276369</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="8__0__5">
+      <data key="d0">8</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5191948</data>
+      <data key="d4">-0.127693</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="9__0__1">
+      <data key="d0">9</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5192073</data>
+      <data key="d4">-0.1277104</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="9__0__2">
+      <data key="d0">9</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5193004</data>
+      <data key="d4">-0.1278044</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="9__0__3">
+      <data key="d0">9</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.519434</data>
+      <data key="d4">-0.1279488</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="Main entrance__0__1">
+      <data key="d0">Main entrance</data>
+      <data key="d1">0</data>
+      <data key="d2">out</data>
+      <data key="d3">51.5186924</data>
+      <data key="d4">-0.1260562</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="Main entrance__0__2">
+      <data key="d0">Main entrance</data>
+      <data key="d1">0</data>
+      <data key="d2">out</data>
+      <data key="d3">51.5187992</data>
+      <data key="d4">-0.1262167</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="Main entrance__0__3">
+      <data key="d0">Main entrance</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188718</data>
+      <data key="d4">-0.1264037</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="Main entrance__0__4">
+      <data key="d0">Main entrance</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188998</data>
+      <data key="d4">-0.1264377</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="South cloakroom__0__1">
+      <data key="d0">South cloakroom</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5188514</data>
+      <data key="d4">-0.1265562</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="South cloakroom__0__2">
+      <data key="d0">South cloakroom</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5187774</data>
+      <data key="d4">-0.1267305</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <node id="South cloakroom__0__3">
+      <data key="d0">South cloakroom</data>
+      <data key="d1">0</data>
+      <data key="d2">in</data>
+      <data key="d3">51.5187323</data>
+      <data key="d4">-0.1268364</data>
+      <data key="d5" />
+      <data key="d6" />
+      <data key="d7" />
+    </node>
+    <edge source="10__0__1" target="7__0__2">
+      <data key="d8" />
+      <data key="d9">6.720425355356681</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="10__0__8" target="23__0__1">
+      <data key="d8" />
+      <data key="d9">1.254520834853612</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="11__0__1" target="6__0__3">
+      <data key="d8" />
+      <data key="d9">5.980697258100135</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="11__0__1" target="12__0__1">
+      <data key="d8" />
+      <data key="d9">7.33362704628017</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="12__0__1" target="11__0__1">
+      <data key="d8" />
+      <data key="d9">7.33362704628017</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="12__0__3" target="13__0__3">
+      <data key="d8" />
+      <data key="d9">6.372242882410778</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="13__0__3" target="12__0__3">
+      <data key="d8" />
+      <data key="d9">6.372242882410778</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="13__0__5" target="14__0__1">
+      <data key="d8" />
+      <data key="d9">4.522693824042203</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="14__0__1" target="13__0__5">
+      <data key="d8" />
+      <data key="d9">4.522693824042203</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="14__0__1" target="15__0__1">
+      <data key="d8" />
+      <data key="d9">4.61938017293093</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="15__0__1" target="14__0__1">
+      <data key="d8" />
+      <data key="d9">4.61938017293093</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="15__0__4" target="16__0__1">
+      <data key="d8" />
+      <data key="d9">4.024449599432374</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="16__0__1" target="15__0__4">
+      <data key="d8" />
+      <data key="d9">4.024449599432374</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="16__0__3" target="17__0__2">
+      <data key="d8" />
+      <data key="d9">3.664381427000018</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="17__0__2" target="16__0__3">
+      <data key="d8" />
+      <data key="d9">3.664381427000018</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="17__0__4" target="23__0__3">
+      <data key="d8" />
+      <data key="d9">5.165717054013055</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="17__0__5" target="18__0__1">
+      <data key="d8" />
+      <data key="d9">6.070469739116185</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="17__0__7" target="19__0__1">
+      <data key="d8" />
+      <data key="d9">5.523902976633505</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="19__0__1" target="17__0__7">
+      <data key="d8" />
+      <data key="d9">5.523902976633505</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="19__0__2" target="20__0__1">
+      <data key="d8" />
+      <data key="d9">7.803241826878874</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="18__0__1" target="17__0__5">
+      <data key="d8" />
+      <data key="d9">6.070469739116185</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="20__0__1" target="19__0__2">
+      <data key="d8" />
+      <data key="d9">7.803241826878874</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="20__0__2" target="21__0__3">
+      <data key="d8" />
+      <data key="d9">6.217738916676149</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="20__0__2" target="20a__0.5__1">
+      <data key="d8" />
+      <data key="d9">4.258011751686474</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="20a__0.5__1" target="20__0__2">
+      <data key="d8" />
+      <data key="d9">4.258011751686474</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="21__0__1" target="22__0__3">
+      <data key="d8" />
+      <data key="d9">13.703139672709991</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="21__0__2" target="77__b1__4">
+      <data key="d8" />
+      <data key="d9">3.0957122988209718</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="21__0__3" target="20__0__2">
+      <data key="d8" />
+      <data key="d9">10.250572442324964</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="22__0__1" target="23__0__4">
+      <data key="d8" />
+      <data key="d9">6.056633179636758</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="22__0__3" target="21__0__1">
+      <data key="d8" />
+      <data key="d9">13.703139672709991</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="23__0__1" target="10__0__8">
+      <data key="d8" />
+      <data key="d9">1.254520834853612</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="23__0__2" target="8__0__4">
+      <data key="d8" />
+      <data key="d9">5.04356914557191</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="23__0__3" target="17__0__4">
+      <data key="d8" />
+      <data key="d9">5.165717054013055</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="23__0__4" target="22__0__1">
+      <data key="d8" />
+      <data key="d9">6.056633179636758</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="4__0__1" target="6__0__5">
+      <data key="d8" />
+      <data key="d9">6.8093632096711865</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="4__0__7" target="8__0__3">
+      <data key="d8" />
+      <data key="d9">3.0612844871579914</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="4__0__12" target="9__0__3">
+      <data key="d8" />
+      <data key="d9">6.371069275684151</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="6__0__1" target="South cloakroom__0__3">
+      <data key="d8" />
+      <data key="d9">5.559627869724343</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="6__0__3" target="11__0__1">
+      <data key="d8" />
+      <data key="d9">5.980697258100135</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="6__0__5" target="4__0__1">
+      <data key="d8" />
+      <data key="d9">6.8093632096711865</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="6__0__7" target="7__0__1">
+      <data key="d8" />
+      <data key="d9">8.35793404077907</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="7__0__1" target="6__0__7">
+      <data key="d8" />
+      <data key="d9">8.35793404077907</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="7__0__2" target="10__0__1">
+      <data key="d8" />
+      <data key="d9">6.720425355356681</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="7__0__4" target="8__0__1">
+      <data key="d8" />
+      <data key="d9">4.308104086216067</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="77__b1__3" target="78__b1__1">
+      <data key="d8" />
+      <data key="d9">7.788836042270923</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="77__b1__4" target="21__0__2">
+      <data key="d8" />
+      <data key="d9">3.0957122988209718</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="78__b1__1" target="77__b1__3">
+      <data key="d8" />
+      <data key="d9">7.788836042270923</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="8__0__1" target="7__0__4">
+      <data key="d8" />
+      <data key="d9">4.308104086216067</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="8__0__2" target="7__0__4">
+      <data key="d8" />
+      <data key="d9">9.69520294436205</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="8__0__3" target="4__0__7">
+      <data key="d8" />
+      <data key="d9">3.0612844871579914</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="8__0__4" target="23__0__2">
+      <data key="d8" />
+      <data key="d9">5.04356914557191</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="8__0__5" target="9__0__1">
+      <data key="d8" />
+      <data key="d9">1.8388496216136596</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="9__0__1" target="8__0__5">
+      <data key="d8" />
+      <data key="d9">1.8388496216136596</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="9__0__3" target="4__0__12">
+      <data key="d8" />
+      <data key="d9">6.371069275684151</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="Main entrance__0__4" target="South cloakroom__0__1">
+      <data key="d8" />
+      <data key="d9">9.807725567063962</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="South cloakroom__0__1" target="Main entrance__0__4">
+      <data key="d8" />
+      <data key="d9">9.807725567063962</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+    <edge source="South cloakroom__0__3" target="6__0__1">
+      <data key="d8" />
+      <data key="d9">5.559627869724343</data>
+      <data key="d10">nearest_other_place</data>
+    </edge>
+  </graph>
+</graphml>
