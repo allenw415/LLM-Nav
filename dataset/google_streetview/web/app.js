@@ -1,7 +1,7 @@
 // =====================
 // Street View Graph Navigator
 // - 4 headings: [330, 60, 150, 240]
-// - move front/back/left/right depends on current headingIdx
+// - move front depends on current headingIdx
 // - edges.json supports arriveHeadingIdx
 // - pitch buttons use mode values: 60/90/120
 // - no start pitch/zoom required (use defaults)
@@ -9,6 +9,14 @@
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const mod = (n, m) => ((n % m) + m) % m;
+
+// 記錄操作到 console
+function logAction(action) {
+  const node = nodeById.get(state.nodeId);
+  const headingDeg = HEADING_DEGS[state.headingIdx];
+  const pitchG = toGooglePitch(state.pitchMode);
+  console.log(`[Action: ${action}]\nNode: ${state.nodeId} (${node?.name || '-'}) | Heading: ${headingDeg}° (idx=${state.headingIdx}) | Pitch Mode: ${state.pitchMode} (Google: ${pitchG}°) | Zoom: ${state.zoom}`);
+}
 
 // 你的 4 個方位角（絕對 heading）
 const HEADING_DEGS = [330, 60, 150, 240]; // idx 0..3
@@ -150,6 +158,9 @@ function updateStatus() {
 }
 
 function applyView() {
+  // 確保 zoom 在範圍內
+  state.zoom = clamp(state.zoom, 0, 3);
+  
   panorama.setPov({
     heading: HEADING_DEGS[state.headingIdx],
     pitch: toGooglePitch(state.pitchMode)
@@ -180,8 +191,9 @@ async function goToNode(nodeId, opts = {}) {
   sel.value = nodeId;
 }
 
-// 前後左右是「相對於當前 headingIdx」的偏移
 async function moveRelative(rel) {
+  if (rel !== "front") return;
+
   const from = state.nodeId;
   const m = adj.get(from);
   if (!m) {
@@ -189,46 +201,47 @@ async function moveRelative(rel) {
     return;
   }
 
-  // 相對方向 offset（以 idx 為單位，一格 = 1 個方向）
-  const offset = {
-    front: 0,
-    right: 1,
-    back: 2,
-    left: 3
-  }[rel];
-
-  const absDirIdx = mod(state.headingIdx + offset, 4);
+  const absDirIdx = state.headingIdx; // front = 當前方向
   const edge = m.get(absDirIdx);
 
   if (!edge) {
-    alert(`這個方向不能走：${rel}（absDirIdx=${absDirIdx}, heading=${HEADING_DEGS[absDirIdx]}°）`);
+    alert(`前方不能走（dirIdx=${absDirIdx}, heading=${HEADING_DEGS[absDirIdx]}°）`);
     return;
   }
 
+  // 前進後視角回復正常
+  state.pitchMode = 90;
+  state.zoom = 1;
+
   await goToNode(edge.to, { arriveHeadingIdx: edge.arriveHeadingIdx });
+  logAction('Move Front');
 }
 
 function turn(deltaIdx) {
   state.headingIdx = mod(state.headingIdx + deltaIdx, 4);
+  // 轉向後視角回復正常
+  state.pitchMode = 90;
+  state.zoom = 1;
   applyView();
+  logAction(deltaIdx > 0 ? 'Turn Right' : 'Turn Left');
 }
 
 function setPitchMode(mode) {
   if (!PITCH_MODES.includes(mode)) return;
   state.pitchMode = mode;
   applyView();
+  const modeNames = { 60: 'Up', 90: 'Level', 120: 'Down' };
+  logAction(`Pitch ${modeNames[mode] || mode}`);
 }
 
 function zoom(delta) {
-  state.zoom = clamp(state.zoom + delta, 0, 5);
+  state.zoom = clamp(state.zoom + delta, 0, 3);
   applyView();
+  logAction(`Zoom ${delta > 0 ? 'In' : 'Out'}`);
 }
 
 function bindUI() {
   document.getElementById("moveFront").onclick = () => moveRelative("front");
-  document.getElementById("moveBack").onclick  = () => moveRelative("back");
-  document.getElementById("moveLeft").onclick  = () => moveRelative("left");
-  document.getElementById("moveRight").onclick = () => moveRelative("right");
 
   document.getElementById("turnLeft").onclick  = () => turn(-1);
   document.getElementById("turnRight").onclick = () => turn(+1);
@@ -246,9 +259,6 @@ function bindUI() {
   // keyboard
   window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowUp") moveRelative("front");
-    else if (e.key === "ArrowDown") moveRelative("back");
-    else if (e.key === "ArrowLeft") moveRelative("left");
-    else if (e.key === "ArrowRight") moveRelative("right");
     else if (e.key.toLowerCase() === "a") turn(-1);
     else if (e.key.toLowerCase() === "d") turn(+1);
     else if (e.key.toLowerCase() === "w") {
@@ -280,7 +290,12 @@ function bindUI() {
   });
 
   panorama.addListener("zoom_changed", () => {
-    state.zoom = panorama.getZoom();
+    const rawZoom = panorama.getZoom();
+    const clampedZoom = clamp(rawZoom, 0, 3);
+    if (Math.abs(rawZoom - clampedZoom) > 0.01) {
+      panorama.setZoom(clampedZoom);
+    }
+    state.zoom = clampedZoom;
     updateStatus();
   });
 }
@@ -343,7 +358,7 @@ async function initApp() {
 (async function main() {
   const key = window.GMAPS_API_KEY;
   if (!key) {
-    alert("Missing GMAPS_API_KEY. Please set it in config.js");
+    alert("Missing GMAPS_API_KEY. Please set it in env.js");
     return;
   }
   await loadGoogleMaps(key);
