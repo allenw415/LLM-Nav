@@ -198,6 +198,7 @@ async function moveRelative(rel) {
   const m = adj.get(from);
   if (!m) {
     alert("此節點沒有任何定義的邊（edges.json）");
+    logAction('Move Front Failed');
     return;
   }
 
@@ -206,6 +207,7 @@ async function moveRelative(rel) {
 
   if (!edge) {
     alert(`前方不能走（dirIdx=${absDirIdx}, heading=${HEADING_DEGS[absDirIdx]}°）`);
+    logAction('Move Front Failed');
     return;
   }
 
