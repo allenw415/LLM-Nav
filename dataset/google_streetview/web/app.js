@@ -313,7 +313,7 @@ async function initApp() {
   } catch {
     console.warn("edges.json not found; movement will not work until you add it.");
   }
-  console.log("edges loaded:", edges);
+  console.log("edges loaded");
   buildAdjacency(edges);
 
   svService = new google.maps.StreetViewService();
