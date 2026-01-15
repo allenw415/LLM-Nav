@@ -11,6 +11,9 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import requests
 
+
+import sys
+sys.path.append('../../dataset/google_streetview')  # Adjust the path as needed
 from control import StreetViewController  # ONLY L1 imports control.py
 
 
@@ -49,8 +52,8 @@ class HTTPVisionClient(VisionClient):
     {
       "status": "ok"|"fail",
       "location_hypotheses": [{"place_id": "...", "confidence": 0.7, "evidence": [...]}, ...],
-      "landmarks": [...],
-      "ocr_text": [...]
+      "descriptions": [...],
+      "landmarks": [...]
     }
     """
     def __init__(self, cfg: HTTPVisionClientConfig):
@@ -75,7 +78,7 @@ class HTTPVisionClient(VisionClient):
         out.setdefault("status", "ok")
         out.setdefault("location_hypotheses", [])
         out.setdefault("landmarks", [])
-        out.setdefault("ocr_text", [])
+        out.setdefault("descriptions", [])
         return out
 
 
@@ -244,7 +247,7 @@ class L1Runtime:
             f"Identify the CURRENT room/gallery from visible cues.\n"
             f"Focus on: {sign_list}.\n"
             f"Task hint: {task_hint}\n"
-            f"Return JSON with: location_hypotheses(place_id, confidence, evidence), landmarks, ocr_text.\n"
+            f"Return JSON with: location_hypotheses(place_id, confidence, evidence), image descriptions, landmarks\n"
         )
 
     def _imgrec(self, view: str, png_bytes: bytes) -> ImageRecord:
@@ -270,8 +273,8 @@ class L1Runtime:
                 "status": "fail",
                 "error": f"vision_call_failed: {type(e).__name__}: {e}",
                 "location_hypotheses": [],
+                "descriptions": [],
                 "landmarks": [],
-                "ocr_text": [],
             }
 
     # -------- observe --------
@@ -346,8 +349,8 @@ class L1Runtime:
                 self.act("pitch_up")
             elif p == 90:
                 self.act("pitch_level")
-            else:
-                self.act("pitch_down")
+            # else:
+            #     self.act("pitch_down")
             png = capture("pitch")
             hints.update({"rel_heading_steps": self._rel_heading_steps, "pitch": self._pitch, "zoom_level": self._zoom_level})
             vision = self._safe_vision_call(png, prompt, hints)

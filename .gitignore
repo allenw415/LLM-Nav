@@ -10,3 +10,7 @@ dataset/google_streetview/web/build_graph.py
 */*/test
 
 */*/demo_caps
+
+*/*/*/config.py
+*/*/*/vision_server_dummy.py
+*/*/*/vision_server_ocr.py
