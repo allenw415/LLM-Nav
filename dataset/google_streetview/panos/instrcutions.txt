@@ -1,0 +1,7 @@
+建polygon(kml)
+parse_kml_polygon.py
+crawl_sv_metadata.py
+(多層樓)彙整成一個檔案(用"panos"做爲key, 把pano改成panoID)
+extract.py
+flatten.py
+bidir.py
