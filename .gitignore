@@ -1,4 +1,3 @@
-dataset/google_streetview/web/.env.js
 dataset/google_streetview/web/init.js
 dataset/google_streetview/web/build_graph.py
 
@@ -14,3 +13,5 @@ dataset/google_streetview/web/build_graph.py
 */*/*/config.py
 */*/*/vision_server_dummy.py
 */*/*/vision_server_ocr.py
+
+*/*/*/.env.js
