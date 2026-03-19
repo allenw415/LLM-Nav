@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -106,22 +107,33 @@ def parse_kml_polygons(kml_path: str) -> List[Dict[str, Any]]:
     return polygons
 
 
-if __name__ == "__main__":
-    kml_file = "google_earth.kml"
-    polys = parse_kml_polygons(kml_file)
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Parse polygons from a Google Earth KML file.")
+    parser.add_argument("--input-path", default="google_earth.kml")
+    parser.add_argument("--output-path", default="polygons.json")
+    return parser.parse_args()
 
-    # 你最常會用到的是 outer（博物館外框）
-    # 這裡也把完整結果輸出成 JSON
+
+def main() -> None:
+    args = parse_args()
+    input_path = Path(args.input_path)
+    output_path = Path(args.output_path)
+
+    polys = parse_kml_polygons(str(input_path))
+
     out = {
-        "source_kml": kml_file,
+        "source_kml": str(input_path),
         "polygon_count": len(polys),
         "polygons": polys,
     }
-    Path("polygons.json").write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Saved polygons.json (polygons={len(polys)})")
+    output_path.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Saved {output_path} (polygons={len(polys)})")
 
-    # 方便你直接 copy：列印第一個 polygon 的 outer 點
     if polys:
         print("\nFirst polygon outer points (lat,lng):")
         for lat, lng in polys[0]["outer"]:
             print(f"{lat:.7f}, {lng:.7f}")
+
+
+if __name__ == "__main__":
+    main()
