@@ -1,0 +1,32 @@
+{
+  "gallery_goal_navigation": {
+    "instruction": "Find the way from Room 4 to Room 23.",
+    "expected_parse_shape": {
+      "source_type": "gallery",
+      "goal_type": "gallery"
+    }
+  },
+  "artwork_goal_navigation": {
+    "instruction": "Find the way from the Lamassu to the Townley Venus.",
+    "expected_parse_shape": {
+      "source_type": "artwork",
+      "goal_type": "artwork"
+    }
+  },
+  "gallery_instruction_following_navigation": {
+    "instruction": "Find the way from Room 4, passing Room 7 and Room 17, to Room 23.",
+    "expected_parse_shape": {
+      "source_type": "gallery",
+      "waypoint_type": "gallery",
+      "goal_type": "gallery"
+    }
+  },
+  "artwork_instruction_following_navigation": {
+    "instruction": "Find the way from the Bronze Container for Cosmetic Items, passing the Lamassu and the Nereid Monument, to the Townley Venus.",
+    "expected_parse_shape": {
+      "source_type": "artwork",
+      "waypoint_type": "artwork_or_gallery",
+      "goal_type": "artwork"
+    }
+  }
+}

@@ -15,3 +15,9 @@ dataset/google_streetview/web/build_graph.py
 */*/*/vision_server_ocr.py
 
 */*/*/.env.js
+.env
+.env.*
+!.env.example
+.DS_Store
+__pycache__/
+*.pyc

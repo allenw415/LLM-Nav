@@ -1,0 +1,40 @@
+{
+  "graph_path": "/Users/allenw1010/Desktop/LLM-Nav/dataset/sites/british_museum/normalized/pano_graph.json",
+  "pano_id": "YrClsQHy3IMBgzvZCwCqww",
+  "floor": "0",
+  "lat": 51.51912553591712,
+  "lng": -0.12761538021973318,
+  "heading_mode": "museum",
+  "pitch": 0.0,
+  "fov": 45,
+  "size": {
+    "width": 640,
+    "height": 640
+  },
+  "captures": [
+    {
+      "label": "north",
+      "heading": 330.0,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/YrClsQHy3IMBgzvZCwCqww/YrClsQHy3IMBgzvZCwCqww_00_north_330deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=YrClsQHy3IMBgzvZCwCqww&heading=330.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "east",
+      "heading": 60.0,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/YrClsQHy3IMBgzvZCwCqww/YrClsQHy3IMBgzvZCwCqww_01_east_060deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=YrClsQHy3IMBgzvZCwCqww&heading=60.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "south",
+      "heading": 150.0,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/YrClsQHy3IMBgzvZCwCqww/YrClsQHy3IMBgzvZCwCqww_02_south_150deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=YrClsQHy3IMBgzvZCwCqww&heading=150.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "west",
+      "heading": 240.0,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/YrClsQHy3IMBgzvZCwCqww/YrClsQHy3IMBgzvZCwCqww_03_west_240deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=YrClsQHy3IMBgzvZCwCqww&heading=240.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    }
+  ]
+}
