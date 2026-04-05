@@ -15,7 +15,7 @@ from st_nav.perception import PanoramaRenderer
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Render four pano views through the perception-layer renderer."
+        description="Render pano views through the perception-layer renderer."
     )
     parser.add_argument(
         "--graph-path",
@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--heading-mode",
         choices=["museum", "cardinal", "graph"],
         default="cardinal",
-        help="Use true cardinal headings 0/90/180/270, museum-map headings 330/60/150/240, or graph-aligned headings.",
+        help="Use true cardinal headings 0/90/180/270, augmented museum-map headings around 330/60/150/240, or graph-aligned headings.",
     )
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=90)

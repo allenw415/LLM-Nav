@@ -22,6 +22,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pano-id", required=True)
     parser.add_argument("--llm-api-key", default=os.environ.get("OPENAI_API_KEY"))
     parser.add_argument("--detector-model", default="gpt-5-mini")
+    parser.add_argument("--vlm-timeout", type=float, default=180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/pano_perception")
     parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
@@ -54,6 +55,7 @@ def main() -> int:
     detector = ViewDetector(
         api_key=args.llm_api_key,
         model=args.detector_model,
+        request_timeout=args.vlm_timeout,
     )
     pipeline = PerceptionPipeline(
         pano_graph=pano_graph,

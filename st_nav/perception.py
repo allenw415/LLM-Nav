@@ -4,6 +4,8 @@ import json
 import math
 import mimetypes
 import os
+import random
+import socket
 import urllib.parse
 import urllib.request
 from base64 import b64encode
@@ -16,6 +18,7 @@ from .prompts import build_view_detection_input, build_view_detection_instructio
 CARDINAL_HEADINGS = (0.0, 90.0, 180.0, 270.0)
 MUSEUM_HEADINGS = (330.0, 60.0, 150.0, 240.0)
 CARDINAL_LABELS = ("north", "east", "south", "west")
+MUSEUM_INTERSTITIAL_LABELS = ("north_to_east", "east_to_south", "south_to_west", "west_to_north")
 
 
 def normalize_heading(heading: float) -> float:
@@ -82,9 +85,11 @@ class PanoramaRenderer:
         pano_graph: dict[str, dict],
         *,
         image_downloader: Callable[[str, Path], None] | None = None,
+        rng: random.Random | None = None,
     ):
         self.pano_graph = pano_graph
         self.image_downloader = image_downloader or _download_image
+        self.rng = rng or random.Random()
 
     def render(
         self,
@@ -100,8 +105,7 @@ class PanoramaRenderer:
         graph_path: str | Path | None = None,
     ) -> dict:
         record = self._get_pano_record(pano_id, required=(heading_mode == "graph"))
-        headings = self._resolve_headings(record, heading_mode)
-        labels = self._labels_for_heading_mode(heading_mode)
+        captures_to_render = self._resolve_captures(record, heading_mode)
 
         output_dir = Path(output_dir)
         pano_slug = sanitize_name(pano_id)
@@ -109,8 +113,7 @@ class PanoramaRenderer:
         pano_output_dir.mkdir(parents=True, exist_ok=True)
 
         captures = []
-        for index, heading in enumerate(headings):
-            label = labels[index]
+        for index, (label, heading) in enumerate(captures_to_render):
             filename = f"{pano_slug}_{index:02d}_{label}_{int(round(heading)):03d}deg.png"
             image_path = pano_output_dir / filename
             image_url = build_streetview_url(
@@ -157,18 +160,12 @@ class PanoramaRenderer:
             raise KeyError(f"pano_id not found in graph: {pano_id}")
         return record
 
-    def _resolve_headings(self, record: dict, heading_mode: str) -> list[float]:
+    def _resolve_captures(self, record: dict, heading_mode: str) -> list[tuple[str, float]]:
         if heading_mode == "museum":
-            return list(MUSEUM_HEADINGS)
+            return self._museum_captures()
         if heading_mode == "cardinal":
-            return list(CARDINAL_HEADINGS)
-        return self._graph_aligned_headings(record)
-
-    @staticmethod
-    def _labels_for_heading_mode(heading_mode: str) -> list[str]:
-        if heading_mode in {"museum", "cardinal"}:
-            return list(CARDINAL_LABELS)
-        return ["view0", "view1", "view2", "view3"]
+            return list(zip(CARDINAL_LABELS, CARDINAL_HEADINGS))
+        return [(f"view{index}", heading) for index, heading in enumerate(self._graph_aligned_headings(record))]
 
     def _graph_aligned_headings(self, record: dict) -> list[float]:
         graph_headings = self._neighbor_headings(record)
@@ -177,6 +174,21 @@ class PanoramaRenderer:
 
         base_heading = circular_mean_headings(graph_headings)
         return [normalize_heading(base_heading + index * 90.0) for index in range(4)]
+
+    def _museum_captures(self) -> list[tuple[str, float]]:
+        captures: list[tuple[str, float]] = []
+        for index, heading in enumerate(MUSEUM_HEADINGS):
+            captures.append((CARDINAL_LABELS[index], heading))
+            next_heading = MUSEUM_HEADINGS[(index + 1) % len(MUSEUM_HEADINGS)]
+            captures.append((MUSEUM_INTERSTITIAL_LABELS[index], self._sample_heading_between(heading, next_heading)))
+        return captures
+
+    def _sample_heading_between(self, start_heading: float, end_heading: float) -> float:
+        span = (normalize_heading(end_heading) - normalize_heading(start_heading)) % 360.0
+        if span == 0.0:
+            span = 360.0
+        fraction = min(max(self.rng.random(), 1e-6), 1.0 - 1e-6)
+        return normalize_heading(start_heading + span * fraction)
 
     @staticmethod
     def _record_floor(record: dict) -> str | None:
@@ -204,11 +216,11 @@ class PanoramaRenderer:
 
 class ViewDetector:
     """
-    View-level visual recognition stage.
+    Multi-view visual recognition stage.
 
     Detection priority:
     1. Optional sibling `*_detections.json` file for offline/manual testing
-    2. OpenAI Responses API with image input for real VLM detection
+    2. OpenAI Responses API with multi-image input for real VLM detection
     """
 
     def __init__(
@@ -217,7 +229,7 @@ class ViewDetector:
         model: str = "gpt-5-mini",
         api_key: str | None = None,
         api_base: str = "https://api.openai.com/v1",
-        request_timeout: float = 60.0,
+        request_timeout: float = 180.0,
         response_client: Callable[[dict], dict] | None = None,
         use_detection_files: bool = True,
     ):
@@ -240,17 +252,7 @@ class ViewDetector:
             return []
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        view_detections: list[ViewDetection] = []
-        for capture in manifest.get("captures", []):
-            if not isinstance(capture, dict):
-                continue
-            label = str(capture.get("label", "unknown"))
-            image_path = capture.get("path")
-            if not isinstance(image_path, str) or not image_path:
-                continue
-            entities = self._detect_view(Path(image_path), capture_label=label)
-            view_detections.append(ViewDetection(capture_label=label, entities=entities))
-        return view_detections
+        return self._detect_manifest(manifest)
 
     def _load_detection_file(self, detection_path: Path) -> list[ViewDetection]:
         payload = json.loads(detection_path.read_text(encoding="utf-8"))
@@ -258,32 +260,35 @@ class ViewDetector:
         for record in payload.get("entities", []):
             if not isinstance(record, dict):
                 continue
-            name = record.get("name")
-            if not isinstance(name, str) or not name:
+            capture_label = record.get("capture_label")
+            if isinstance(capture_label, str) and capture_label:
+                detection = grouped.setdefault(capture_label, ViewDetection(capture_label=capture_label))
+                entity = self._entity_from_record(record, default_source_view=capture_label)
+                if entity is not None:
+                    detection.entities.append(entity)
                 continue
-            capture_label = str(record.get("capture_label", "unknown"))
-            detection = grouped.setdefault(capture_label, ViewDetection(capture_label=capture_label))
-            detection.entities.append(
-                EntityDetection(
-                    name=name,
-                    confidence=float(record.get("confidence", 0.0)),
-                    kind=str(record.get("kind", "entity")),
-                    source_view=capture_label,
-                    metadata={
-                        key: value
-                        for key, value in record.items()
-                        if key not in {"name", "confidence", "kind", "capture_label"}
-                    },
-                )
-            )
+
+            detection = grouped.setdefault("multiview", ViewDetection(capture_label="multiview"))
+            entity = self._entity_from_record(record, default_source_view="multiview")
+            if entity is not None:
+                detection.entities.append(entity)
         return list(grouped.values())
 
-    def _detect_view(self, image_path: Path, *, capture_label: str) -> list[EntityDetection]:
-        request_body = self._build_request_body(image_path, capture_label=capture_label)
+    def _detect_manifest(self, manifest: dict) -> list[ViewDetection]:
+        captures = [
+            capture
+            for capture in manifest.get("captures", [])
+            if isinstance(capture, dict) and isinstance(capture.get("path"), str) and capture.get("path")
+        ]
+        if not captures:
+            return []
+
+        request_body = self._build_request_body(captures)
         payload = self._create_response(request_body)
         self.last_traces.append(
             {
-                "capture_label": capture_label,
+                "capture_label": "multiview",
+                "capture_labels": [str(capture.get("label", "unknown")) for capture in captures],
                 "request": self._redact_request_body(request_body),
                 "response": self._clone_json(payload),
             }
@@ -293,43 +298,37 @@ class ViewDetector:
         for record in parsed.get("entities", []):
             if not isinstance(record, dict):
                 continue
-            name = record.get("name")
-            kind = record.get("kind")
-            confidence = record.get("confidence")
-            if not isinstance(name, str) or not name:
-                continue
-            if not isinstance(kind, str) or not kind:
-                kind = "other"
-            if not isinstance(confidence, (int, float)):
-                confidence = 0.0
-            entities.append(
-                EntityDetection(
-                    name=name,
-                    confidence=float(confidence),
-                    kind=kind,
-                    source_view=capture_label,
-                )
-            )
-        return entities
+            entity = self._entity_from_record(record, default_source_view="multiview")
+            if entity is not None:
+                entities.append(entity)
+        return [ViewDetection(capture_label="multiview", entities=entities)] if entities else []
 
-    def _build_request_body(self, image_path: Path, *, capture_label: str) -> dict:
+    def _build_request_body(self, captures: list[dict]) -> dict:
+        content = [{"type": "input_text", "text": build_view_detection_input(captures)}]
+        for capture in captures:
+            label = str(capture.get("label", "unknown"))
+            heading = capture.get("heading")
+            heading_text = f"{float(heading):.1f} deg" if isinstance(heading, (int, float)) else "unknown heading"
+            content.extend(
+                [
+                    {
+                        "type": "input_text",
+                        "text": f"View label: {label}. Heading: {heading_text}.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": self._image_to_data_url(Path(str(capture["path"]))),
+                        "detail": "high",
+                    },
+                ]
+            )
         return {
             "model": self.model,
             "instructions": build_view_detection_instructions(),
             "input": [
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": build_view_detection_input(capture_label),
-                        },
-                        {
-                            "type": "input_image",
-                            "image_url": self._image_to_data_url(image_path),
-                            "detail": "high",
-                        },
-                    ],
+                    "content": content,
                 }
             ],
             "text": {
@@ -341,6 +340,47 @@ class ViewDetector:
                 }
             },
         }
+
+    @staticmethod
+    def _entity_from_record(record: dict, *, default_source_view: str) -> EntityDetection | None:
+        name = record.get("name")
+        kind = record.get("kind")
+        confidence = record.get("confidence")
+        source_views = record.get("source_views")
+
+        if not isinstance(name, str) or not name:
+            return None
+        if not isinstance(kind, str) or not kind:
+            kind = "other"
+        if not isinstance(confidence, (int, float)):
+            confidence = 0.0
+
+        normalized_source_views: list[str] = []
+        if isinstance(source_views, list):
+            for value in source_views:
+                if isinstance(value, str) and value and value not in normalized_source_views:
+                    normalized_source_views.append(value)
+
+        capture_label = record.get("capture_label")
+        if not normalized_source_views and isinstance(capture_label, str) and capture_label:
+            normalized_source_views.append(capture_label)
+        if not normalized_source_views and default_source_view:
+            normalized_source_views.append(default_source_view)
+
+        metadata = {
+            key: value
+            for key, value in record.items()
+            if key not in {"name", "confidence", "kind", "capture_label", "source_views"}
+        }
+        metadata["source_views"] = normalized_source_views
+        metadata["view_count"] = len(normalized_source_views)
+        return EntityDetection(
+            name=name,
+            confidence=float(confidence),
+            kind=kind,
+            source_view=normalized_source_views[0] if len(normalized_source_views) == 1 else "multiview",
+            metadata=metadata,
+        )
 
     def _create_response(self, request_body: dict) -> dict:
         if self.response_client is not None:
@@ -355,8 +395,21 @@ class ViewDetector:
             },
             method="POST",
         )
-        with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except TimeoutError as exc:
+            raise TimeoutError(
+                "OpenAI Responses API timed out after "
+                f"{self.request_timeout:.0f}s while processing the multi-view panorama request. "
+                "Try a larger request timeout."
+            ) from exc
+        except socket.timeout as exc:
+            raise TimeoutError(
+                "OpenAI Responses API timed out after "
+                f"{self.request_timeout:.0f}s while processing the multi-view panorama request. "
+                "Try a larger request timeout."
+            ) from exc
 
     @staticmethod
     def _parse_output_payload(payload: dict) -> dict:
@@ -405,6 +458,10 @@ class ViewDetector:
 class MultiViewAggregator:
     """
     Aggregate rendered views and multi-view detections into a single observation.
+
+    The preferred path is for the detector to already aggregate entities across all views.
+    This layer mainly normalizes metadata and preserves backward compatibility with older
+    per-view detection files.
     """
 
     def __init__(self, pano_graph: dict[str, dict]):
@@ -449,26 +506,43 @@ class MultiViewAggregator:
         grouped: dict[tuple[str, str], EntityDetection] = {}
         for view_detection in view_detections:
             for entity in view_detection.entities:
+                source_views = MultiViewAggregator._source_views_for_entity(entity)
                 key = (entity.name.strip().lower(), entity.kind)
                 existing = grouped.get(key)
                 if existing is None:
+                    metadata = dict(entity.metadata)
+                    metadata["source_views"] = source_views
+                    metadata["view_count"] = len(source_views)
                     grouped[key] = EntityDetection(
                         name=entity.name,
                         confidence=entity.confidence,
                         kind=entity.kind,
-                        source_view=entity.source_view,
-                        metadata={
-                            "source_views": [entity.source_view],
-                            "view_count": 1,
-                        },
+                        source_view=source_views[0] if len(source_views) == 1 else "multiview",
+                        metadata=metadata,
                     )
                     continue
                 existing.confidence = max(existing.confidence, entity.confidence)
-                source_views = existing.metadata.setdefault("source_views", [])
-                if entity.source_view not in source_views:
-                    source_views.append(entity.source_view)
-                    existing.metadata["view_count"] = len(source_views)
+                existing_source_views = existing.metadata.setdefault("source_views", [])
+                for source_view in source_views:
+                    if source_view not in existing_source_views:
+                        existing_source_views.append(source_view)
+                existing.metadata["view_count"] = len(existing_source_views)
+                existing.source_view = existing_source_views[0] if len(existing_source_views) == 1 else "multiview"
         return sorted(grouped.values(), key=lambda item: (-item.confidence, item.name.lower()))
+
+    @staticmethod
+    def _source_views_for_entity(entity: EntityDetection) -> list[str]:
+        source_views = entity.metadata.get("source_views")
+        if isinstance(source_views, list):
+            normalized = []
+            for value in source_views:
+                if isinstance(value, str) and value and value not in normalized:
+                    normalized.append(value)
+            if normalized:
+                return normalized
+        if entity.source_view:
+            return [entity.source_view]
+        return []
 
 
 class PerceptionPipeline:

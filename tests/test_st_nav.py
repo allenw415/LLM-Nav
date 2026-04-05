@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,6 +33,17 @@ from st_nav.prompts import (
     build_view_detection_instructions,
     build_view_detection_schema,
 )
+
+MUSEUM_CAPTURE_LABELS = [
+    "north",
+    "north_to_east",
+    "east",
+    "east_to_south",
+    "south",
+    "south_to_west",
+    "west",
+    "west_to_north",
+]
 
 
 class STNavTests(unittest.TestCase):
@@ -544,7 +556,7 @@ class STNavTests(unittest.TestCase):
                 current_heading=330.0,
                 view_detections=detections,
             )
-            self.assertEqual(len(downloads), 4)
+            self.assertEqual(len(downloads), 8)
             self.assertEqual(len(detections), 1)
             self.assertEqual(observation.entities[0].name, "Lamassu")
             self.assertEqual(observation.entities[0].metadata["view_count"], 1)
@@ -564,7 +576,12 @@ class STNavTests(unittest.TestCase):
                 "output_text": json.dumps(
                     {
                         "entities": [
-                            {"name": "Lamassu", "kind": "artwork", "confidence": 0.95},
+                            {
+                                "name": "Lamassu",
+                                "kind": "artwork",
+                                "confidence": 0.95,
+                                "source_views": list(MUSEUM_CAPTURE_LABELS),
+                            },
                         ]
                     }
                 )
@@ -590,19 +607,21 @@ class STNavTests(unittest.TestCase):
 
         self.assertEqual(len(observation.entities), 1)
         self.assertEqual(observation.entities[0].name, "Lamassu")
-        self.assertEqual(observation.entities[0].metadata["view_count"], 4)
-        self.assertEqual(len(captured_bodies), 4)
+        self.assertEqual(observation.entities[0].metadata["view_count"], 8)
+        self.assertEqual(observation.entities[0].metadata["source_views"], MUSEUM_CAPTURE_LABELS)
+        self.assertEqual(len(captured_bodies), 1)
         self.assertIn(
             "Use a specific official exhibit name only when the identity is visually unique",
             captured_bodies[0]["instructions"],
         )
         self.assertIn(
-            "This is the north view from a 4-view panorama.",
+            "These are 8 overlapping views from the same panorama.",
             captured_bodies[0]["input"][0]["content"][0]["text"],
         )
-        self.assertEqual(detector.last_traces[0]["capture_label"], "north")
+        self.assertEqual(detector.last_traces[0]["capture_label"], "multiview")
+        self.assertEqual(detector.last_traces[0]["capture_labels"], MUSEUM_CAPTURE_LABELS)
         self.assertEqual(
-            detector.last_traces[0]["request"]["input"][0]["content"][1]["image_url"],
+            detector.last_traces[0]["request"]["input"][0]["content"][2]["image_url"],
             "<IMAGE_DATA_URL_OMITTED>",
         )
         self.assertEqual(
@@ -610,7 +629,12 @@ class STNavTests(unittest.TestCase):
             json.dumps(
                 {
                     "entities": [
-                        {"name": "Lamassu", "kind": "artwork", "confidence": 0.95},
+                        {
+                            "name": "Lamassu",
+                            "kind": "artwork",
+                            "confidence": 0.95,
+                            "source_views": list(MUSEUM_CAPTURE_LABELS),
+                        },
                     ]
                 }
             ),
@@ -620,11 +644,33 @@ class STNavTests(unittest.TestCase):
         schema = build_view_detection_schema()
         kinds = schema["properties"]["entities"]["items"]["properties"]["kind"]["enum"]
         instructions = build_view_detection_instructions()
-        view_input = build_view_detection_input("north")
+        view_input = build_view_detection_input(
+            [
+                {"label": "north", "heading": 330.0},
+                {"label": "north_to_east", "heading": 15.0},
+            ]
+        )
 
         self.assertIn("passage", kinds)
         self.assertIn("salient passages or doorways", instructions)
-        self.assertIn("visually grounded entities", view_input)
+        self.assertIn("first identify the full set of distinct navigable openings", instructions)
+        self.assertIn("include each distinct opening as its own entity", instructions)
+        self.assertIn("same physical entity", instructions)
+        self.assertIn("Do not merge different entities just because they share the same type", instructions)
+        self.assertIn("north-facing passage and a south-facing passage should usually be separate entities", instructions)
+        self.assertIn("Do not combine passages seen in opposite or non-contiguous views into one entity", instructions)
+        self.assertIn("Do not omit side openings just because they are partially occluded", instructions)
+        self.assertIn("Treat room or gallery labels as signage by default", instructions)
+        self.assertIn("Only mention a room id or destination in a passage name", instructions)
+        self.assertIn("First inventory the distinct navigable openings visible across all views", view_input)
+        self.assertIn("separate instances of the same kind", view_input)
+        self.assertIn("prefer direction-aware names such as north passage, south doorway, east corridor", view_input)
+        self.assertIn("include every clearly visible opening even if some are less central or partly occluded", view_input)
+        self.assertIn("doorway beside the Assyria Nimrud sign", view_input)
+        self.assertIn("Do not rename a passage as an entrance to Room 8", view_input)
+        self.assertIn("neighboring and show the same opening continuously", view_input)
+        self.assertIn("Aggregate all visible evidence across the full panorama", view_input)
+        self.assertIn("source_views", schema["properties"]["entities"]["items"]["properties"])
 
     def test_view_detector_can_preserve_passage_kind(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
@@ -640,7 +686,12 @@ class STNavTests(unittest.TestCase):
                 "output_text": json.dumps(
                     {
                         "entities": [
-                            {"name": "archway to next room", "kind": "passage", "confidence": 0.88},
+                            {
+                                "name": "archway to next room",
+                                "kind": "passage",
+                                "confidence": 0.88,
+                                "source_views": list(MUSEUM_CAPTURE_LABELS),
+                            },
                         ]
                     }
                 )
@@ -664,11 +715,11 @@ class STNavTests(unittest.TestCase):
                 current_heading=330.0,
             )
 
-        self.assertEqual(len(downloads), 4)
+        self.assertEqual(len(downloads), 8)
         self.assertEqual(len(observation.entities), 1)
         self.assertEqual(observation.entities[0].kind, "passage")
         self.assertEqual(observation.entities[0].name, "archway to next room")
-        self.assertEqual(observation.entities[0].metadata["view_count"], 4)
+        self.assertEqual(observation.entities[0].metadata["view_count"], 8)
 
     def test_multiview_aggregator_merges_same_entity_across_views(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
@@ -725,7 +776,7 @@ class STNavTests(unittest.TestCase):
             downloads.append((url, output_path))
             output_path.write_bytes(b"fake-image")
 
-        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader)
+        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader, rng=random.Random(0))
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             manifest = renderer.render(
@@ -738,11 +789,20 @@ class STNavTests(unittest.TestCase):
 
             manifest_path = Path(manifest["manifest_path"])
             self.assertTrue(manifest_path.exists())
-            self.assertEqual(len(manifest["captures"]), 4)
-            self.assertEqual(len(downloads), 4)
+            self.assertEqual(len(manifest["captures"]), 8)
+            self.assertEqual(len(downloads), 8)
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["pano_id"], "pano-8")
             self.assertEqual(payload["heading_mode"], "museum")
+            self.assertEqual([capture["label"] for capture in payload["captures"]], MUSEUM_CAPTURE_LABELS)
+            self.assertEqual(payload["captures"][0]["heading"], 330.0)
+            self.assertTrue(330.0 < payload["captures"][1]["heading"] or payload["captures"][1]["heading"] < 60.0)
+            self.assertEqual(payload["captures"][2]["heading"], 60.0)
+            self.assertTrue(60.0 < payload["captures"][3]["heading"] < 150.0)
+            self.assertEqual(payload["captures"][4]["heading"], 150.0)
+            self.assertTrue(150.0 < payload["captures"][5]["heading"] < 240.0)
+            self.assertEqual(payload["captures"][6]["heading"], 240.0)
+            self.assertTrue(240.0 < payload["captures"][7]["heading"] < 330.0)
 
     def test_panorama_renderer_can_render_pano_missing_from_graph_in_non_graph_mode(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
@@ -752,7 +812,7 @@ class STNavTests(unittest.TestCase):
             downloads.append((url, output_path))
             output_path.write_bytes(b"fake-image")
 
-        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader)
+        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader, rng=random.Random(0))
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             manifest = renderer.render(
@@ -763,8 +823,8 @@ class STNavTests(unittest.TestCase):
             )
 
             self.assertEqual(manifest["pano_id"], "missing-pano-id")
-            self.assertEqual(len(manifest["captures"]), 4)
-            self.assertEqual(len(downloads), 4)
+            self.assertEqual(len(manifest["captures"]), 8)
+            self.assertEqual(len(downloads), 8)
             self.assertIsNone(manifest["floor"])
 
     def test_spatial_engine_can_compute_shortest_room_route(self) -> None:
@@ -939,8 +999,8 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(result.task.source_room_id, "Room 8")
         self.assertEqual(result.source_pano.pano_id, "pano-8")
         self.assertEqual(result.observation.pano_id, "pano-8")
-        self.assertEqual(len(result.observation.views), 4)
-        self.assertEqual(len(downloads), 4)
+        self.assertEqual(len(result.observation.views), 8)
+        self.assertEqual(len(downloads), 8)
 
     def test_grounding_index_can_resolve_primary_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
