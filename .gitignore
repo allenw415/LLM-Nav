@@ -21,3 +21,5 @@ dataset/google_streetview/web/build_graph.py
 .DS_Store
 __pycache__/
 *.pyc
+
+/renders
