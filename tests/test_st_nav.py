@@ -721,6 +721,70 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(observation.entities[0].name, "archway to next room")
         self.assertEqual(observation.entities[0].metadata["view_count"], 8)
 
+    def test_view_detector_writes_and_reuses_detection_cache(self) -> None:
+        calls = []
+        detector = ViewDetector(
+            api_key="test-key",
+            response_client=lambda body: calls.append(body) or {
+                "output_text": json.dumps(
+                    {
+                        "entities": [
+                            {
+                                "name": "north doorway",
+                                "kind": "passage",
+                                "confidence": 0.91,
+                                "source_views": ["north", "north_to_east"],
+                            }
+                        ]
+                    }
+                )
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "north.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "captures": [
+                            {"label": "north", "heading": 330.0, "path": str(image_path)},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            first = detector.detect(manifest_path)
+            second = detector.detect(manifest_path)
+
+            detection_path = manifest_path.with_name("pano-8_manifest_detections.json")
+            trace_path = manifest_path.with_name("pano-8_manifest_detections_trace.json")
+
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(first), 1)
+            self.assertEqual(len(second), 1)
+            self.assertTrue(detection_path.exists())
+            self.assertTrue(trace_path.exists())
+
+            detection_payload = json.loads(detection_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                detection_payload["entities"][0]["source_views"],
+                ["north", "north_to_east"],
+            )
+            trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
+            self.assertEqual(
+                trace_payload["requests_and_responses"][0]["capture_labels"],
+                ["north"],
+            )
+            self.assertEqual(
+                detector.last_traces[0]["capture_labels"],
+                ["north"],
+            )
+
     def test_multiview_aggregator_merges_same_entity_across_views(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
         provider = ManifestPerceptionProvider(pano_graph)
@@ -794,6 +858,7 @@ class STNavTests(unittest.TestCase):
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["pano_id"], "pano-8")
             self.assertEqual(payload["heading_mode"], "museum")
+            self.assertEqual(payload["size"], {"width": 512, "height": 512})
             self.assertEqual([capture["label"] for capture in payload["captures"]], MUSEUM_CAPTURE_LABELS)
             self.assertEqual(payload["captures"][0]["heading"], 330.0)
             self.assertTrue(330.0 < payload["captures"][1]["heading"] or payload["captures"][1]["heading"] < 60.0)
@@ -826,6 +891,34 @@ class STNavTests(unittest.TestCase):
             self.assertEqual(len(manifest["captures"]), 8)
             self.assertEqual(len(downloads), 8)
             self.assertIsNone(manifest["floor"])
+
+    def test_panorama_renderer_reuses_cached_manifest_and_images(self) -> None:
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        downloads = []
+
+        def fake_downloader(url: str, output_path: Path) -> None:
+            downloads.append((url, output_path))
+            output_path.write_bytes(b"fake-image")
+
+        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader, rng=random.Random(0))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            first = renderer.render(
+                pano_id="pano-8",
+                api_key="test-key",
+                output_dir=output_dir,
+                heading_mode="museum",
+            )
+            second = renderer.render(
+                pano_id="pano-8",
+                api_key="test-key",
+                output_dir=output_dir,
+                heading_mode="museum",
+            )
+
+            self.assertEqual(len(downloads), 8)
+            self.assertEqual(first["manifest_path"], second["manifest_path"])
+            self.assertEqual(first["captures"], second["captures"])
 
     def test_spatial_engine_can_compute_shortest_room_route(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)

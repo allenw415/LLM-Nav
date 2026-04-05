@@ -100,8 +100,8 @@ class PanoramaRenderer:
         heading_mode: str = "cardinal",
         pitch: float = 0.0,
         fov: int = 45,
-        width: int = 640,
-        height: int = 640,
+        width: int = 512,
+        height: int = 512,
         graph_path: str | Path | None = None,
     ) -> dict:
         record = self._get_pano_record(pano_id, required=(heading_mode == "graph"))
@@ -111,6 +111,22 @@ class PanoramaRenderer:
         pano_slug = sanitize_name(pano_id)
         pano_output_dir = output_dir / pano_slug
         pano_output_dir.mkdir(parents=True, exist_ok=True)
+        manifest_path = pano_output_dir / f"{pano_slug}_manifest.json"
+
+        cached_manifest = self._load_cached_manifest(
+            manifest_path,
+            pano_id=pano_id,
+            heading_mode=heading_mode,
+            pitch=pitch,
+            fov=fov,
+            width=width,
+            height=height,
+            graph_path=graph_path,
+            captures_to_render=captures_to_render,
+        )
+        if cached_manifest is not None:
+            cached_manifest["manifest_path"] = str(manifest_path)
+            return cached_manifest
 
         captures = []
         for index, (label, heading) in enumerate(captures_to_render):
@@ -147,9 +163,65 @@ class PanoramaRenderer:
             "size": {"width": width, "height": height},
             "captures": captures,
         }
-        manifest_path = pano_output_dir / f"{pano_slug}_manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
+        return manifest
+
+    @staticmethod
+    def _load_cached_manifest(
+        manifest_path: Path,
+        *,
+        pano_id: str,
+        heading_mode: str,
+        pitch: float,
+        fov: int,
+        width: int,
+        height: int,
+        graph_path: str | Path | None,
+        captures_to_render: list[tuple[str, float]],
+    ) -> dict | None:
+        if not manifest_path.exists():
+            return None
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        if not isinstance(manifest, dict):
+            return None
+
+        if manifest.get("pano_id") != pano_id:
+            return None
+        if manifest.get("heading_mode") != heading_mode:
+            return None
+        if manifest.get("pitch") != pitch or manifest.get("fov") != fov:
+            return None
+        if manifest.get("graph_path") != (str(graph_path) if graph_path is not None else None):
+            return None
+
+        size = manifest.get("size")
+        if not isinstance(size, dict):
+            return None
+        if size.get("width") != width or size.get("height") != height:
+            return None
+
+        captures = manifest.get("captures")
+        if not isinstance(captures, list) or len(captures) != len(captures_to_render):
+            return None
+
+        for index, capture in enumerate(captures):
+            if not isinstance(capture, dict):
+                return None
+            expected_label, expected_heading = captures_to_render[index]
+            if capture.get("label") != expected_label:
+                return None
+            if heading_mode != "museum":
+                heading = capture.get("heading")
+                if not isinstance(heading, (int, float)) or abs(float(heading) - expected_heading) > 1e-6:
+                    return None
+            image_path = capture.get("path")
+            if not isinstance(image_path, str) or not Path(image_path).exists():
+                return None
         return manifest
 
     def _get_pano_record(self, pano_id: str, *, required: bool) -> dict:
@@ -245,14 +317,19 @@ class ViewDetector:
         manifest_path = Path(manifest_path)
         self.last_traces = []
         detection_path = manifest_path.with_name(f"{manifest_path.stem}_detections.json")
+        trace_path = manifest_path.with_name(f"{manifest_path.stem}_detections_trace.json")
         if self.use_detection_files and detection_path.exists():
+            self.last_traces = self._load_trace_file(trace_path)
             return self._load_detection_file(detection_path)
 
         if not self.api_key and self.response_client is None:
             return []
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        return self._detect_manifest(manifest)
+        detections = self._detect_manifest(manifest)
+        self._write_detection_file(detection_path, detections)
+        self._write_trace_file(trace_path)
+        return detections
 
     def _load_detection_file(self, detection_path: Path) -> list[ViewDetection]:
         payload = json.loads(detection_path.read_text(encoding="utf-8"))
@@ -273,6 +350,50 @@ class ViewDetector:
             if entity is not None:
                 detection.entities.append(entity)
         return list(grouped.values())
+
+    def _write_detection_file(self, detection_path: Path, view_detections: list[ViewDetection]) -> None:
+        records: list[dict] = []
+        for view_detection in view_detections:
+            for entity in view_detection.entities:
+                record = {
+                    "name": entity.name,
+                    "confidence": entity.confidence,
+                    "kind": entity.kind,
+                }
+                source_views = entity.metadata.get("source_views")
+                if isinstance(source_views, list) and source_views:
+                    record["source_views"] = list(source_views)
+                elif entity.source_view:
+                    record["capture_label"] = entity.source_view
+
+                for key, value in entity.metadata.items():
+                    if key not in {"source_views"}:
+                        record[key] = value
+                records.append(record)
+
+        detection_path.write_text(
+            json.dumps({"entities": records}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def _write_trace_file(self, trace_path: Path) -> None:
+        trace_path.write_text(
+            json.dumps({"requests_and_responses": self.last_traces}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _load_trace_file(trace_path: Path) -> list[dict]:
+        if not trace_path.exists():
+            return []
+        try:
+            payload = json.loads(trace_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        traces = payload.get("requests_and_responses")
+        if not isinstance(traces, list):
+            return []
+        return [trace for trace in traces if isinstance(trace, dict)]
 
     def _detect_manifest(self, manifest: dict) -> list[ViewDetection]:
         captures = [

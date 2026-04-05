@@ -74,8 +74,8 @@ class SourcePerceptionWorkflow:
         heading_mode: str = "museum",
         pitch: float = 0.0,
         fov: int = 45,
-        width: int = 640,
-        height: int = 640,
+        width: int = 512,
+        height: int = 512,
         current_heading: float = 330.0,
         graph_path: str | None = None,
     ) -> SourcePerceptionResult:

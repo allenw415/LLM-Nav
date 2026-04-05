@@ -28,8 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=45)
-    parser.add_argument("--width", type=int, default=640)
-    parser.add_argument("--height", type=int, default=640)
+    parser.add_argument("--width", type=int, default=512)
+    parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--current-heading", type=float, default=330.0)
     parser.add_argument("--demo-trace", action="store_true")
     return parser

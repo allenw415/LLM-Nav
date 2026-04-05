@@ -37,8 +37,8 @@ class EpisodeRunner:
         render_heading_mode: str = "museum",
         render_pitch: float = 0.0,
         render_fov: int = 90,
-        render_width: int = 640,
-        render_height: int = 640,
+        render_width: int = 512,
+        render_height: int = 512,
         render_graph_path: str | Path | None = None,
     ) -> tuple[BeliefState, list[EpisodeTrace]]:
         manifest_paths = dict(manifest_paths or {})
