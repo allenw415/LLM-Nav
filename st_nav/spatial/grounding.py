@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .models import RoomGroundingEntry, SourcePanoResolution
+from ..common.types import RoomGroundingEntry, SourcePanoResolution
 
 
 def build_grounding_template(room_graph: dict[str, dict]) -> dict[str, dict]:

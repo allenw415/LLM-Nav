@@ -4,7 +4,7 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-from .models import PanoNode, RoomNode
+from st_nav.common.types import PanoNode, RoomNode
 
 BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS = {
     "Room 4",

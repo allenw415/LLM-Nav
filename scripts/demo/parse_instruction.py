@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import sys
-from pathlib import Path
+from _common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+ensure_project_root_on_path()
 
-from st_nav import LLMInstructionParser
-from st_nav.env import load_dotenv
+from st_nav import LLMInstructionParser, load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
-
+# Example instructions for the four task types used by the parser:
+# 1. gallery_goal_navigation:
+#    "Find the way from Room 4 to Room 23."
+# 2. artwork_goal_navigation:
+#    "Find the way from the Lamassu to the Townley Venus."
+# 3. gallery_instruction_following_navigation:
+#    "Find the way from Room 4, passing Room 7 and Room 17, to Room 23."
+# 4. artwork_instruction_following_navigation:
+#    "Find the way from the Bronze Container for Cosmetic Items, passing the Lamassu and the Nereid Monument, to the Townley Venus."
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Parse a navigation instruction with the LLM parser.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
@@ -25,29 +28,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_json(path: Path) -> dict:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected dict JSON: {path}")
-    return payload
-
-
 def main() -> int:
     args = build_parser().parse_args()
     if not args.llm_api_key:
         raise RuntimeError("Missing OPENAI_API_KEY.")
 
-    artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
-    room_graph = load_json(artifacts_dir / "room_graph.json")
+    artifacts = load_normalized_artifacts(args.artifacts_dir, room_graph=True)
     parser = LLMInstructionParser(
-        room_graph=room_graph,
+        room_graph=artifacts.room_graph or {},
         api_key=args.llm_api_key,
         model=args.llm_model,
     )
     task = parser.parse(args.instruction)
 
     print(
-        json.dumps(
+        render_json(
             {
                 "instruction": task.raw_instruction,
                 "task_type": task.task_type,
@@ -82,9 +77,7 @@ def main() -> int:
                     }
                     for entity in task.waypoint_entities
                 ],
-            },
-            ensure_ascii=False,
-            indent=2,
+            }
         )
     )
     return 0

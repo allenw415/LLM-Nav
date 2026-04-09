@@ -6,13 +6,12 @@ import os
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import PanoramaRenderer
-from st_nav.env import load_dotenv
-from st_nav.room_grounder import GeminiRoomGrounder, aggregate_gemini_usage_from_traces, invert_room_grounding
+from st_nav import PanoramaRenderer, load_dotenv
+from st_nav_data.room_grounder import GeminiRoomGrounder, aggregate_gemini_usage_from_traces, invert_room_grounding
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -29,7 +28,7 @@ def format_usage(usage: dict) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Test room grounding from rendered pano views using Gemini.")
+    parser = argparse.ArgumentParser(description="Run room grounding from rendered pano views using Gemini.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--manifest-path")
     parser.add_argument("--pano-id")

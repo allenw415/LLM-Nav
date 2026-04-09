@@ -5,12 +5,12 @@ import json
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.grounding import build_grounding_template
-from st_nav.normalize import (
+from st_nav import build_grounding_template
+from st_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
     BRITISH_MUSEUM_EXCLUDED_EDGES,
     BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS,

@@ -3,12 +3,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+from _common import (
+    PROJECT_ROOT,
+    ensure_project_root_on_path,
+    load_json,
+    load_normalized_artifacts,
+    render_json,
+    resolve_project_path,
+    write_text_if_requested,
+)
+
+ensure_project_root_on_path()
 
 from st_nav import (
     EntityDetection,
@@ -19,10 +26,9 @@ from st_nav import (
     RoomLocalizer,
     SpatialEngine,
     build_grounding_template,
-    normalize_pano_graph,
-    normalize_room_graph,
+    load_dotenv,
 )
-from st_nav.env import load_dotenv
+from st_nav_data.normalize import normalize_pano_graph, normalize_room_graph
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -30,7 +36,7 @@ PROBABILITY_DECIMALS = 2
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Demo room-level Bayesian localization.")
+    parser = argparse.ArgumentParser(description="Run room-level localization on synthetic or cached inputs.")
     parser.add_argument("--mode", choices=["synthetic", "manifest", "perception-json"], default="synthetic")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--manifest-path")
@@ -54,15 +60,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--full-json", action="store_true")
     parser.add_argument("--output-path")
     return parser
-
-
-def load_json(path: Path) -> dict:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected dict JSON: {path}")
-    return payload
-
-
 def parse_prior_room_belief(values: list[str], default_room_id: str | None) -> dict[str, float]:
     if not values:
         return {default_room_id: 1.0} if default_room_id else {}
@@ -371,10 +368,9 @@ def main() -> int:
     prior_room_belief = parse_prior_room_belief(args.prior_room, args.start_room_id)
     prior_room_source = "manual"
     if args.prior_localization_json:
-        prior_room_belief, inferred_start_room_id = load_prior_from_localization_json(
-            Path(args.prior_localization_json).resolve()
-        )
-        prior_room_source = str(Path(args.prior_localization_json).resolve())
+        prior_path = resolve_project_path(args.prior_localization_json)
+        prior_room_belief, inferred_start_room_id = load_prior_from_localization_json(prior_path)
+        prior_room_source = str(prior_path)
         if (not args.start_room_id or args.start_room_id == "Room 10") and inferred_start_room_id:
             args.start_room_id = inferred_start_room_id
 
@@ -384,20 +380,20 @@ def main() -> int:
     elif args.mode == "manifest":
         if not args.manifest_path:
             raise RuntimeError("--manifest-path is required when --mode manifest.")
-        artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
+        artifacts_dir = load_normalized_artifacts(args.artifacts_dir).artifacts_dir
         room_graph, pano_graph, grounding, observation, description = build_manifest_demo_inputs(
             artifacts_dir=artifacts_dir,
-            manifest_path=Path(args.manifest_path).resolve(),
+            manifest_path=resolve_project_path(args.manifest_path),
             current_heading=args.current_heading,
         )
         start_pano_id = args.start_pano_id
     else:
         if not args.perception_json_path:
             raise RuntimeError("--perception-json-path is required when --mode perception-json.")
-        artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
+        artifacts_dir = load_normalized_artifacts(args.artifacts_dir).artifacts_dir
         room_graph, pano_graph, grounding, observation, description = build_perception_json_demo_inputs(
             artifacts_dir=artifacts_dir,
-            perception_json_path=Path(args.perception_json_path).resolve(),
+            perception_json_path=resolve_project_path(args.perception_json_path),
         )
         start_pano_id = args.start_pano_id
 
@@ -491,11 +487,8 @@ def main() -> int:
             localization.get("observation_likelihood", {})
         )
 
-    output_text = json.dumps(payload, ensure_ascii=False, indent=2)
-    if args.output_path:
-        output_path = Path(args.output_path).resolve()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output_text, encoding="utf-8")
+    output_text = render_json(payload)
+    write_text_if_requested(output_text, args.output_path)
 
     if args.json:
         print(output_text)

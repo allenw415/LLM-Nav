@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
-import sys
-from pathlib import Path
+from _common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+ensure_project_root_on_path()
 
-from st_nav import GroundingIndex, SourcePanoResolver
-from st_nav.env import load_dotenv
+from st_nav import GroundingIndex, SourcePanoResolver, load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -23,19 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_json(path: Path) -> dict:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected dict JSON: {path}")
-    return payload
-
-
 def main() -> int:
     args = build_parser().parse_args()
-    artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
-    grounding = load_json(artifacts_dir / "room_grounding.template.json")
+    artifacts = load_normalized_artifacts(args.artifacts_dir, grounding=True)
 
-    resolver = SourcePanoResolver(GroundingIndex(grounding))
+    resolver = SourcePanoResolver(GroundingIndex(artifacts.grounding or {}))
     resolution = resolver.resolve(args.source_room_id)
 
     payload = {
@@ -46,7 +33,7 @@ def main() -> int:
         payload["candidate_pano_ids"] = resolution.candidate_pano_ids
         payload["resolution_method"] = resolution.resolution_method
 
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    print(render_json(payload))
     return 0
 
 

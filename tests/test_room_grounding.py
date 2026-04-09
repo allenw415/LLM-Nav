@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from st_nav.room_grounder import (
+from st_nav_data.room_grounder import (
     aggregate_gemini_usage_from_traces,
     build_compact_pano_room_mapping,
     GeminiRoomGrounder,

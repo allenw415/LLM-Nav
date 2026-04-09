@@ -6,14 +6,13 @@ import os
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import PanoramaRenderer
-from st_nav.env import load_dotenv
-from st_nav.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
-from st_nav.room_grounder import (
+from st_nav import PanoramaRenderer, load_dotenv
+from st_nav_data.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
+from st_nav_data.room_grounder import (
     GeminiRoomGrounder,
     build_compact_pano_room_mapping,
     build_manual_annotation_records,

@@ -13,30 +13,28 @@ from st_nav import (
     LLMRoomLocalizer,
     LLMInstructionParser,
     ManifestPerceptionProvider,
+    NavigationPipeline,
     Observation,
     PerceptionPipeline,
     PanoramaRenderer,
     RoomLocalizer,
     SourcePanoResolver,
-    SourcePerceptionWorkflow,
+    SourceResolutionWorkflow,
     SpatialEngine,
     ViewDetector,
     build_grounding_template,
-    normalize_pano_graph,
-    normalize_room_graph,
-)
-from st_nav.normalize import (
-    BRITISH_MUSEUM_DIRECTION_OVERRIDES,
-    BRITISH_MUSEUM_EXCLUDED_EDGES,
-    BRITISH_MUSEUM_ROOM_CANONICAL_IDS,
-    BRITISH_MUSEUM_TRANSITION_OVERRIDES,
-)
-from st_nav.prompts import (
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
 )
-
+from st_nav_data.normalize import (
+    BRITISH_MUSEUM_DIRECTION_OVERRIDES,
+    BRITISH_MUSEUM_EXCLUDED_EDGES,
+    BRITISH_MUSEUM_ROOM_CANONICAL_IDS,
+    BRITISH_MUSEUM_TRANSITION_OVERRIDES,
+    normalize_pano_graph,
+    normalize_room_graph,
+)
 MUSEUM_CAPTURE_LABELS = [
     "north",
     "north_to_east",
@@ -1309,16 +1307,10 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(resolution.pano_id, "pano-8")
         self.assertEqual(resolution.candidate_pano_ids, ["pano-8", "pano-8b"])
 
-    def test_source_perception_workflow_runs_parse_resolve_render_aggregate(self) -> None:
+    def test_source_resolution_workflow_runs_parse_and_resolve_source_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        pano_graph = normalize_pano_graph(self.pano_graph)
         grounding = build_grounding_template(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
-        downloads = []
-
-        def fake_downloader(url: str, output_path: Path) -> None:
-            downloads.append((url, output_path))
-            output_path.write_bytes(b"fake-image")
 
         parser = LLMInstructionParser(
             room_graph=room_graph,
@@ -1347,27 +1339,75 @@ class STNavTests(unittest.TestCase):
                 )
             },
         )
-        workflow = SourcePerceptionWorkflow(
+        workflow = SourceResolutionWorkflow(
             instruction_parser=parser,
             source_pano_resolver=SourcePanoResolver(GroundingIndex(grounding)),
-            perception_pipeline=PerceptionPipeline(
-                pano_graph=pano_graph,
-                renderer=PanoramaRenderer(pano_graph, image_downloader=fake_downloader),
-            ),
         )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            result = workflow.run(
-                "Find the way from Room 8 to Room 23.",
-                api_key="test-key",
-                output_dir=tmpdir,
-            )
+        result = workflow.run("Find the way from Room 8 to Room 23.")
 
         self.assertEqual(result.task.source_room_id, "Room 8")
         self.assertEqual(result.source_pano.pano_id, "pano-8")
-        self.assertEqual(result.observation.pano_id, "pano-8")
-        self.assertEqual(len(result.observation.views), 8)
-        self.assertEqual(len(downloads), 8)
+
+    def test_navigation_pipeline_runs_source_resolution_then_episode_runner(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        grounding["Room 8"]["pano_ids"] = ["pano-8"]
+
+        parser = LLMInstructionParser(
+            room_graph=room_graph,
+            api_key="test-key",
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "task_type": "gallery_goal_navigation",
+                        "source_room_id": "Room 8",
+                        "source_entity": {
+                            "name": "Room 8",
+                            "entity_type": "gallery",
+                            "predicted_room_id": "Room 8",
+                            "confidence": 1.0,
+                        },
+                        "goal_entities": [
+                            {
+                                "name": "Room 23",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 23",
+                                "confidence": 1.0,
+                            }
+                        ],
+                        "waypoint_entities": [],
+                    }
+                )
+            },
+        )
+
+        class FakeEpisodeRunner:
+            def __init__(self) -> None:
+                self.last_call = None
+
+            def run(self, **kwargs):
+                self.last_call = kwargs
+                return {"final_pano_id": kwargs["start_pano_id"]}, ["trace-0"]
+
+        runner = FakeEpisodeRunner()
+        pipeline = NavigationPipeline(
+            source_resolution_workflow=SourceResolutionWorkflow(
+                instruction_parser=parser,
+                source_pano_resolver=SourcePanoResolver(GroundingIndex(grounding)),
+            ),
+            episode_runner=runner,
+        )
+
+        result = pipeline.run("Find the way from Room 8 to Room 23.", step_budget=3)
+
+        self.assertEqual(result.task.source_room_id, "Room 8")
+        self.assertEqual(result.source.source_pano.pano_id, "pano-8")
+        self.assertEqual(result.final_state["final_pano_id"], "pano-8")
+        self.assertEqual(result.traces, ["trace-0"])
+        self.assertEqual(runner.last_call["start_pano_id"], "pano-8")
+        self.assertEqual(runner.last_call["start_room_id"], "Room 8")
+        self.assertEqual(runner.last_call["step_budget"], 3)
 
     def test_grounding_index_can_resolve_primary_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)

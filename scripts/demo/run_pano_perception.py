@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
-import sys
-from pathlib import Path
+from _common import (
+    PROJECT_ROOT,
+    ensure_project_root_on_path,
+    load_normalized_artifacts,
+    render_json,
+    write_text_if_requested,
+)
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+ensure_project_root_on_path()
 
-from st_nav import PanoramaRenderer, PerceptionPipeline, ViewDetector
-from st_nav.env import load_dotenv
+from st_nav import PanoramaRenderer, PerceptionPipeline, ViewDetector, load_dotenv
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -36,13 +37,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_json(path: Path) -> dict:
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"Expected dict JSON: {path}")
-    return payload
-
-
 def main() -> int:
     args = build_parser().parse_args()
     if not args.llm_api_key:
@@ -50,8 +44,8 @@ def main() -> int:
     if not args.render_api_key:
         raise RuntimeError("Missing GMAPS_API_KEY.")
 
-    artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
-    pano_graph = load_json(artifacts_dir / "pano_graph.json")
+    artifacts = load_normalized_artifacts(args.artifacts_dir, pano_graph=True)
+    pano_graph = artifacts.pano_graph or {}
 
     detector = ViewDetector(
         api_key=args.llm_api_key,
@@ -73,7 +67,7 @@ def main() -> int:
         fov=args.fov,
         width=args.width,
         height=args.height,
-        graph_path=str(artifacts_dir / "pano_graph.json"),
+        graph_path=str(artifacts.artifacts_dir / "pano_graph.json"),
     )
     observation = pipeline.observe_from_manifest(
         manifest["manifest_path"],
@@ -104,11 +98,8 @@ def main() -> int:
             "requests_and_responses": detector.last_traces,
         }
 
-    output_text = json.dumps(payload, ensure_ascii=False, indent=2)
-    if args.output_path:
-        output_path = Path(args.output_path).resolve()
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(output_text, encoding="utf-8")
+    output_text = render_json(payload)
+    write_text_if_requested(output_text, args.output_path)
     print(output_text)
     return 0
 

@@ -20,6 +20,9 @@ ST-Nav/
         run_control.py
         scripts/
         web/
+  scripts/
+    data/
+    demo/
 ```
 
 ## Key Directories
@@ -34,6 +37,7 @@ ST-Nav/
   the viewer
 - `dataset/pipelines/google_streetview/run_control.py`: small CLI entrypoint for
   interactive checks and screenshots
+- `scripts/`: repository-facing helper CLIs grouped into `data/` and `demo/`
 
 ## Notes
 
@@ -41,3 +45,5 @@ ST-Nav/
   `dataset/README.md`.
 - Site-specific notes for the British Museum assets are documented in
   `dataset/sites/british_museum/README.md`.
+- Script usage notes are documented in
+  `scripts/README.md`.

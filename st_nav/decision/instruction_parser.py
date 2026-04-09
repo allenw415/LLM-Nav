@@ -5,13 +5,13 @@ import os
 import urllib.request
 from typing import Callable
 
-from .models import ParsedNavigationEntity, TaskSpec
-from .prompts import (
+from ..common.prompts import (
     NAVIGATION_TASK_TYPES,
     build_navigation_parse_input,
     build_navigation_parse_instructions,
     build_navigation_parse_schema,
 )
+from ..common.types import ParsedNavigationEntity, TaskSpec
 
 
 class LLMInstructionParser:

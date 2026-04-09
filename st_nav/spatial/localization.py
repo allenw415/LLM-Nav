@@ -8,9 +8,9 @@ import urllib.request
 from difflib import SequenceMatcher
 from typing import Callable
 
+from ..common.prompts import build_localization_input, build_localization_instructions, build_localization_schema
+from ..common.types import EntityDetection, Observation
 from .grounding import GroundingIndex
-from .models import EntityDetection, Observation
-from .prompts import build_localization_input, build_localization_instructions, build_localization_schema
 
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 TOKEN_NORMALIZATION = {

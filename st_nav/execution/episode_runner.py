@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import BeliefState, Observation, PolicyOutput, ReasoningInput, TaskSpec
+from ..common.types import BeliefState, Observation, PolicyOutput, ReasoningInput, TaskSpec
 
 
 @dataclass
