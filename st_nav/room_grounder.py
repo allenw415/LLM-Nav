@@ -414,10 +414,12 @@ class GeminiRoomGrounder:
 
         request_body = self._build_request_body(manifest, candidates)
         payload = self._create_response(request_body)
+        usage = extract_gemini_usage_metadata(payload)
         self.last_traces.append(
             {
                 "request": self._redact_request_body(request_body),
                 "response": self._clone_json(payload),
+                "usage": usage,
             }
         )
         parsed = self._parse_output_payload(payload)
@@ -780,6 +782,63 @@ def merge_seed_panos_by_room(*seed_maps: dict[str, list[str]]) -> dict[str, list
                 if pano_id not in room_seed_panos:
                     room_seed_panos.append(pano_id)
     return {room_id: sorted(pano_ids) for room_id, pano_ids in merged.items()}
+
+
+def extract_gemini_usage_metadata(payload: dict) -> dict | None:
+    usage = payload.get("usageMetadata")
+    if not isinstance(usage, dict):
+        return None
+
+    mapped = {
+        "prompt_token_count": usage.get("promptTokenCount"),
+        "candidates_token_count": usage.get("candidatesTokenCount"),
+        "total_token_count": usage.get("totalTokenCount"),
+        "thoughts_token_count": usage.get("thoughtsTokenCount"),
+        "cached_content_token_count": usage.get("cachedContentTokenCount"),
+    }
+    normalized = {
+        key: int(value)
+        for key, value in mapped.items()
+        if isinstance(value, int) or (isinstance(value, float) and float(value).is_integer())
+    }
+    return normalized or None
+
+
+def aggregate_gemini_usage_from_traces(traces: list[dict]) -> dict:
+    totals = {
+        "request_count": 0,
+        "prompt_token_count": 0,
+        "candidates_token_count": 0,
+        "total_token_count": 0,
+        "thoughts_token_count": 0,
+        "cached_content_token_count": 0,
+    }
+    found_usage = False
+
+    for trace in traces:
+        if not isinstance(trace, dict):
+            continue
+        usage = trace.get("usage")
+        if not isinstance(usage, dict):
+            response = trace.get("response")
+            if isinstance(response, dict):
+                usage = extract_gemini_usage_metadata(response)
+        if not isinstance(usage, dict):
+            continue
+        found_usage = True
+        totals["request_count"] += 1
+        for key in (
+            "prompt_token_count",
+            "candidates_token_count",
+            "total_token_count",
+            "thoughts_token_count",
+            "cached_content_token_count",
+        ):
+            value = usage.get(key)
+            if isinstance(value, int):
+                totals[key] += value
+
+    return totals if found_usage else {}
 
 
 def build_compact_pano_room_mapping(

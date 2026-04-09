@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from st_nav.room_grounder import (
+    aggregate_gemini_usage_from_traces,
     build_compact_pano_room_mapping,
     GeminiRoomGrounder,
     build_manual_annotation_records,
@@ -360,6 +361,35 @@ class RoomGroundingTests(unittest.TestCase):
 
         self.assertEqual(compact["mappings"], {"pano-1": "Room 4", "pano-2": "Room 8"})
         self.assertEqual(compact["sources"], {"pano-1": "gemini", "pano-2": "manual:accepted"})
+
+    def test_aggregate_gemini_usage_from_traces_sums_usage_metadata(self) -> None:
+        usage = aggregate_gemini_usage_from_traces(
+            [
+                {
+                    "response": {
+                        "usageMetadata": {
+                            "promptTokenCount": 100,
+                            "candidatesTokenCount": 20,
+                            "totalTokenCount": 120,
+                            "thoughtsTokenCount": 5,
+                        }
+                    }
+                },
+                {
+                    "usage": {
+                        "prompt_token_count": 30,
+                        "candidates_token_count": 10,
+                        "total_token_count": 40,
+                    }
+                },
+            ]
+        )
+
+        self.assertEqual(usage["request_count"], 2)
+        self.assertEqual(usage["prompt_token_count"], 130)
+        self.assertEqual(usage["candidates_token_count"], 30)
+        self.assertEqual(usage["total_token_count"], 160)
+        self.assertEqual(usage["thoughts_token_count"], 5)
 
 
 if __name__ == "__main__":

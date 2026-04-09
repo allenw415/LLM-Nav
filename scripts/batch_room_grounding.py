@@ -127,7 +127,7 @@ def ensure_manifest(
         pano_id=pano_id,
         api_key=render_api_key,
         output_dir=str(render_output_dir),
-        heading_mode="cardinal",
+        heading_mode="grounding",
         pitch=pitch,
         fov=fov,
         width=width,

@@ -7,13 +7,16 @@ import unittest
 from pathlib import Path
 
 from st_nav import (
+    EntityDetection,
     GroundingIndex,
     InstructionRoutePlanner,
+    LLMRoomLocalizer,
     LLMInstructionParser,
     ManifestPerceptionProvider,
     Observation,
     PerceptionPipeline,
     PanoramaRenderer,
+    RoomLocalizer,
     SourcePanoResolver,
     SourcePerceptionWorkflow,
     SpatialEngine,
@@ -869,6 +872,29 @@ class STNavTests(unittest.TestCase):
             self.assertEqual(payload["captures"][6]["heading"], 240.0)
             self.assertTrue(240.0 < payload["captures"][7]["heading"] < 330.0)
 
+    def test_panorama_renderer_grounding_mode_uses_four_museum_headings(self) -> None:
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        downloads = []
+
+        def fake_downloader(url: str, output_path: Path) -> None:
+            downloads.append((url, output_path))
+            output_path.write_bytes(b"fake-image")
+
+        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader, rng=random.Random(0))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            manifest = renderer.render(
+                pano_id="pano-8",
+                api_key="test-key",
+                output_dir=output_dir,
+                heading_mode="grounding",
+            )
+
+            self.assertEqual(len(manifest["captures"]), 4)
+            self.assertEqual(len(downloads), 4)
+            self.assertEqual([capture["label"] for capture in manifest["captures"]], ["north", "east", "south", "west"])
+            self.assertEqual([capture["heading"] for capture in manifest["captures"]], [330.0, 60.0, 150.0, 240.0])
+
     def test_panorama_renderer_can_render_pano_missing_from_graph_in_non_graph_mode(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
         downloads = []
@@ -977,6 +1003,254 @@ class STNavTests(unittest.TestCase):
         )
         self.assertEqual(updated.current_room_id, "Room 23")
         self.assertEqual(updated.room_belief, {"Room 23": 0.9})
+
+    def test_room_localizer_combines_transition_and_entity_evidence(self) -> None:
+        explicit_map = {
+            "Room 7": {
+                "name": "Room 7",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria",
+                "links": [{"direction": "right", "name": "Room 10"}],
+            },
+            "Room 10": {
+                "name": "Room 10",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Lion hunts",
+                "links": [
+                    {"direction": "left", "name": "Room 7"},
+                    {"direction": "up", "name": "Room 23"},
+                ],
+            },
+            "Room 18": {
+                "name": "Room 18",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek sculpture",
+                "links": [{"direction": "up", "name": "Room 19"}],
+            },
+            "Room 19": {
+                "name": "Room 19",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek marble sculpture",
+                "links": [{"direction": "down", "name": "Room 18"}],
+            },
+            "Room 20": {
+                "name": "Room 20",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Roman sculpture",
+                "links": [{"direction": "up", "name": "Room 21"}],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [{"direction": "down", "name": "Room 10"}],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = RoomLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+
+        observation = Observation(
+            pano_id="pano-unknown",
+            entities=[
+                EntityDetection(
+                    name="Greek Roman statue",
+                    confidence=0.95,
+                    kind="artwork",
+                    source_view="north",
+                ),
+                EntityDetection(
+                    name="marble sculpture",
+                    confidence=0.9,
+                    kind="landmark",
+                    source_view="east",
+                ),
+                EntityDetection(
+                    name="stone relief",
+                    confidence=0.75,
+                    kind="artwork",
+                    source_view="south",
+                ),
+            ],
+            metadata={"floor": "0"},
+        )
+        localization = localizer.localize(
+            observation=observation,
+            prior_room_belief={"Room 10": 1.0},
+            fallback_room_id="Room 10",
+        )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 23")
+        self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 7"])
+        self.assertEqual(localization["room_belief"]["Room 18"], 0.0)
+        self.assertEqual(localization["room_belief"]["Room 19"], 0.0)
+        self.assertEqual(localization["room_belief"]["Room 20"], 0.0)
+
+    def test_spatial_update_can_localize_room_without_explicit_metadata(self) -> None:
+        explicit_map = {
+            "Room 7": {
+                "name": "Room 7",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria",
+                "links": [{"direction": "right", "name": "Room 10"}],
+            },
+            "Room 10": {
+                "name": "Room 10",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Lion hunts",
+                "links": [
+                    {"direction": "left", "name": "Room 7"},
+                    {"direction": "up", "name": "Room 23"},
+                ],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [{"direction": "down", "name": "Room 10"}],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 10")
+
+        updated = spatial.update(
+            state,
+            Observation(
+                pano_id="pano-23",
+                entities=[
+                    EntityDetection(
+                        name="Greek Roman statue",
+                        confidence=0.95,
+                        kind="artwork",
+                        source_view="north",
+                    ),
+                    EntityDetection(
+                        name="marble sculpture",
+                        confidence=0.9,
+                        kind="landmark",
+                        source_view="east",
+                    ),
+                ],
+                metadata={"floor": "0"},
+            ),
+        )
+
+        self.assertEqual(updated.current_room_id, "Room 23")
+        self.assertGreater(updated.room_belief["Room 23"], updated.room_belief["Room 7"])
+
+    def test_llm_room_localizer_combines_llm_scores_with_transition_prior(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = LLMRoomLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "predicted_room_id": "Room 23",
+                        "confidence": 0.91,
+                        "evidence": ["marble statue on pedestal", "classical sculpture hall"],
+                        "room_scores": [
+                            {"room_id": "Room 7", "score": 0.2},
+                            {"room_id": "Room 8", "score": 0.2},
+                            {"room_id": "Room 9", "score": 0.2},
+                            {"room_id": "Room 23", "score": 0.9},
+                        ],
+                        "summary": "Observation best matches the Greek and Roman sculpture room.",
+                    }
+                )
+            },
+        )
+
+        localization = localizer.localize(
+            observation=Observation(
+                pano_id="pano-23",
+                entities=[
+                    EntityDetection(
+                        name="marble statue on pedestal",
+                        confidence=0.95,
+                        kind="artwork",
+                        source_view="north",
+                    ),
+                ],
+                metadata={"floor": "0"},
+            ),
+            prior_room_belief={"Room 8": 1.0},
+            fallback_room_id="Room 8",
+        )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 23")
+        self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
+        self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 8"])
+
+    def test_spatial_engine_can_use_injected_llm_localizer(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        localizer = LLMRoomLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "predicted_room_id": "Room 23",
+                        "confidence": 0.88,
+                        "evidence": ["Greek and Roman sculpture sign"],
+                        "room_scores": [
+                            {"room_id": "Room 7", "score": 0.2},
+                            {"room_id": "Room 8", "score": 0.2},
+                            {"room_id": "Room 9", "score": 0.2},
+                            {"room_id": "Room 23", "score": 0.9},
+                        ],
+                        "summary": "Observation favors Room 23.",
+                    }
+                )
+            },
+        )
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+            localizer=localizer,
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
+        updated = spatial.update(
+            state,
+            Observation(
+                pano_id="pano-23",
+                entities=[
+                    EntityDetection(
+                        name="Greek and Roman sculpture sign",
+                        confidence=0.95,
+                        kind="signage",
+                        source_view="north",
+                    )
+                ],
+                metadata={"floor": "0"},
+            ),
+        )
+
+        self.assertEqual(updated.current_room_id, "Room 23")
+        self.assertEqual(updated.room_belief["Room 23"], max(updated.room_belief.values()))
 
     def test_instruction_route_planner_runs_parse_then_shortest_path(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)

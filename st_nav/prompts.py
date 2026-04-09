@@ -159,3 +159,92 @@ def build_navigation_parse_schema(room_ids: list[str]) -> dict:
         "required": ["task_type", "source_room_id", "source_entity", "goal_entities", "waypoint_entities"],
         "additionalProperties": False,
     }
+
+
+def build_localization_instructions() -> str:
+    return " ".join(
+        [
+            "You are a museum localization reasoner for British Museum indoor navigation.",
+            "You are given detected entities from the current panorama, plus a closed list of candidate rooms on the same floor.",
+            "Estimate how visually compatible the current observation is with each candidate room.",
+            "Use the room titles, aliases, categories, and anchor entities as room descriptions.",
+            "Prefer stable in-room evidence such as statues, reliefs, busts, monuments, display cases, and explicit room signs.",
+            "Treat passages, doorways, and corridor views as weaker evidence because they may reveal adjacent rooms.",
+            "A sign for another room can indicate a nearby neighboring room, so do not over-weight it unless it strongly matches the overall scene.",
+            "Return a normalized observation distribution over the candidate rooms, where probabilities sum to 1.",
+            "These probabilities represent observation-only compatibility, not motion priors and not the final localization posterior.",
+            "Do not invent room ids outside the candidate list.",
+            "Return JSON only.",
+        ]
+    )
+
+
+def build_localization_input(*, observation_entities: list[dict], candidates: list[dict]) -> str:
+    entity_lines = []
+    for entity in observation_entities:
+        parts = [
+            f"name={entity['name']}",
+            f"kind={entity['kind']}",
+            f"confidence={entity['confidence']:.2f}",
+        ]
+        source_views = entity.get("source_views")
+        if isinstance(source_views, list) and source_views:
+            parts.append("source_views=" + ", ".join(str(value) for value in source_views))
+        entity_lines.append("- " + " | ".join(parts))
+
+    candidate_lines = []
+    for candidate in candidates:
+        parts = [
+            f"room_id={candidate['room_id']}",
+            f"transition_support={candidate['transition_support']:.4f}",
+            f"title={candidate.get('title') or 'unknown'}",
+            f"category={candidate.get('category') or 'unknown'}",
+        ]
+        aliases = candidate.get("aliases")
+        if isinstance(aliases, list) and aliases:
+            parts.append("aliases=" + ", ".join(str(value) for value in aliases))
+        anchor_entities = candidate.get("anchor_entities")
+        if isinstance(anchor_entities, list) and anchor_entities:
+            parts.append("anchors=" + ", ".join(str(value) for value in anchor_entities))
+        candidate_lines.append("- " + " | ".join(parts))
+
+    lines = [
+        f"Observed entity count: {len(observation_entities)}.",
+        "Observation entities:",
+        *entity_lines,
+        "",
+        f"Candidate room count: {len(candidates)}.",
+        "Candidate rooms:",
+        *candidate_lines,
+        "",
+        "Task:",
+        "1. Judge visual compatibility for every candidate room using only the observation entities.",
+        "2. Output exactly one observation probability for each candidate room.",
+        "3. Make the observation probabilities sum to 1 across the candidate rooms.",
+        "4. Choose the single best predicted_room_id based on observation compatibility only.",
+    ]
+    return "\n".join(lines)
+
+
+def build_localization_schema(room_ids: list[str]) -> dict:
+    room_score_schema = {
+        "type": "object",
+        "properties": {
+            "room_id": {"type": "string", "enum": room_ids},
+            "score": {"type": "number"},
+        },
+        "required": ["room_id", "score"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+            "confidence": {"type": "number"},
+            "evidence": {"type": "array", "items": {"type": "string"}},
+            "room_distribution": {"type": "array", "items": room_score_schema},
+            "summary": {"type": "string"},
+        },
+        "required": ["predicted_room_id", "confidence", "evidence", "room_distribution", "summary"],
+        "additionalProperties": False,
+    }

@@ -32,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--current-heading", type=float, default=330.0)
     parser.add_argument("--demo-trace", action="store_true")
+    parser.add_argument("--output-path")
     return parser
 
 
@@ -82,13 +83,16 @@ def main() -> int:
     payload = {
         "pano_id": observation.pano_id,
         "manifest_path": manifest["manifest_path"],
+        "floor": observation.metadata.get("floor"),
+        "lat": observation.metadata.get("lat"),
+        "lng": observation.metadata.get("lng"),
+        "current_heading": args.current_heading,
         "view_count": len(observation.views),
         "entities": [
             {
                 "name": entity.name,
                 "kind": entity.kind,
                 "confidence": entity.confidence,
-                "source_views": entity.metadata.get("source_views", [entity.source_view]),
             }
             for entity in observation.entities
         ],
@@ -100,7 +104,12 @@ def main() -> int:
             "requests_and_responses": detector.last_traces,
         }
 
-    print(json.dumps(payload, ensure_ascii=False, indent=2))
+    output_text = json.dumps(payload, ensure_ascii=False, indent=2)
+    if args.output_path:
+        output_path = Path(args.output_path).resolve()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(output_text, encoding="utf-8")
+    print(output_text)
     return 0
 
 

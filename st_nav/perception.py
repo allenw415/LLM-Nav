@@ -16,6 +16,7 @@ from .models import EntityDetection, Observation, RenderedView, ViewDetection
 from .prompts import build_view_detection_input, build_view_detection_instructions, build_view_detection_schema
 
 CARDINAL_HEADINGS = (0.0, 90.0, 180.0, 270.0)
+GROUNDING_HEADINGS = (330.0, 60.0, 150.0, 240.0)
 MUSEUM_HEADINGS = (330.0, 60.0, 150.0, 240.0)
 CARDINAL_LABELS = ("north", "east", "south", "west")
 MUSEUM_INTERSTITIAL_LABELS = ("north_to_east", "east_to_south", "south_to_west", "west_to_north")
@@ -235,6 +236,8 @@ class PanoramaRenderer:
     def _resolve_captures(self, record: dict, heading_mode: str) -> list[tuple[str, float]]:
         if heading_mode == "museum":
             return self._museum_captures()
+        if heading_mode == "grounding":
+            return list(zip(CARDINAL_LABELS, GROUNDING_HEADINGS))
         if heading_mode == "cardinal":
             return list(zip(CARDINAL_LABELS, CARDINAL_HEADINGS))
         return [(f"view{index}", heading) for index, heading in enumerate(self._graph_aligned_headings(record))]
@@ -619,6 +622,9 @@ class MultiViewAggregator:
             metadata={
                 "manifest_path": str(manifest_path),
                 "heading_mode": manifest.get("heading_mode"),
+                "floor": manifest.get("floor"),
+                "lat": manifest.get("lat"),
+                "lng": manifest.get("lng"),
             },
         )
 

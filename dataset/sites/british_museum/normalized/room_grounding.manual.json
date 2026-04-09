@@ -1,0 +1,1212 @@
+{
+  "summary": {
+    "room_ids": [
+      "Room 4"
+    ],
+    "floor": "0",
+    "expansion_strategy": "confidence-region-growing",
+    "max_hops": 2,
+    "seed_room_count": 1,
+    "template_seed_room_count": 1,
+    "manual_seed_room_count": 1,
+    "manual_seed_pano_count": 31,
+    "missing_seed_rooms": [],
+    "candidate_scope": "same-floor",
+    "gemini_model": "gemini-2.5-flash",
+    "min_confidence": 0.75,
+    "expansion_confidence": 0.8,
+    "latest_run_result_count": 60,
+    "candidate_pano_count": 60,
+    "result_count": 60,
+    "review_count": 19,
+    "compact_mapping_count": 57
+  },
+  "results": [
+    {
+      "pano_id": "03uM-NCdPTwEA1fuyubWWA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/03uM-NCdPTwEA1fuyubWWA/03uM-NCdPTwEA1fuyubWWA_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is identified as Room 4, Egyptian sculpture, by clear signage and the distinct visual characteristics of the artifacts displayed.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "1RqWqKdrtf8EZWXdAEn99Q",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/1RqWqKdrtf8EZWXdAEn99Q/1RqWqKdrtf8EZWXdAEn99Q_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama is confidently identified as Room 4 due to explicit room signage and the presence of iconic Egyptian sculptures, including the Rosetta Stone.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "1VaXjbDOjNCp09wI7ErFEg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/1VaXjbDOjNCp09wI7ErFEg/1VaXjbDOjNCp09wI7ErFEg_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama is confidently identified as Room 4 due to the explicit room signage and visible Egyptian sculptures, with Assyrian artifacts seen in an adjacent space.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "4on9t53HrRXDtCB8b9hGFg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/4on9t53HrRXDtCB8b9hGFg/4on9t53HrRXDtCB8b9hGFg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.9,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays prominent Egyptian sculptures and large stone reliefs, consistent with Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "5CY4qPrtGkcOtpwEI12hTQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/5CY4qPrtGkcOtpwEI12hTQ/5CY4qPrtGkcOtpwEI12hTQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 23"
+      ],
+      "gemini_summary": "The panorama clearly displays numerous large-scale Egyptian sculptures and artifacts, consistent with Room 4: Egyptian sculpture.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "632l392YwsdWwHcDEdZHNw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/632l392YwsdWwHcDEdZHNw/632l392YwsdWwHcDEdZHNw_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identifiable as Room 4 due to the abundance of distinct large-scale Egyptian sculptures and artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "6m7p-OurdTHYAFXmn0lmFQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/6m7p-OurdTHYAFXmn0lmFQ/6m7p-OurdTHYAFXmn0lmFQ_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly features large Egyptian sculptures, sarcophagi, and stelae, which directly corresponds to 'Room 4: Egyptian sculpture'.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "79p-vcnKjKQ7aEd3wJkqZQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/79p-vcnKjKQ7aEd3wJkqZQ/79p-vcnKjKQ7aEd3wJkqZQ_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": ["Room 4"],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": "Room 8",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": ["Room 4", "Room 7"],
+      "gemini_summary": "The panorama clearly displays a sign identifying 'Assyria: Nimrud' and the room number '8', alongside characteristic Assyrian sculptures and reliefs.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 8",
+      "notes": "manual override: actually Room 8"
+    },
+    {
+      "pano_id": "7QmI4JcVfHu9BOjVhZxI6g",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/7QmI4JcVfHu9BOjVhZxI6g/7QmI4JcVfHu9BOjVhZxI6g_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is filled with prominent large-scale Egyptian sculptures and artifacts, strongly matching the description of 'Egyptian sculpture'.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "9GZ_v8bYbDTgV2Md9eV03Q",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/9GZ_v8bYbDTgV2Md9eV03Q/9GZ_v8bYbDTgV2Md9eV03Q_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": "Room 10",
+      "gemini_confidence": 0.9,
+      "gemini_alternative_room_ids": [
+        "Room 9",
+        "Room 7",
+        "Room 8"
+      ],
+      "gemini_summary": "The panorama clearly displays a winged human-headed bull sculpture and large wall reliefs, which are iconic artifacts found in Assyrian galleries, specifically matching the description for Room 10.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 8",
+      "notes": ""
+    },
+    {
+      "pano_id": "9r6K740UDkTkY49LYg2W5g",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/9r6K740UDkTkY49LYg2W5g/9r6K740UDkTkY49LYg2W5g_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": null,
+      "gemini_confidence": 0.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama displays prominent artifacts from multiple distinct rooms (Egyptian, Assyrian, and Greek/Roman), making it too ambiguous to assign a single room from the candidate list.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "BD25_SDK_DYtOOJyxUJHKg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/BD25_SDK_DYtOOJyxUJHKg/BD25_SDK_DYtOOJyxUJHKg_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly depicts a vast collection of Egyptian sculptures and artifacts, aligning perfectly with the description of Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "EHxw9_EDNIdfU9crcNi3dg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/EHxw9_EDNIdfU9crcNi3dg/EHxw9_EDNIdfU9crcNi3dg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The presence of the iconic Rosetta Stone and several large Egyptian sculptures strongly indicates this is the Egyptian Sculpture gallery.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "F-SIezpBaIVK2L9e_5f3Qg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/F-SIezpBaIVK2L9e_5f3Qg/F-SIezpBaIVK2L9e_5f3Qg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identifiable as the Egyptian sculpture gallery due to the numerous large Egyptian statues and reliefs.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "FHnQLcyRg8QVSJrrzThLrQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/FHnQLcyRg8QVSJrrzThLrQ/FHnQLcyRg8QVSJrrzThLrQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identified as 'Egyptian sculpture' by explicit signage and the presence of numerous Egyptian artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "FtfhqHytXRIw8Q399Exuew",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/FtfhqHytXRIw8Q399Exuew/FtfhqHytXRIw8Q399Exuew_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room clearly features a prominent collection of large Egyptian sculptures, including a distinctive inscribed stone slab and a historical timeline of Egyptian dynasties.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "FyBuFtvu6FeVvVVc5--uiw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/FyBuFtvu6FeVvVVc5--uiw/FyBuFtvu6FeVvVVc5--uiw_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is identified as Room 4 due to the prominent display of Egyptian sculptures and the iconic Rosetta Stone.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "GLPfYKMmuMdqaq_7vCVSCg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/GLPfYKMmuMdqaq_7vCVSCg/GLPfYKMmuMdqaq_7vCVSCg_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama prominently features the Rosetta Stone and several large Egyptian sculptures, strongly indicating Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "GQoDT6IGdnFYpvf3_URQnw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/GQoDT6IGdnFYpvf3_URQnw/GQoDT6IGdnFYpvf3_URQnw_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [
+        "Room 23"
+      ],
+      "gemini_summary": "The room is identified by explicit signage indicating 'Room 4 Egyptian Sculpture' and corroborated by the numerous Egyptian artifacts displayed.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "GYQOAzJsD3WjX449bY0mcg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/GYQOAzJsD3WjX449bY0mcg/GYQOAzJsD3WjX449bY0mcg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.9,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama is situated amidst numerous large Egyptian sculptures, with a view extending into an adjacent gallery featuring an Assyrian Lamassu.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "IhXe1F85Zgyhj64VBzhc4Q",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/IhXe1F85Zgyhj64VBzhc4Q/IhXe1F85Zgyhj64VBzhc4Q_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is unequivocally identified by the abundance of distinctive Egyptian sculptures and artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "IknWJZfISRfjWz-UuL1zwQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/IknWJZfISRfjWz-UuL1zwQ/IknWJZfISRfjWz-UuL1zwQ_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is filled with large-scale Egyptian sculptures and information panels detailing the Ramesides period.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "KiaaOuVwgN9QXWcdhDCgiA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/KiaaOuVwgN9QXWcdhDCgiA/KiaaOuVwgN9QXWcdhDCgiA_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identified as housing Egyptian sculpture through explicit signage and numerous characteristic artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "NJIPTrs8hsSABB6xEevKLw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/NJIPTrs8hsSABB6xEevKLw/NJIPTrs8hsSABB6xEevKLw_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is identified as Room 4 based on explicit signage and the presence of Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "On4Dfol7pSFeCcNPv5dXPA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/On4Dfol7pSFeCcNPv5dXPA/On4Dfol7pSFeCcNPv5dXPA_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identifiable as Room 4 due to the abundance of large-scale Egyptian sculptures and reliefs.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "QDRDKSYmJ2MQ2lK-mizkHw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/QDRDKSYmJ2MQ2lK-mizkHw/QDRDKSYmJ2MQ2lK-mizkHw_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly depicts numerous Egyptian sculptures and artifacts, aligning perfectly with Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "Tn_ya3kbpBdVdQ5oslFWMg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/Tn_ya3kbpBdVdQ5oslFWMg/Tn_ya3kbpBdVdQ5oslFWMg_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama displays several large-scale sculptures and sarcophagi clearly identifiable as Ancient Egyptian art, matching the description for Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "V5C-BZZ8zVYaqHr29nbBgg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/V5C-BZZ8zVYaqHr29nbBgg/V5C-BZZ8zVYaqHr29nbBgg_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room clearly displays monumental stone sarcophagi and sculptures characteristic of Ancient Egyptian art, aligning with Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "Vj-kXqBQMuUXDCOXAyahzQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/Vj-kXqBQMuUXDCOXAyahzQ/Vj-kXqBQMuUXDCOXAyahzQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama is confidently identified as Room 4 due to clear signage and the presence of the Rosetta Stone exhibit and other Egyptian sculptures.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "X0UyMF2bByFBzUSUIxm3mA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/X0UyMF2bByFBzUSUIxm3mA/X0UyMF2bByFBzUSUIxm3mA_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays 'Room 4' signage and features iconic Egyptian artifacts, including the Rosetta Stone.",
+      "needs_review": false,
+      "manual_status": "accepted" ,
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "YtCCwFXtjjNAEKynmqEIDA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/YtCCwFXtjjNAEKynmqEIDA/YtCCwFXtjjNAEKynmqEIDA_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The room is clearly identified as Room 4 by explicit signage and contains distinct Egyptian sculptures.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "Z4ucctEakYF_IlMQCirTYA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/Z4ucctEakYF_IlMQCirTYA/Z4ucctEakYF_IlMQCirTYA_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays Egyptian sculptures and a room sign identifying it as Room 4, Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "bT0we5IB4k4EiEbRlg0_jg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/bT0we5IB4k4EiEbRlg0_jg/bT0we5IB4k4EiEbRlg0_jg_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": null,
+      "gemini_confidence": 0.9,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama displays a museum shop and general public area, which does not correspond to any of the specific exhibit rooms in the candidate list.",
+      "needs_review": true,
+      "manual_status": "pending",
+      "manual_room_id": null,
+      "notes": ""
+    },
+    {
+      "pano_id": "bYHxfKckC7e8oxB7w-r4VA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/bYHxfKckC7e8oxB7w-r4VA/bYHxfKckC7e8oxB7w-r4VA_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": null,
+      "gemini_confidence": 0.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "This panorama is located in a retail and circulation area, not a specific exhibition room from the provided list, making it ambiguous for identification.",
+      "needs_review": true,
+      "manual_status": "pending",
+      "manual_room_id": null,
+      "notes": ""
+    },
+    {
+      "pano_id": "cMjlkQrJTg004rtBtTBoVw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/cMjlkQrJTg004rtBtTBoVw/cMjlkQrJTg004rtBtTBoVw_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays a collection of large-scale Egyptian sculptures, including a distinctive colossal head, consistent with Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "csQKNXqOn4yOZlR6qOwtUQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/csQKNXqOn4yOZlR6qOwtUQ/csQKNXqOn4yOZlR6qOwtUQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identified as Room 4, 'Egyptian Sculpture', by multiple visible signs and the distinct style of the artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "eBlyjXFWD1GpZeZzAYNdvA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/eBlyjXFWD1GpZeZzAYNdvA/eBlyjXFWD1GpZeZzAYNdvA_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays various large-scale Egyptian sculptures, including statues and carved reliefs, directly matching the description of Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "eRFHUGVEFPqO-9IsGL42JA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/eRFHUGVEFPqO-9IsGL42JA/eRFHUGVEFPqO-9IsGL42JA_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [],
+      "gemini_predicted_room_id": "Room 10",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 9",
+        "Room 7",
+        "Room 8"
+      ],
+      "gemini_summary": "The panorama prominently features colossal human-headed winged lions/bulls guarding an entrance, characteristic of Assyrian palace architecture and fitting for a gallery like Room 10, which includes Khorsabad.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": "manual override: actually Room 4"
+    },
+    {
+      "pano_id": "frUsQhfCT2qpC2d5GFWYQQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/frUsQhfCT2qpC2d5GFWYQQ/frUsQhfCT2qpC2d5GFWYQQ_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [
+        "Room 10",
+        "Room 7",
+        "Room 8",
+        "Room 9"
+      ],
+      "gemini_summary": "The room is filled with prominent large-scale Egyptian sculptures and inscribed stelae, directly matching the description of 'Egyptian sculpture'.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "gGQes0UhnkHDSrMZF57x4g",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/gGQes0UhnkHDSrMZF57x4g/gGQes0UhnkHDSrMZF57x4g_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama clearly displays numerous colossal Egyptian sculptures and reliefs, directly matching the description of Room 4: Egyptian sculpture.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "iVBTz6wL-zwu5uGpg_aEIQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/iVBTz6wL-zwu5uGpg_aEIQ/iVBTz6wL-zwu5uGpg_aEIQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is definitively identified as Room 4 due to prominent signage and the display of Egyptian sculptures.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "iwnGaONabzJfe_pGR2QDiw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/iwnGaONabzJfe_pGR2QDiw/iwnGaONabzJfe_pGR2QDiw_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is filled with diverse ancient Egyptian sculptures and a visible sign confirms it as the 'Egyptian sculpture' room.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "kWZ0-f6uHj_WRE4gBMEPAA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/kWZ0-f6uHj_WRE4gBMEPAA/kWZ0-f6uHj_WRE4gBMEPAA_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays a collection of large-scale ancient Egyptian sculptures, characteristic of Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "lYj5UtOeVsBks-nRvAOhRg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/lYj5UtOeVsBks-nRvAOhRg/lYj5UtOeVsBks-nRvAOhRg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [
+        "Room 23"
+      ],
+      "gemini_summary": "The room contains prominent Egyptian sculptures, including a large seated statue, which aligns with Room 4: Egyptian sculpture.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "nSsUi4_IUJqjKd3RqEV5ug",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/nSsUi4_IUJqjKd3RqEV5ug/nSsUi4_IUJqjKd3RqEV5ug_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama displays several distinctive ancient Egyptian sculptures and reliefs, consistent with Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "nZAoJvjL3c5lym7Un48xfQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/nZAoJvjL3c5lym7Un48xfQ/nZAoJvjL3c5lym7Un48xfQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama is confidently identified as Room 4 due to clear signage and the abundance of characteristic Egyptian sculptures.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "od9cM1NKpovBJafiwaS4DQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/od9cM1NKpovBJafiwaS4DQ/od9cM1NKpovBJafiwaS4DQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama clearly displays signage identifying it as \"Room 4 Egyptian Sculpture\" and features related artifacts, including a display about the Rosetta Stone.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "plVMvg3bokHDkkTaG7C__Q",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/plVMvg3bokHDkkTaG7C__Q/plVMvg3bokHDkkTaG7C__Q_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.9,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8"
+      ],
+      "gemini_summary": "The panorama is located in the Egyptian sculpture gallery, featuring prominent Egyptian artifacts like the colossal bust of Ramesses II and a large inscribed stele.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "qJDhoHccxGag27ICHzdNeA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/qJDhoHccxGag27ICHzdNeA/qJDhoHccxGag27ICHzdNeA_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama prominently displays numerous large Egyptian sculptures, busts, and stelae with hieroglyphs, which directly matches the description of Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "rkyezsZZtdjxgqnAwgt0Ww",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/rkyezsZZtdjxgqnAwgt0Ww/rkyezsZZtdjxgqnAwgt0Ww_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is identified as 'Room 4: Egyptian sculpture' based on the numerous distinctive large-scale Egyptian artifacts, including pharaoh busts and a sarcophagus.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "sDqQ950IkChZhtZoPUvfNg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/sDqQ950IkChZhtZoPUvfNg/sDqQ950IkChZhtZoPUvfNg_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays multiple large Egyptian sculptures and sarcophagi, consistent with the description of Room 4: Egyptian sculpture.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "t56Y24y4G9Wb3f0Fy1GD8g",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/t56Y24y4G9Wb3f0Fy1GD8g/t56Y24y4G9Wb3f0Fy1GD8g_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room displays a collection of large-scale sculptures that are unmistakably ancient Egyptian in style.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "uXnYwXHUxAOs1m0s0gMNGg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/uXnYwXHUxAOs1m0s0gMNGg/uXnYwXHUxAOs1m0s0gMNGg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.98,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is filled with prominent ancient Egyptian sculptures and stelae, clearly matching the description for Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "vR0YdkMtscxTC1OeRlGp6Q",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/vR0YdkMtscxTC1OeRlGp6Q/vR0YdkMtscxTC1OeRlGp6Q_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays numerous large Egyptian sculptures, sarcophagi, and a funerary boat, all indicative of an Egyptian sculpture gallery.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "xJqrR7oSxRdg8ocBb7acrw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/xJqrR7oSxRdg8ocBb7acrw/xJqrR7oSxRdg8ocBb7acrw_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays signage identifying it as Room 4, dedicated to Egyptian sculpture, which is consistent with the visible artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "xRpWlXPsayjw0bNqbl5S2w",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/xRpWlXPsayjw0bNqbl5S2w/xRpWlXPsayjw0bNqbl5S2w_manifest.json",
+      "region_depth": 1,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is clearly identified as Room 4, Egyptian sculpture, by prominent signage and visual exhibits.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "xXRCdcpobXQG1U4kzuS0DQ",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/xXRCdcpobXQG1U4kzuS0DQ/xXRCdcpobXQG1U4kzuS0DQ_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [
+        "Room 7",
+        "Room 8",
+        "Room 9",
+        "Room 10"
+      ],
+      "gemini_summary": "The panorama clearly displays a sign for 'Room 4 Egyptian Sculpture' and prominently features the Rosetta Stone along with other Egyptian artifacts.",
+      "needs_review": true,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "y2R-mvDtGiF6YoRPZvQjvw",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/y2R-mvDtGiF6YoRPZvQjvw/y2R-mvDtGiF6YoRPZvQjvw_manifest.json",
+      "region_depth": 2,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly displays various large-scale Egyptian sculptures and reliefs, matching the description for Room 4.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "yr950BQft9aKWpzud4cnPg",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/yr950BQft9aKWpzud4cnPg/yr950BQft9aKWpzud4cnPg_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 0.95,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The panorama clearly depicts a gallery filled with large-scale Egyptian sculptures.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    },
+    {
+      "pano_id": "zWZer3Eu4rVrRIxfG5nzJA",
+      "manifest_path": "/Users/allenw1010/Desktop/LLM-Nav/renders/room_grounding/zWZer3Eu4rVrRIxfG5nzJA/zWZer3Eu4rVrRIxfG5nzJA_manifest.json",
+      "region_depth": 0,
+      "frontier_room_ids": [
+        "Room 4"
+      ],
+      "expansion_room_ids": [
+        "Room 4"
+      ],
+      "gemini_predicted_room_id": "Room 4",
+      "gemini_confidence": 1.0,
+      "gemini_alternative_room_ids": [],
+      "gemini_summary": "The room is definitively identified as Room 4 due to a clear display panel labeled 'Egyptian Sculpture' and the presence of numerous large Egyptian artifacts.",
+      "needs_review": false,
+      "manual_status": "accepted",
+      "manual_room_id": "Room 4",
+      "notes": ""
+    }
+  ]
+}

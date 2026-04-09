@@ -1,0 +1,170 @@
+{
+  "mode": "perception-json",
+  "localizer_mode": "llm",
+  "description": "Perception-JSON demo from: /Users/allenw1010/Desktop/LLM-Nav/outputs/step2_perception.json",
+  "start_room_id": "Room 23",
+  "prior_room_source": "/Users/allenw1010/Desktop/LLM-Nav/outputs/step1_localization.json",
+  "prior_room_belief": {
+    "Room 23": 0.93,
+    "Room 10": 0.05,
+    "Room 7": 0.02
+  },
+  "observation": {
+    "pano_id": "zx_e8g3qdlk4wbzQIS0Itw",
+    "floor": "0",
+    "entity_count": 16,
+    "entities": [
+      {
+        "name": "south passage (large rectangular opening with twin Assyrian lamassu visible)",
+        "kind": "passage",
+        "confidence": 0.95,
+        "source_view": "south"
+      },
+      {
+        "name": "\"THE HELLENISTIC WORLD\" wall text / interpretive panel",
+        "kind": "signage",
+        "confidence": 0.92,
+        "source_view": "multiview"
+      },
+      {
+        "name": "crouching marble figure on central plinth",
+        "kind": "artwork",
+        "confidence": 0.92,
+        "source_view": "south"
+      },
+      {
+        "name": "bust on pedestal casting shadow (small alcove)",
+        "kind": "artwork",
+        "confidence": 0.9,
+        "source_view": "multiview"
+      },
+      {
+        "name": "corner glass display case with small objects (L-shaped case)",
+        "kind": "other",
+        "confidence": 0.9,
+        "source_view": "multiview"
+      },
+      {
+        "name": "east doorway (doorframe beside bust/display case)",
+        "kind": "passage",
+        "confidence": 0.9,
+        "source_view": "multiview"
+      },
+      {
+        "name": "large standing marble statue (left foreground, draped cloth and ornate support)",
+        "kind": "artwork",
+        "confidence": 0.9,
+        "source_view": "multiview"
+      },
+      {
+        "name": "left lamassu (in gallery beyond south passage)",
+        "kind": "artwork",
+        "confidence": 0.9,
+        "source_view": "south"
+      },
+      {
+        "name": "right lamassu (in gallery beyond south passage)",
+        "kind": "artwork",
+        "confidence": 0.9,
+        "source_view": "south"
+      },
+      {
+        "name": "bust on tall column — center",
+        "kind": "artwork",
+        "confidence": 0.88,
+        "source_view": "multiview"
+      },
+      {
+        "name": "bust on tall column — left",
+        "kind": "artwork",
+        "confidence": 0.88,
+        "source_view": "multiview"
+      },
+      {
+        "name": "bust on tall column — right",
+        "kind": "artwork",
+        "confidence": 0.88,
+        "source_view": "multiview"
+      },
+      {
+        "name": "standing statue on right wall — left of pair (on pedestal)",
+        "kind": "artwork",
+        "confidence": 0.85,
+        "source_view": "south"
+      },
+      {
+        "name": "standing statue on right wall — right of pair (on pedestal)",
+        "kind": "artwork",
+        "confidence": 0.85,
+        "source_view": "south"
+      },
+      {
+        "name": "dark rectangular wall plaque (near standing statues on right)",
+        "kind": "signage",
+        "confidence": 0.8,
+        "source_view": "south"
+      },
+      {
+        "name": "pair of small rectangular wall relief panels (left wall)",
+        "kind": "artwork",
+        "confidence": 0.8,
+        "source_view": "east"
+      }
+    ]
+  },
+  "localizer": {
+    "predicted_room_id": "Room 22",
+    "confidence": 0.63,
+    "transition_support": {
+      "Room 10": 1.0,
+      "Room 23": 0.98,
+      "Room 8": 0.95,
+      "Room 17": 0.93,
+      "Room 22": 0.93,
+      "Room 7": 0.07,
+      "Room 6": 0.02
+    },
+    "observation_distribution": {
+      "Room 22": 0.55,
+      "Room 23": 0.25,
+      "Room 17": 0.05,
+      "Room 16": 0.03,
+      "Room 18": 0.02
+    },
+    "posterior_room_belief": {
+      "Room 22": 0.63,
+      "Room 23": 0.3,
+      "Room 17": 0.06,
+      "Room 10": 0.0,
+      "Room 8": 0.0,
+      "Room 7": 0.0,
+      "Room 6": 0.0
+    },
+    "evidence": [
+      "\"THE HELLENISTIC WORLD\" interpretive panel visible (strong textual sign pointing to Hellenistic gallery)",
+      "Multiple marble statues, central crouching marble figure, several busts on tall columns and standing statues — consistent with Greek/Hellenistic sculpture displays",
+      "Corner glass display case with small objects and wall relief panels — typical of sculpture/galleries"
+    ]
+  },
+  "spatial_engine_update": {
+    "current_room_id": "Room 22",
+    "room_belief": {
+      "Room 22": 0.63,
+      "Room 23": 0.3,
+      "Room 17": 0.06,
+      "Room 10": 0.0,
+      "Room 8": 0.0,
+      "Room 7": 0.0,
+      "Room 6": 0.0
+    },
+    "observation_metadata": {
+      "localized_room_id": "Room 22",
+      "localization_confidence": 0.63,
+      "localization_evidence": [
+        "\"THE HELLENISTIC WORLD\" interpretive panel visible (strong textual sign pointing to Hellenistic gallery)",
+        "Multiple marble statues, central crouching marble figure, several busts on tall columns and standing statues — consistent with Greek/Hellenistic sculpture displays",
+        "Corner glass display case with small objects and wall relief panels — typical of sculpture/galleries"
+      ]
+    }
+  }
+}

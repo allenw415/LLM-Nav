@@ -8,33 +8,57 @@
   "pitch": 0.0,
   "fov": 45,
   "size": {
-    "width": 640,
-    "height": 640
+    "width": 512,
+    "height": 512
   },
   "captures": [
     {
       "label": "north",
       "heading": 330.0,
       "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_00_north_330deg.png",
-      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=330.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=330.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "north_to_east",
+      "heading": 346.84649771137884,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_01_north_to_east_347deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=346.846498&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
     },
     {
       "label": "east",
       "heading": 60.0,
-      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_01_east_060deg.png",
-      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=60.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_02_east_060deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=60.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "east_to_south",
+      "heading": 107.76084080194371,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_03_east_to_south_108deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=107.760841&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
     },
     {
       "label": "south",
       "heading": 150.0,
-      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_02_south_150deg.png",
-      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=150.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_04_south_150deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=150.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "south_to_west",
+      "heading": 221.87300998053993,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_05_south_to_west_222deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=221.873010&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
     },
     {
       "label": "west",
       "heading": 240.0,
-      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_03_west_240deg.png",
-      "url": "https://maps.googleapis.com/maps/api/streetview?size=640x640&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=240.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_06_west_240deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=240.000000&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
+    },
+    {
+      "label": "west_to_north",
+      "heading": 312.0459315839379,
+      "path": "/Users/allenw1010/Desktop/LLM-Nav/renders/pano_perception/7grGsbOXqpEMDLgTG6VfmQ/7grGsbOXqpEMDLgTG6VfmQ_07_west_to_north_312deg.png",
+      "url": "https://maps.googleapis.com/maps/api/streetview?size=512x512&pano=7grGsbOXqpEMDLgTG6VfmQ&heading=312.045932&pitch=0.000000&fov=45&key=AIzaSyD3BF_CqmzI1yPxCUdv7dnJ3zXuvDxrxCE"
     }
   ]
 }

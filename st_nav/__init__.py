@@ -1,5 +1,6 @@
 from .env import load_dotenv
 from .grounding import GroundingIndex, SourcePanoResolver, build_grounding_template
+from .localization import LLMRoomLocalizer, RoomLocalizer
 from .models import (
     BeliefState,
     CandidateAction,
@@ -31,6 +32,7 @@ __all__ = [
     "EpisodeTrace",
     "GroundingIndex",
     "InstructionRoutePlanner",
+    "LLMRoomLocalizer",
     "load_dotenv",
     "ManifestPerceptionProvider",
     "MultiViewAggregator",
@@ -50,6 +52,7 @@ __all__ = [
     "TaskSpec",
     "PanoramaRenderer",
     "PerceptionPipeline",
+    "RoomLocalizer",
     "ViewDetection",
     "ViewDetector",
     "SourcePerceptionResult",

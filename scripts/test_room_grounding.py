@@ -12,9 +12,20 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from st_nav import PanoramaRenderer
 from st_nav.env import load_dotenv
-from st_nav.room_grounder import GeminiRoomGrounder, invert_room_grounding
+from st_nav.room_grounder import GeminiRoomGrounder, aggregate_gemini_usage_from_traces, invert_room_grounding
 
 load_dotenv(PROJECT_ROOT / ".env")
+
+
+def format_usage(usage: dict) -> dict:
+    return {
+        "requests": usage.get("request_count", 0),
+        "input_tokens": usage.get("prompt_token_count", 0),
+        "output_tokens": usage.get("candidates_token_count", 0),
+        "total_tokens": usage.get("total_token_count", 0),
+        "thinking_tokens": usage.get("thoughts_token_count", 0),
+        "cached_tokens": usage.get("cached_content_token_count", 0),
+    }
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -29,13 +40,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vlm-timeout", type=float, default=180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/room_grounding")
-    parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="cardinal")
+    parser.add_argument("--heading-mode", choices=["museum", "cardinal", "grounding", "graph"], default="grounding")
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=45)
     parser.add_argument("--width", type=int, default=512)
     parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--candidate-scope", choices=["same-floor", "all"], default="same-floor")
     parser.add_argument("--debug-trace", action="store_true")
+    parser.add_argument("--full-output", action="store_true")
     return parser
 
 
@@ -140,6 +152,14 @@ def main() -> int:
     results = []
     matched_count = 0
     scored_count = 0
+    usage_totals = {
+        "request_count": 0,
+        "prompt_token_count": 0,
+        "candidates_token_count": 0,
+        "total_token_count": 0,
+        "thoughts_token_count": 0,
+        "cached_content_token_count": 0,
+    }
     for target in targets:
         manifest_path = ensure_manifest(
             target,
@@ -159,6 +179,7 @@ def main() -> int:
             room_graph=room_graph,
             room_grounding=room_grounding,
         )
+        usage = aggregate_gemini_usage_from_traces(grounder.last_traces)
         expected_room_ids = target.get("expected_room_ids")
         if not isinstance(expected_room_ids, list):
             expected_room_ids = invert_room_grounding(room_grounding).get(str(result.get("pano_id")), [])
@@ -173,28 +194,45 @@ def main() -> int:
 
         payload = {
             "pano_id": result.get("pano_id"),
-            "manifest_path": str(manifest_path),
-            "expected_room_ids": expected_room_ids,
             "predicted_room_id": predicted_room_id,
-            "is_match": is_match,
             "confidence": result.get("confidence"),
-            "evidence": result.get("evidence"),
-            "alternative_room_ids": result.get("alternative_room_ids"),
-            "summary": result.get("summary"),
-            "candidate_count": len(result.get("candidate_room_ids", [])),
         }
+        if expected_room_ids:
+            payload["expected_room_ids"] = expected_room_ids
+            payload["is_match"] = is_match
+        if args.full_output:
+            payload.update(
+                {
+                    "manifest_path": str(manifest_path),
+                    "evidence": result.get("evidence"),
+                    "alternative_room_ids": result.get("alternative_room_ids"),
+                    "summary": result.get("summary"),
+                    "candidate_count": len(result.get("candidate_room_ids", [])),
+                    "usage": format_usage(usage),
+                }
+            )
         if args.debug_trace:
             payload["trace"] = grounder.last_traces
         results.append(payload)
+        for key in usage_totals:
+            value = usage.get(key)
+            if isinstance(value, int):
+                usage_totals[key] += value
 
     summary = {
-        "target_count": len(results),
-        "scored_count": scored_count,
-        "matched_count": matched_count,
-        "accuracy": (matched_count / scored_count) if scored_count else None,
         "gemini_model": args.gemini_model,
-        "candidate_scope": args.candidate_scope,
+        "usage": format_usage(usage_totals) if usage_totals["request_count"] > 0 else {},
     }
+    if args.full_output:
+        summary.update(
+            {
+                "target_count": len(results),
+                "scored_count": scored_count,
+                "matched_count": matched_count,
+                "accuracy": (matched_count / scored_count) if scored_count else None,
+                "candidate_scope": args.candidate_scope,
+            }
+        )
     print(json.dumps({"summary": summary, "results": results}, ensure_ascii=False, indent=2))
     return 0
 
