@@ -212,8 +212,24 @@ class RoomLocalizer:
                 target_room_id = neighbor.get("target_room_id")
                 if target_room_id in candidate_set and target_room_id not in targets:
                     targets.append(target_room_id)
-            for target_room_id in targets:
-                support[target_room_id] += source_probability
+
+            target_weights = {
+                target_room_id: (
+                    self.self_transition_weight
+                    if target_room_id == source_room_id
+                    else self.neighbor_transition_weight
+                )
+                for target_room_id in targets
+            }
+            total_weight = sum(weight for weight in target_weights.values() if weight > 0.0)
+            if total_weight <= 0.0:
+                support[source_room_id] += source_probability
+                continue
+
+            for target_room_id, target_weight in target_weights.items():
+                if target_weight <= 0.0:
+                    continue
+                support[target_room_id] += source_probability * (target_weight / total_weight)
 
         return support
 
