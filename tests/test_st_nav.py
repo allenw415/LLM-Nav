@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import random
 import tempfile
 import unittest
+import urllib.error
+from unittest import mock
 from pathlib import Path
 
 from st_nav import (
@@ -11,12 +15,16 @@ from st_nav import (
     GroundingIndex,
     InstructionRoutePlanner,
     LLMRoomLocalizer,
+    LLMSpatialAlignmentLocalizer,
     LLMInstructionParser,
     ManifestPerceptionProvider,
+    ModelEnvironment,
+    ModelResponseClient,
     NavigationPipeline,
     Observation,
     PerceptionPipeline,
     PanoramaRenderer,
+    RenderedView,
     RoomLocalizer,
     SourcePanoResolver,
     SourceResolutionWorkflow,
@@ -26,6 +34,9 @@ from st_nav import (
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
+    extract_output_text,
+    load_dotenv,
+    resolve_model_environment,
 )
 from st_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
@@ -109,6 +120,421 @@ class STNavTests(unittest.TestCase):
                 ],
             },
         }
+
+    def test_model_response_client_can_convert_responses_payload_to_chat_completions(self) -> None:
+        request_body = {
+            "model": "demo-model",
+            "instructions": "Return JSON only.",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Describe this image."},
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,AAA",
+                            "detail": "high",
+                        },
+                    ],
+                }
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "demo_schema",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"answer": {"type": "string"}},
+                        "required": ["answer"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+        }
+
+        payload = ModelResponseClient._responses_to_chat_completions_payload(request_body)
+
+        self.assertEqual(payload["model"], "demo-model")
+        self.assertEqual(payload["messages"][0], {"role": "system", "content": "Return JSON only."})
+        self.assertEqual(payload["messages"][1]["role"], "user")
+        self.assertEqual(payload["messages"][1]["content"][0], {"type": "text", "text": "Describe this image."})
+        self.assertEqual(
+            payload["messages"][1]["content"][1],
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": "data:image/png;base64,AAA",
+                    "detail": "high",
+                },
+            },
+        )
+        self.assertEqual(payload["response_format"]["type"], "json_schema")
+        self.assertEqual(payload["response_format"]["json_schema"]["name"], "demo_schema")
+
+    def test_model_response_client_preserves_string_input_for_chat_completions(self) -> None:
+        payload = ModelResponseClient._responses_to_chat_completions_payload(
+            {
+                "model": "demo-model",
+                "instructions": "Return JSON only.",
+                "input": "Instruction: Find the way from Room 4 to Room 23.",
+            }
+        )
+
+        self.assertEqual(payload["messages"][0], {"role": "system", "content": "Return JSON only."})
+        self.assertEqual(
+            payload["messages"][1],
+            {"role": "user", "content": "Instruction: Find the way from Room 4 to Room 23."},
+        )
+
+    def test_extract_output_text_can_read_chat_completions_payload(self) -> None:
+        payload = {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "output_text", "text": '{"answer":"ok"}'},
+                        ]
+                    }
+                }
+            ]
+        }
+
+        self.assertEqual(extract_output_text(payload), '{"answer":"ok"}')
+
+    def test_extract_output_text_can_read_ollama_native_payload(self) -> None:
+        payload = {
+            "message": {
+                "role": "assistant",
+                "content": '{"answer":"ok"}',
+            }
+        }
+
+        self.assertEqual(extract_output_text(payload), '{"answer":"ok"}')
+
+    def test_extract_output_text_can_read_gemini_payload(self) -> None:
+        payload = {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {"text": '{"answer":"ok"}'},
+                        ]
+                    }
+                }
+            ]
+        }
+
+        self.assertEqual(extract_output_text(payload), '{"answer":"ok"}')
+
+    def test_load_dotenv_lets_later_file_values_override_earlier_file_values(self) -> None:
+        original = os.environ.pop("ST_NAV_API_KIND", None)
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                dotenv_path = Path(tmpdir) / ".env"
+                dotenv_path.write_text(
+                    "ST_NAV_API_KIND=responses\nST_NAV_API_KIND=chat_completions\n",
+                    encoding="utf-8",
+                )
+
+                load_dotenv(dotenv_path)
+
+            self.assertEqual(os.environ.get("ST_NAV_API_KIND"), "chat_completions")
+        finally:
+            if original is None:
+                os.environ.pop("ST_NAV_API_KIND", None)
+            else:
+                os.environ["ST_NAV_API_KIND"] = original
+
+    def test_resolve_model_environment_can_use_active_profile(self) -> None:
+        managed_keys = {
+            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
+            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
+            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
+            "ST_NAV_PROFILE_OLLAMA_NUM_CTX": os.environ.get("ST_NAV_PROFILE_OLLAMA_NUM_CTX"),
+            "ST_NAV_PROFILE_OLLAMA_TEMPERATURE": os.environ.get("ST_NAV_PROFILE_OLLAMA_TEMPERATURE"),
+        }
+        try:
+            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ["ST_NAV_PROFILE_OLLAMA_NUM_CTX"] = "4096"
+            os.environ["ST_NAV_PROFILE_OLLAMA_TEMPERATURE"] = "0"
+
+            resolved = resolve_model_environment(
+                default_model="gpt-5-mini",
+                default_api_base="https://api.openai.com/v1",
+                default_api_kind="responses",
+            )
+
+            self.assertEqual(
+                resolved,
+                ModelEnvironment(
+                    provider="ollama",
+                    model_name="gemma4:26b",
+                    api_key="ollama",
+                    api_base="http://127.0.0.1:11434/v1",
+                    api_kind="chat_completions",
+                    request_timeout=None,
+                    num_ctx=4096,
+                    temperature=0.0,
+                    active_profile="ollama",
+                ),
+            )
+        finally:
+            for key, value in managed_keys.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_resolve_model_environment_can_use_gemini_api_key_fallback(self) -> None:
+        managed_keys = {
+            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
+            "ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER"),
+            "ST_NAV_PROFILE_GEMINI_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_GEMINI_MODEL_NAME"),
+            "ST_NAV_PROFILE_GEMINI_API_KEY": os.environ.get("ST_NAV_PROFILE_GEMINI_API_KEY"),
+        }
+        try:
+            os.environ["ST_NAV_ACTIVE_PROFILE"] = "gemini"
+            os.environ["ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER"] = "gemini"
+            os.environ["ST_NAV_PROFILE_GEMINI_MODEL_NAME"] = "gemma-4-26b-a4b-it"
+            os.environ["ST_NAV_PROFILE_GEMINI_API_KEY"] = "gemini-test-key"
+
+            resolved = resolve_model_environment(
+                default_model="gpt-5-mini",
+                default_api_base="https://api.openai.com/v1",
+                default_api_kind="responses",
+            )
+
+            self.assertEqual(resolved.provider, "gemini")
+            self.assertEqual(resolved.model_name, "gemma-4-26b-a4b-it")
+            self.assertEqual(resolved.api_key, "gemini-test-key")
+            self.assertEqual(resolved.api_base, "https://generativelanguage.googleapis.com/v1beta")
+        finally:
+            for key, value in managed_keys.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_model_response_client_can_convert_responses_payload_to_ollama_chat(self) -> None:
+        client = ModelResponseClient(
+            provider="ollama",
+            api_base="http://127.0.0.1:11434/v1",
+            api_kind="chat_completions",
+        )
+        request_body = {
+            "model": "gemma4:26b",
+            "instructions": "Return JSON only.",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Describe this image."},
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,AAA",
+                            "detail": "high",
+                        },
+                    ],
+                }
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "demo_schema",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"answer": {"type": "string"}},
+                        "required": ["answer"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+        }
+
+        payload = client._responses_to_ollama_chat_payload(request_body)
+
+        self.assertEqual(payload["model"], "gemma4:26b")
+        self.assertEqual(payload["messages"][0], {"role": "system", "content": "Return JSON only."})
+        self.assertEqual(payload["messages"][1]["role"], "user")
+        self.assertEqual(payload["messages"][1]["content"], "Describe this image.")
+        self.assertEqual(payload["messages"][1]["images"], ["AAA"])
+        self.assertEqual(payload["format"]["required"], ["answer"])
+        self.assertEqual(payload["options"]["num_ctx"], 4096)
+        self.assertEqual(payload["options"]["temperature"], 0)
+
+    def test_model_response_client_preserves_string_input_for_ollama_chat(self) -> None:
+        client = ModelResponseClient(
+            provider="ollama",
+            api_base="http://127.0.0.1:11434/v1",
+            api_kind="chat_completions",
+        )
+
+        payload = client._responses_to_ollama_chat_payload(
+            {
+                "model": "gemma4:26b",
+                "instructions": "Return JSON only.",
+                "input": "Instruction: Find the way from Room 4 to Room 23.",
+            }
+        )
+
+        self.assertEqual(payload["messages"][0], {"role": "system", "content": "Return JSON only."})
+        self.assertEqual(
+            payload["messages"][1],
+            {"role": "user", "content": "Instruction: Find the way from Room 4 to Room 23."},
+        )
+
+    def test_model_response_client_can_convert_responses_payload_to_gemini(self) -> None:
+        client = ModelResponseClient(
+            provider="gemini",
+            api_base="https://generativelanguage.googleapis.com/v1beta",
+            api_kind="responses",
+        )
+        request_body = {
+            "model": "gemma-4-26b-a4b-it",
+            "instructions": "Return JSON only.",
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": "Describe this image."},
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,AAA",
+                            "detail": "high",
+                        },
+                    ],
+                }
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "demo_schema",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {"answer": {"type": "string"}},
+                        "required": ["answer"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+        }
+
+        payload = client._responses_to_gemini_generate_content_payload(request_body)
+
+        self.assertEqual(payload["contents"][0], {"role": "user", "parts": [{"text": "Return JSON only."}]})
+        self.assertEqual(payload["contents"][1]["role"], "user")
+        self.assertEqual(payload["contents"][1]["parts"][0], {"text": "Describe this image."})
+        self.assertEqual(
+            payload["contents"][1]["parts"][1],
+            {"inline_data": {"mime_type": "image/png", "data": "AAA"}},
+        )
+        self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
+        self.assertEqual(payload["generationConfig"]["responseJsonSchema"]["required"], ["answer"])
+
+    def test_model_response_client_preserves_string_input_for_gemini(self) -> None:
+        client = ModelResponseClient(
+            provider="gemini",
+            api_base="https://generativelanguage.googleapis.com/v1beta",
+            api_kind="responses",
+        )
+
+        payload = client._responses_to_gemini_generate_content_payload(
+            {
+                "model": "gemma-4-31b-it",
+                "instructions": "Return JSON only.",
+                "input": "Instruction: Find the way from the Lamassu to the Townley Venus.",
+            }
+        )
+
+        self.assertEqual(payload["contents"][0], {"role": "user", "parts": [{"text": "Return JSON only."}]})
+        self.assertEqual(
+            payload["contents"][1],
+            {
+                "role": "user",
+                "parts": [{"text": "Instruction: Find the way from the Lamassu to the Townley Venus."}],
+            },
+        )
+
+    def test_model_response_client_retries_transient_http_errors(self) -> None:
+        client = ModelResponseClient(
+            api_key="test-key",
+            api_base="https://example.test/v1",
+            api_kind="responses",
+        )
+        request_body = {"model": "demo-model"}
+
+        transient_error = urllib.error.HTTPError(
+            url="https://example.test/v1/responses",
+            code=503,
+            msg="Service Unavailable",
+            hdrs=None,
+            fp=io.BytesIO(b'{"error":"backend busy"}'),
+        )
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, exc_type, exc, tb) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"output_text":"{\\"answer\\":\\"ok\\"}"}'
+
+        with (
+            mock.patch("st_nav.common.model_client.time.sleep") as sleep_mock,
+            mock.patch(
+                "st_nav.common.model_client.urllib.request.urlopen",
+                side_effect=[transient_error, FakeResponse()],
+            ) as urlopen_mock,
+        ):
+            payload = client.create(request_body)
+
+        self.assertEqual(payload["output_text"], '{"answer":"ok"}')
+        self.assertEqual(urlopen_mock.call_count, 2)
+        sleep_mock.assert_called_once_with(1.0)
+
+    def test_model_response_client_http_error_includes_response_body(self) -> None:
+        client = ModelResponseClient(
+            api_key="test-key",
+            api_base="https://example.test/v1",
+            api_kind="responses",
+        )
+        request_body = {"model": "demo-model"}
+
+        def build_request_error() -> urllib.error.HTTPError:
+            return urllib.error.HTTPError(
+                url="https://example.test/v1/responses",
+                code=400,
+                msg="Bad Request",
+                hdrs=None,
+                fp=io.BytesIO(b'{"error":{"message":"bad schema"}}'),
+            )
+
+        with mock.patch(
+            "st_nav.common.model_client.urllib.request.urlopen",
+            side_effect=build_request_error(),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 400"):
+                client.create(request_body)
+
+        with self.assertRaisesRegex(RuntimeError, "bad schema"):
+            with mock.patch(
+                "st_nav.common.model_client.urllib.request.urlopen",
+                side_effect=build_request_error(),
+            ):
+                client.create(request_body)
 
     def test_normalize_room_graph_preserves_direction_metadata(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -1199,6 +1625,225 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(localization["predicted_room_id"], "Room 23")
         self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
         self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 8"])
+
+    def test_llm_spatial_alignment_localizer_a_uses_rotation_aware_view_ids(self) -> None:
+        explicit_map = {
+            "Room 7": {
+                "name": "Room 7",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "links": [{"direction": "up", "name": "Room 8"}],
+            },
+            "Room 8": {
+                "name": "Room 8",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "links": [
+                    {"direction": "up", "name": "Room 9"},
+                    {"direction": "down", "name": "Room 7"},
+                    {"direction": "left", "name": "Room 23"},
+                ],
+            },
+            "Room 9": {
+                "name": "Room 9",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nineveh",
+                "links": [{"direction": "down", "name": "Room 8"}],
+            },
+            "Room 10": {
+                "name": "Room 10",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
+                "links": [{"direction": "up", "name": "Room 23"}],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [
+                    {"direction": "right", "name": "Room 8"},
+                    {"direction": "down", "name": "Room 10"},
+                ],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        grounding = build_grounding_template(room_graph)
+
+        responses = [
+            {
+                "output_text": json.dumps(
+                    {
+                        "views": [
+                            {
+                                "view_id": "view_0",
+                                "themes": [{"label": "Greek and Roman sculpture", "confidence": 0.82}],
+                                "summary": "Greek and Roman sculpture is visible.",
+                            },
+                            {
+                                "view_id": "view_1",
+                                "themes": [{"label": "Assyria: Nimrud", "confidence": 0.83}],
+                                "summary": "Assyria Nimrud appears here.",
+                            },
+                        ],
+                        "summary": "Two panorama sectors were identified.",
+                    }
+                )
+            },
+            {
+                "output_text": json.dumps(
+                    {
+                        "predicted_room_id": "Room 8",
+                        "confidence": 0.9,
+                        "view_0_allocentric_direction": "west",
+                        "evidence": ["view_0 matches Greek and Roman sculpture", "view_1 matches Assyria: Nimrud"],
+                        "room_distribution": [
+                            {"room_id": "Room 7", "score": 0.0},
+                            {"room_id": "Room 8", "score": 0.9},
+                            {"room_id": "Room 9", "score": 0.0},
+                            {"room_id": "Room 10", "score": 0.1},
+                            {"room_id": "Room 23", "score": 0.0},
+                        ],
+                        "summary": "Room 8 best aligns after rotation.",
+                    }
+                )
+            },
+        ]
+
+        def response_client(_: dict) -> dict:
+            return responses.pop(0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_paths = []
+            for index in range(2):
+                path = Path(tmpdir) / f"view_{index}.png"
+                path.write_bytes(b"fake-image")
+                image_paths.append(path)
+
+            localizer = LLMSpatialAlignmentLocalizer(
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+                alignment_mode="text_from_images",
+                response_client=response_client,
+            )
+            localization = localizer.localize(
+                observation=Observation(
+                    pano_id="pano-8",
+                    views=[
+                        RenderedView(label="north", heading=330.0, path=str(image_paths[0])),
+                        RenderedView(label="east", heading=60.0, path=str(image_paths[1])),
+                    ],
+                    metadata={"floor": "0"},
+                ),
+                prior_room_belief={"Room 23": 1.0},
+                fallback_room_id="Room 23",
+            )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 8")
+        self.assertEqual(localization["spatial_alignment"]["view_0_allocentric_direction"], "west")
+        self.assertIsNotNone(localizer.last_ego_spatial_context)
+        alignment_input = localizer.last_alignment_request_body["input"]
+        self.assertIn("view_0", alignment_input)
+        self.assertNotIn("Front", alignment_input)
+        self.assertNotIn("front", alignment_input)
+
+    def test_llm_spatial_alignment_localizer_b_can_align_directly_from_images(self) -> None:
+        explicit_map = {
+            "Room 8": {
+                "name": "Room 8",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "links": [
+                    {"direction": "up", "name": "Room 9"},
+                    {"direction": "left", "name": "Room 23"},
+                ],
+            },
+            "Room 9": {
+                "name": "Room 9",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nineveh",
+                "links": [{"direction": "down", "name": "Room 8"}],
+            },
+            "Room 10": {
+                "name": "Room 10",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
+                "links": [{"direction": "up", "name": "Room 23"}],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [
+                    {"direction": "right", "name": "Room 8"},
+                    {"direction": "down", "name": "Room 10"},
+                ],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = LLMSpatialAlignmentLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            alignment_mode="direct_images",
+            response_client=lambda _: {
+                "output_text": json.dumps(
+                    {
+                        "predicted_room_id": "Room 10",
+                        "confidence": 0.87,
+                        "view_0_allocentric_direction": "south",
+                        "sector_alignment": [
+                            {
+                                "view_id": "view_0",
+                                "allocentric_direction": "south",
+                                "matched_room_id": "Room 10",
+                                "matched_theme": "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
+                                "rationale": "The dominant theme best matches the Room 10 gallery itself.",
+                            }
+                        ],
+                        "evidence": ["The panorama matches Room 10 after rotation."],
+                        "room_distribution": [
+                            {"room_id": "Room 8", "score": 0.13},
+                            {"room_id": "Room 9", "score": 0.0},
+                            {"room_id": "Room 10", "score": 0.87},
+                            {"room_id": "Room 23", "score": 0.0},
+                        ],
+                        "summary": "Direct visual alignment favors Room 10.",
+                    }
+                )
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_path = Path(tmpdir) / "view_0.png"
+            image_path.write_bytes(b"fake-image")
+            localization = localizer.localize(
+                observation=Observation(
+                    pano_id="pano-10",
+                    views=[RenderedView(label="north", heading=330.0, path=str(image_path))],
+                    metadata={"floor": "0"},
+                ),
+                prior_room_belief={"Room 23": 1.0},
+                fallback_room_id="Room 23",
+            )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 10")
+        self.assertEqual(localization["spatial_alignment"]["mode"], "direct_images")
+        self.assertEqual(localization["spatial_alignment"]["view_0_allocentric_direction"], "south")
+        self.assertEqual(localization["spatial_alignment"]["sector_alignment"][0]["view_id"], "view_0")
+        direct_input = localizer.last_alignment_request_body["input"][0]["content"][0]["text"]
+        self.assertIn("view_0", direct_input)
+        self.assertIn("global heading is unknown", direct_input)
+        self.assertIn("sector_alignment", direct_input)
+        self.assertIn("do not jump straight to a room prediction from one sign", localizer.last_alignment_request_body["instructions"])
 
     def test_spatial_engine_can_use_injected_llm_localizer(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)

@@ -84,6 +84,12 @@ class StateEstimator:
                 observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
+                spatial_alignment = localization.get("spatial_alignment")
+                if isinstance(spatial_alignment, dict):
+                    observation.metadata["spatial_alignment"] = dict(spatial_alignment)
+                ego_spatial_context = localization.get("ego_spatial_context")
+                if isinstance(ego_spatial_context, dict):
+                    observation.metadata["ego_spatial_context"] = dict(ego_spatial_context)
 
         unexplored = self._unexplored_neighbor_count(state)
         if unexplored > 1 and (not state.junction_stack or state.junction_stack[-1] != state.current_pano_id):

@@ -107,6 +107,58 @@ Args:
 Manual smoke tests and module-level demos.
 These are useful when debugging one stage or a short chain of stages without treating them as formal benchmarks.
 
+LLM/VLM demo scripts can now target either:
+- OpenAI `Responses API`
+- an OpenAI-compatible self-hosted server exposing `/v1/chat/completions`
+
+Use `--*-api-kind` to switch transport (`responses` or `chat_completions`) and `--*-api-base` to point at your server.
+
+For `.env`-only switching, prefer an active-profile layout instead of repeating the same keys twice:
+
+```env
+ST_NAV_ACTIVE_PROFILE=ollama
+
+ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER=ollama
+ST_NAV_PROFILE_OLLAMA_MODEL_NAME=gemma4:26b
+ST_NAV_PROFILE_OLLAMA_API_BASE=http://127.0.0.1:11434/v1
+ST_NAV_PROFILE_OLLAMA_API_KEY=ollama
+ST_NAV_PROFILE_OLLAMA_API_KIND=chat_completions
+ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT=180
+ST_NAV_PROFILE_OLLAMA_NUM_CTX=4096
+ST_NAV_PROFILE_OLLAMA_TEMPERATURE=0
+
+ST_NAV_PROFILE_OPENAI_MODEL_PROVIDER=openai
+ST_NAV_PROFILE_OPENAI_MODEL_NAME=gpt-5-mini
+ST_NAV_PROFILE_OPENAI_API_BASE=https://api.openai.com/v1
+ST_NAV_PROFILE_OPENAI_API_KEY=YOUR_OPENAI_KEY
+ST_NAV_PROFILE_OPENAI_API_KIND=responses
+ST_NAV_PROFILE_OPENAI_REQUEST_TIMEOUT=30
+
+ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER=gemini
+ST_NAV_PROFILE_GEMINI_MODEL_NAME=gemma-4-26b-a4b-it
+ST_NAV_PROFILE_GEMINI_API_KEY=YOUR_GEMINI_API_KEY
+ST_NAV_PROFILE_GEMINI_API_KIND=responses
+ST_NAV_PROFILE_GEMINI_REQUEST_TIMEOUT=60
+```
+
+Then switch providers by editing only:
+
+```env
+ST_NAV_ACTIVE_PROFILE=ollama
+```
+
+or
+
+```env
+ST_NAV_ACTIVE_PROFILE=openai
+```
+
+or
+
+```env
+ST_NAV_ACTIVE_PROFILE=gemini
+```
+
 - `parse_instruction.py`: inspect the instruction parser output
 - `resolve_source_pano.py`: inspect source-room to source-pano resolution
 - `plan_room_route.py`: inspect shortest-room-route planning from explicit room ids
@@ -126,6 +178,8 @@ Args:
 - `--instruction`
 - `--llm-api-key`
 - `--llm-model`
+- `--llm-api-kind` (`responses | chat_completions`)
+- `--llm-api-base`
 
 `resolve_source_pano.py`
 
@@ -161,6 +215,8 @@ Args:
 - `--pano-id`
 - `--llm-api-key`
 - `--detector-model`
+- `--detector-api-kind` (`responses | chat_completions`)
+- `--detector-api-base`
 - `--vlm-timeout`
 - `--render-api-key`
 - `--render-output-dir`
@@ -191,6 +247,8 @@ Args:
 - `--localizer` (`heuristic | llm`)
 - `--llm-model`
 - `--llm-api-key`
+- `--llm-api-kind` (`responses | chat_completions`)
+- `--llm-api-base`
 - `--llm-timeout`
 - `--prior-room` (repeatable, e.g. `Room 10=0.7`)
 - `--top-k`

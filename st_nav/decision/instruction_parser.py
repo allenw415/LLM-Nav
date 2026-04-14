@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
-import urllib.request
 from typing import Callable
 
+from ..common.env import resolve_model_environment
+from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     NAVIGATION_TASK_TYPES,
     build_navigation_parse_input,
@@ -26,24 +26,41 @@ class LLMInstructionParser:
         self,
         *,
         room_graph: dict[str, dict],
-        model: str = "gpt-5-mini",
+        model: str | None = None,
         api_key: str | None = None,
-        api_base: str = "https://api.openai.com/v1",
-        request_timeout: float = 30.0,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
     ):
+        settings = resolve_model_environment(
+            default_model="gpt-5-mini",
+            default_api_base=DEFAULT_OPENAI_API_BASE,
+            default_api_kind="responses",
+        )
         self.room_graph = room_graph
-        self.model = model
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.api_base = api_base.rstrip("/")
-        self.request_timeout = request_timeout
+        self.model = model or settings.model_name or "gpt-5-mini"
+        self.api_key = api_key or settings.api_key
+        self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
+        self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
+        self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 30.0))
         self.response_client = response_client
         self.last_request_body: dict | None = None
         self.last_response_payload: dict | None = None
+        self.model_client = ModelResponseClient(
+            provider=settings.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            api_kind=self.api_kind,
+            request_timeout=self.request_timeout,
+            num_ctx=settings.num_ctx,
+            temperature=settings.temperature,
+            response_client=self.response_client,
+        )
 
     def parse(self, instruction: str) -> TaskSpec:
-        if not self.api_key and self.response_client is None:
-            raise RuntimeError("Missing API key for LLM-based instruction parsing.")
+        if not self.model_client.is_configured():
+            raise RuntimeError("Missing model API configuration for LLM-based instruction parsing.")
 
         request_body = self._build_request_body(instruction)
         self.last_request_body = self._clone_json(request_body)
@@ -78,39 +95,10 @@ class LLMInstructionParser:
         }
 
     def _create_response(self, request_body: dict) -> dict:
-        if self.response_client is not None:
-            return self.response_client(request_body)
-
-        request = urllib.request.Request(
-            f"{self.api_base}/responses",
-            data=json.dumps(request_body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+        return self.model_client.create(request_body)
 
     def _parse_output_payload(self, payload: dict) -> dict:
-        output_text = payload.get("output_text")
-        if not isinstance(output_text, str) or not output_text.strip():
-            fragments: list[str] = []
-            for item in payload.get("output", []):
-                if not isinstance(item, dict) or item.get("type") != "message":
-                    continue
-                for content in item.get("content", []):
-                    if not isinstance(content, dict):
-                        continue
-                    text = content.get("text")
-                    if isinstance(text, str):
-                        fragments.append(text)
-            output_text = "".join(fragments)
-
-        if not isinstance(output_text, str) or not output_text.strip():
-            raise ValueError("Responses API payload did not include output text.")
-        return json.loads(output_text)
+        return parse_json_output(payload)
 
     @staticmethod
     def _clone_json(payload: dict) -> dict:

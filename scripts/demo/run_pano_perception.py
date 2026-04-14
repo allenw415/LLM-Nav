@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from _common import (
     PROJECT_ROOT,
     ensure_project_root_on_path,
@@ -12,18 +13,26 @@ from _common import (
 
 ensure_project_root_on_path()
 
-from st_nav import PanoramaRenderer, PerceptionPipeline, ViewDetector, load_dotenv
+from st_nav import PanoramaRenderer, PerceptionPipeline, ViewDetector, load_dotenv, resolve_model_environment
 
 load_dotenv(PROJECT_ROOT / ".env")
+MODEL_ENV = resolve_model_environment(
+    default_model="gpt-5-mini",
+    default_api_base="https://api.openai.com/v1",
+    default_api_kind="responses",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run perception directly on a given pano id.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--pano-id", required=True)
-    parser.add_argument("--llm-api-key", default=os.environ.get("OPENAI_API_KEY"))
-    parser.add_argument("--detector-model", default="gpt-5-mini")
-    parser.add_argument("--vlm-timeout", type=float, default=180.0)
+    parser.add_argument("--debug-request", action="store_true")
+    parser.add_argument("--llm-api-key", default=MODEL_ENV.api_key)
+    parser.add_argument("--detector-model", default=MODEL_ENV.model_name)
+    parser.add_argument("--detector-api-kind", default=MODEL_ENV.api_kind)
+    parser.add_argument("--detector-api-base", default=MODEL_ENV.api_base)
+    parser.add_argument("--vlm-timeout", type=float, default=MODEL_ENV.request_timeout or 180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/pano_perception")
     parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
@@ -37,10 +46,30 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _resolve_endpoint(detector: ViewDetector, request_body: dict) -> str:
+    client = detector.model_client
+    if client.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+        return client._gemini_endpoint(request_body)
+    if client.provider == "ollama":
+        return f"{client._ollama_api_base()}/api/chat"
+    if client.api_kind == "responses":
+        return f"{client.api_base}/responses"
+    return f"{client.api_base}/chat/completions"
+
+
+def _resolve_transport_payload(detector: ViewDetector, request_body: dict) -> dict:
+    client = detector.model_client
+    if client.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+        return client._responses_to_gemini_generate_content_payload(request_body)
+    if client.provider == "ollama":
+        return client._responses_to_ollama_chat_payload(request_body)
+    if client.api_kind == "responses":
+        return request_body
+    return client._responses_to_chat_completions_payload(request_body)
+
+
 def main() -> int:
     args = build_parser().parse_args()
-    if not args.llm_api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY.")
     if not args.render_api_key:
         raise RuntimeError("Missing GMAPS_API_KEY.")
 
@@ -49,6 +78,8 @@ def main() -> int:
 
     detector = ViewDetector(
         api_key=args.llm_api_key,
+        api_base=args.detector_api_base,
+        api_kind=args.detector_api_kind,
         model=args.detector_model,
         request_timeout=args.vlm_timeout,
     )
@@ -69,6 +100,26 @@ def main() -> int:
         height=args.height,
         graph_path=str(artifacts.artifacts_dir / "pano_graph.json"),
     )
+    if args.debug_request:
+        request_body = detector._build_request_body(
+            [
+                capture
+                for capture in manifest.get("captures", [])
+                if isinstance(capture, dict) and isinstance(capture.get("path"), str) and capture.get("path")
+            ]
+        )
+        debug_payload = {
+            "provider": detector.model_client.provider,
+            "model": detector.model,
+            "api_kind": detector.api_kind,
+            "api_base": detector.api_base,
+            "endpoint": _resolve_endpoint(detector, request_body),
+            "request_timeout": detector.request_timeout,
+            "has_api_key": bool(detector.api_key),
+            "request_body": detector._redact_request_body(request_body),
+            "transport_payload": detector._redact_request_body(_resolve_transport_payload(detector, request_body)),
+        }
+        print(render_json(debug_payload), file=sys.stderr)
     observation = pipeline.observe_from_manifest(
         manifest["manifest_path"],
         current_heading=args.current_heading,
@@ -87,6 +138,7 @@ def main() -> int:
                 "name": entity.name,
                 "kind": entity.kind,
                 "confidence": entity.confidence,
+                "source_views": entity.metadata.get("source_views"),
             }
             for entity in observation.entities
         ],

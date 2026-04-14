@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import mimetypes
-import os
-import socket
-import urllib.request
 from base64 import b64encode
 from pathlib import Path
 from typing import Callable
 
+from ..common.env import resolve_model_environment
+from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     build_view_detection_input,
     build_view_detection_instructions,
@@ -24,26 +23,43 @@ class ViewDetector:
 
     Detection priority:
     1. Optional sibling `*_detections.json` file for offline/manual testing
-    2. OpenAI Responses API with multi-image input for real VLM detection
+    2. Configurable model API with multi-image input for real VLM detection
     """
 
     def __init__(
         self,
         *,
-        model: str = "gpt-5-mini",
+        model: str | None = None,
         api_key: str | None = None,
-        api_base: str = "https://api.openai.com/v1",
-        request_timeout: float = 180.0,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
         use_detection_files: bool = True,
     ):
-        self.model = model
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.api_base = api_base.rstrip("/")
-        self.request_timeout = request_timeout
+        settings = resolve_model_environment(
+            default_model="gpt-5-mini",
+            default_api_base=DEFAULT_OPENAI_API_BASE,
+            default_api_kind="responses",
+        )
+        self.model = model or settings.model_name or "gpt-5-mini"
+        self.api_key = api_key or settings.api_key
+        self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
+        self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
+        self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 180.0))
         self.response_client = response_client
         self.use_detection_files = use_detection_files
         self.last_traces: list[dict] = []
+        self.model_client = ModelResponseClient(
+            provider=settings.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            api_kind=self.api_kind,
+            request_timeout=self.request_timeout,
+            num_ctx=settings.num_ctx,
+            temperature=settings.temperature,
+            response_client=self.response_client,
+        )
 
     def detect(self, manifest_path: str | Path) -> list[ViewDetection]:
         manifest_path = Path(manifest_path)
@@ -54,7 +70,7 @@ class ViewDetector:
             self.last_traces = self._load_trace_file(trace_path)
             return self._load_detection_file(detection_path)
 
-        if not self.api_key and self.response_client is None:
+        if not self.model_client.is_configured():
             return []
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -236,52 +252,21 @@ class ViewDetector:
         )
 
     def _create_response(self, request_body: dict) -> dict:
-        if self.response_client is not None:
-            return self.response_client(request_body)
-
-        request = urllib.request.Request(
-            f"{self.api_base}/responses",
-            data=json.dumps(request_body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
-                return json.loads(response.read().decode("utf-8"))
+            return self.model_client.create(request_body)
         except TimeoutError as exc:
             raise TimeoutError(
-                "OpenAI Responses API timed out after "
-                f"{self.request_timeout:.0f}s while processing the multi-view panorama request. "
-                "Try a larger request timeout."
-            ) from exc
-        except socket.timeout as exc:
-            raise TimeoutError(
-                "OpenAI Responses API timed out after "
+                "Model API timed out after "
                 f"{self.request_timeout:.0f}s while processing the multi-view panorama request. "
                 "Try a larger request timeout."
             ) from exc
 
     @staticmethod
     def _parse_output_payload(payload: dict) -> dict:
-        output_text = payload.get("output_text")
-        if not isinstance(output_text, str) or not output_text.strip():
-            fragments: list[str] = []
-            for item in payload.get("output", []):
-                if not isinstance(item, dict) or item.get("type") != "message":
-                    continue
-                for content in item.get("content", []):
-                    if not isinstance(content, dict):
-                        continue
-                    text = content.get("text")
-                    if isinstance(text, str):
-                        fragments.append(text)
-            output_text = "".join(fragments)
-        if not isinstance(output_text, str) or not output_text.strip():
+        try:
+            return parse_json_output(payload)
+        except ValueError:
             return {"entities": []}
-        return json.loads(output_text)
 
     @staticmethod
     def _clone_json(payload: dict) -> dict:

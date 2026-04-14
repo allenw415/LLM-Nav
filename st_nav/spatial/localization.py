@@ -2,13 +2,26 @@ from __future__ import annotations
 
 import json
 import math
-import os
+import mimetypes
 import re
-import urllib.request
+from base64 import b64encode
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Callable
 
-from ..common.prompts import build_localization_input, build_localization_instructions, build_localization_schema
+from ..common.env import resolve_model_environment
+from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
+from ..common.prompts import (
+    build_localization_input,
+    build_localization_instructions,
+    build_localization_schema,
+    build_spatial_alignment_input,
+    build_spatial_alignment_instructions,
+    build_spatial_alignment_schema,
+    build_spatial_context_extraction_input,
+    build_spatial_context_extraction_instructions,
+    build_spatial_context_extraction_schema,
+)
 from ..common.types import EntityDetection, Observation
 from .grounding import GroundingIndex
 
@@ -359,10 +372,11 @@ class LLMRoomLocalizer(RoomLocalizer):
         *,
         room_graph: dict[str, dict],
         grounding_index: GroundingIndex,
-        model: str = "gpt-5-mini",
+        model: str | None = None,
         api_key: str | None = None,
-        api_base: str = "https://api.openai.com/v1",
-        request_timeout: float = 30.0,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
         same_floor_only: bool = True,
         self_transition_weight: float = 1.0,
@@ -377,13 +391,29 @@ class LLMRoomLocalizer(RoomLocalizer):
             neighbor_transition_weight=neighbor_transition_weight,
             min_entity_likelihood=min_entity_likelihood,
         )
-        self.model = model
-        self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
-        self.api_base = api_base.rstrip("/")
-        self.request_timeout = request_timeout
+        settings = resolve_model_environment(
+            default_model="gpt-5-mini",
+            default_api_base=DEFAULT_OPENAI_API_BASE,
+            default_api_kind="responses",
+        )
+        self.model = model or settings.model_name or "gpt-5-mini"
+        self.api_key = api_key or settings.api_key
+        self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
+        self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
+        self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 30.0))
         self.response_client = response_client
         self.last_request_body: dict | None = None
         self.last_response_payload: dict | None = None
+        self.model_client = ModelResponseClient(
+            provider=settings.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            api_kind=self.api_kind,
+            request_timeout=self.request_timeout,
+            num_ctx=settings.num_ctx,
+            temperature=settings.temperature,
+            response_client=self.response_client,
+        )
 
     def localize(
         self,
@@ -408,8 +438,8 @@ class LLMRoomLocalizer(RoomLocalizer):
                 prior_room_belief=prior_room_belief,
                 fallback_room_id=fallback_room_id,
             )
-        if not self.api_key and self.response_client is None:
-            raise RuntimeError("Missing API key for LLM-based localization.")
+        if not self.model_client.is_configured():
+            raise RuntimeError("Missing model API configuration for LLM-based localization.")
 
         transition_support = self._build_transition_support(
             prior_room_belief or {},
@@ -519,38 +549,431 @@ class LLMRoomLocalizer(RoomLocalizer):
         return {room_id: uniform for room_id in candidate_room_ids}
 
     def _create_response(self, request_body: dict) -> dict:
-        if self.response_client is not None:
-            return self.response_client(request_body)
-        request = urllib.request.Request(
-            f"{self.api_base}/responses",
-            data=json.dumps(request_body).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+        return self.model_client.create(request_body)
 
     def _parse_output_payload(self, payload: dict) -> dict:
-        output_text = payload.get("output_text")
-        if not isinstance(output_text, str) or not output_text.strip():
-            fragments: list[str] = []
-            for item in payload.get("output", []):
-                if not isinstance(item, dict) or item.get("type") != "message":
-                    continue
-                for content in item.get("content", []):
-                    if not isinstance(content, dict):
-                        continue
-                    text = content.get("text")
-                    if isinstance(text, str):
-                        fragments.append(text)
-            output_text = "".join(fragments)
-        if not isinstance(output_text, str) or not output_text.strip():
-            raise ValueError("Responses API payload did not include output text for localization.")
-        return json.loads(output_text)
+        return parse_json_output(payload)
 
     @staticmethod
     def _clone_json(payload: dict) -> dict:
         return json.loads(json.dumps(payload))
+
+
+class LLMSpatialAlignmentLocalizer(RoomLocalizer):
+    ALIGNMENT_MODES = {"text_from_images", "direct_images"}
+
+    def __init__(
+        self,
+        *,
+        room_graph: dict[str, dict],
+        grounding_index: GroundingIndex,
+        alignment_mode: str = "text_from_images",
+        model: str | None = None,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
+        response_client: Callable[[dict], dict] | None = None,
+        same_floor_only: bool = True,
+        self_transition_weight: float = 1.0,
+        neighbor_transition_weight: float = 1.0,
+        min_entity_likelihood: float = 0.05,
+    ):
+        super().__init__(
+            room_graph=room_graph,
+            grounding_index=grounding_index,
+            same_floor_only=same_floor_only,
+            self_transition_weight=self_transition_weight,
+            neighbor_transition_weight=neighbor_transition_weight,
+            min_entity_likelihood=min_entity_likelihood,
+        )
+        if alignment_mode not in self.ALIGNMENT_MODES:
+            raise ValueError(f"Unsupported alignment_mode: {alignment_mode}")
+        settings = resolve_model_environment(
+            default_model="gpt-5-mini",
+            default_api_base=DEFAULT_OPENAI_API_BASE,
+            default_api_kind="responses",
+        )
+        self.alignment_mode = alignment_mode
+        self.model = model or settings.model_name or "gpt-5-mini"
+        self.api_key = api_key or settings.api_key
+        self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
+        self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
+        self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 30.0))
+        self.response_client = response_client
+        self.last_extraction_request_body: dict | None = None
+        self.last_extraction_response_payload: dict | None = None
+        self.last_alignment_request_body: dict | None = None
+        self.last_alignment_response_payload: dict | None = None
+        self.last_ego_spatial_context: dict | None = None
+        self.model_client = ModelResponseClient(
+            provider=settings.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            api_kind=self.api_kind,
+            request_timeout=self.request_timeout,
+            num_ctx=settings.num_ctx,
+            temperature=settings.temperature,
+            response_client=self.response_client,
+        )
+
+    def localize(
+        self,
+        *,
+        observation: Observation,
+        prior_room_belief: dict[str, float] | None,
+        fallback_room_id: str | None = None,
+    ) -> dict:
+        candidate_room_ids = self._candidate_room_ids(observation)
+        if not candidate_room_ids:
+            return {
+                "predicted_room_id": None,
+                "confidence": 0.0,
+                "room_belief": {},
+                "transition_support": {},
+                "evidence": [],
+            }
+        if not self.model_client.is_configured():
+            raise RuntimeError("Missing model API configuration for LLM spatial alignment localization.")
+
+        ordered_views = self._ordered_views(observation)
+        if not ordered_views:
+            raise RuntimeError("Spatial alignment localization requires observation.views with image paths.")
+
+        transition_support = self._build_transition_support(
+            prior_room_belief or {},
+            candidate_room_ids=candidate_room_ids,
+            fallback_room_id=fallback_room_id,
+        )
+        candidate_context_text = self._build_candidate_context_text(candidate_room_ids)
+
+        ego_spatial_context = None
+        if self.alignment_mode == "text_from_images":
+            extraction_request = self._build_context_extraction_request_body(
+                ordered_views=ordered_views,
+                candidate_room_ids=candidate_room_ids,
+            )
+            self.last_extraction_request_body = self._clone_json(extraction_request)
+            extraction_payload = self._create_response(extraction_request)
+            self.last_extraction_response_payload = self._clone_json(extraction_payload)
+            extracted = self._parse_output_payload(extraction_payload)
+            ego_spatial_context = self._format_ego_spatial_context(extracted, ordered_views)
+            self.last_ego_spatial_context = self._clone_json(ego_spatial_context)
+            alignment_request = self._build_alignment_text_request_body(
+                candidate_room_ids=candidate_room_ids,
+                candidate_context_text=candidate_context_text,
+                ego_context_text=str(ego_spatial_context.get("text", "")),
+                ordered_views=ordered_views,
+            )
+        else:
+            self.last_extraction_request_body = None
+            self.last_extraction_response_payload = None
+            self.last_ego_spatial_context = None
+            alignment_request = self._build_alignment_image_request_body(
+                candidate_room_ids=candidate_room_ids,
+                candidate_context_text=candidate_context_text,
+                ordered_views=ordered_views,
+            )
+
+        self.last_alignment_request_body = self._clone_json(alignment_request)
+        alignment_payload = self._create_response(alignment_request)
+        self.last_alignment_response_payload = self._clone_json(alignment_payload)
+        parsed = self._parse_output_payload(alignment_payload)
+        observation_likelihood = self._observation_scores_from_distribution(parsed, candidate_room_ids)
+
+        posterior_scores = {
+            room_id: float(transition_support.get(room_id, 0.0)) * float(observation_likelihood.get(room_id, 0.0))
+            for room_id in candidate_room_ids
+        }
+        posterior = self._normalize_scores(posterior_scores)
+        predicted_room_id = max(posterior, key=posterior.get) if posterior else None
+        if predicted_room_id and posterior.get(predicted_room_id, 0.0) <= 0.0:
+            predicted_room_id = None
+
+        raw_evidence = parsed.get("evidence")
+        evidence = [value for value in raw_evidence if isinstance(value, str) and value] if isinstance(raw_evidence, list) else []
+        raw_summary = parsed.get("summary")
+        summary = raw_summary if isinstance(raw_summary, str) else ""
+        view_0_direction = parsed.get("view_0_allocentric_direction")
+        if not isinstance(view_0_direction, str) or not view_0_direction:
+            view_0_direction = None
+        spatial_alignment = {
+            "mode": self.alignment_mode,
+            "view_0_allocentric_direction": view_0_direction,
+            "candidate_context_text": candidate_context_text,
+        }
+        raw_sector_alignment = parsed.get("sector_alignment")
+        if isinstance(raw_sector_alignment, list):
+            spatial_alignment["sector_alignment"] = [
+                record for record in raw_sector_alignment if isinstance(record, dict)
+            ]
+        if ego_spatial_context is not None:
+            spatial_alignment["ego_context_text"] = str(ego_spatial_context.get("text", ""))
+            spatial_alignment["ego_context_views"] = list(ego_spatial_context.get("views", []))
+
+        return {
+            "predicted_room_id": predicted_room_id,
+            "confidence": posterior.get(predicted_room_id, 0.0) if predicted_room_id else 0.0,
+            "room_belief": posterior,
+            "transition_support": transition_support,
+            "observation_distribution": observation_likelihood,
+            "observation_likelihood": observation_likelihood,
+            "evidence": evidence[:3],
+            "summary": summary,
+            "spatial_alignment": spatial_alignment,
+            "ego_spatial_context": ego_spatial_context,
+        }
+
+    def _ordered_views(self, observation: Observation) -> list[dict]:
+        ordered = []
+        for index, view in enumerate(observation.views):
+            if not isinstance(view.path, str) or not view.path:
+                continue
+            ordered.append(
+                {
+                    "view_id": f"view_{index}",
+                    "path": view.path,
+                    "heading": float(view.heading),
+                }
+            )
+        return ordered
+
+    def _build_candidate_context_text(self, candidate_room_ids: list[str]) -> str:
+        lines: list[str] = []
+        for room_id in candidate_room_ids:
+            node = self.room_graph.get(room_id, {})
+            title = node.get("title") or "unknown"
+            category = node.get("category") or "unknown"
+            lines.append(f"Candidate room {room_id}: title={title}; category={category}.")
+            for neighbor in node.get("neighbors", []):
+                if not isinstance(neighbor, dict):
+                    continue
+                neighbor_room_id = neighbor.get("target_room_id")
+                if not isinstance(neighbor_room_id, str) or not neighbor_room_id:
+                    continue
+                direction = neighbor.get("allocentric_direction") or "unknown"
+                neighbor_node = self.room_graph.get(neighbor_room_id, {})
+                neighbor_title = neighbor_node.get("title") or neighbor_room_id
+                lines.append(f"- {neighbor_room_id} ({neighbor_title}) is {direction} of {room_id}.")
+        return "\n".join(lines)
+
+    def _candidate_theme_labels(self, candidate_room_ids: list[str]) -> list[str]:
+        labels: list[str] = []
+        for room_id in candidate_room_ids:
+            node = self.room_graph.get(room_id, {})
+            for key in ("title", "category"):
+                value = node.get(key)
+                if isinstance(value, str) and value and value not in labels:
+                    labels.append(value)
+            for neighbor in node.get("neighbors", []):
+                if not isinstance(neighbor, dict):
+                    continue
+                neighbor_node = self.room_graph.get(str(neighbor.get("target_room_id")), {})
+                for key in ("title", "category"):
+                    value = neighbor_node.get(key)
+                    if isinstance(value, str) and value and value not in labels:
+                        labels.append(value)
+        return labels
+
+    def _build_context_extraction_request_body(
+        self,
+        *,
+        ordered_views: list[dict],
+        candidate_room_ids: list[str],
+    ) -> dict:
+        content: list[dict] = [
+            {
+                "type": "input_text",
+                "text": build_spatial_context_extraction_input(
+                    view_ids=[view["view_id"] for view in ordered_views],
+                    candidate_theme_labels=self._candidate_theme_labels(candidate_room_ids),
+                ),
+            }
+        ]
+        for view in ordered_views:
+            content.extend(
+                [
+                    {
+                        "type": "input_text",
+                        "text": f"Panorama sector {view['view_id']}. The panorama's global heading is unknown.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": self._image_to_data_url(Path(view["path"])),
+                        "detail": "high",
+                    },
+                ]
+            )
+        return {
+            "model": self.model,
+            "instructions": build_spatial_context_extraction_instructions(),
+            "input": [{"role": "user", "content": content}],
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "spatial_context_extraction",
+                    "strict": True,
+                    "schema": build_spatial_context_extraction_schema([view["view_id"] for view in ordered_views]),
+                }
+            },
+        }
+
+    def _format_ego_spatial_context(self, parsed: dict, ordered_views: list[dict]) -> dict:
+        raw_views = parsed.get("views")
+        by_id = {}
+        if isinstance(raw_views, list):
+            for record in raw_views:
+                if not isinstance(record, dict):
+                    continue
+                view_id = record.get("view_id")
+                if isinstance(view_id, str) and view_id:
+                    by_id[view_id] = record
+
+        formatted_views = []
+        lines = []
+        for view in ordered_views:
+            record = by_id.get(view["view_id"], {})
+            raw_themes = record.get("themes")
+            themes = []
+            if isinstance(raw_themes, list):
+                for theme in raw_themes[:3]:
+                    if not isinstance(theme, dict):
+                        continue
+                    label = theme.get("label")
+                    confidence = theme.get("confidence")
+                    if isinstance(label, str) and label:
+                        themes.append(
+                            {
+                                "label": label,
+                                "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.0,
+                            }
+                        )
+            formatted_views.append({"view_id": view["view_id"], "themes": themes})
+            if themes:
+                theme_text = ", ".join(f"{theme['label']} ({theme['confidence']:.2f})" for theme in themes)
+            else:
+                theme_text = "(no reliable theme)"
+            lines.append(f"- {view['view_id']}: {theme_text}")
+
+        summary = parsed.get("summary")
+        return {
+            "views": formatted_views,
+            "summary": summary if isinstance(summary, str) else "",
+            "text": "\n".join(lines),
+        }
+
+    def _build_alignment_text_request_body(
+        self,
+        *,
+        candidate_room_ids: list[str],
+        candidate_context_text: str,
+        ego_context_text: str,
+        ordered_views: list[dict],
+    ) -> dict:
+        return {
+            "model": self.model,
+            "instructions": build_spatial_alignment_instructions(),
+            "input": build_spatial_alignment_input(
+                candidate_context_text=candidate_context_text,
+                ego_context_text=ego_context_text,
+                view_ids=[view["view_id"] for view in ordered_views],
+            ),
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "spatial_alignment",
+                    "strict": True,
+                    "schema": build_spatial_alignment_schema(candidate_room_ids),
+                }
+            },
+        }
+
+    def _build_alignment_image_request_body(
+        self,
+        *,
+        candidate_room_ids: list[str],
+        candidate_context_text: str,
+        ordered_views: list[dict],
+    ) -> dict:
+        content: list[dict] = [
+            {
+                "type": "input_text",
+                "text": build_spatial_alignment_input(
+                    candidate_context_text=candidate_context_text,
+                    ego_context_text="Use the panorama-sector images below directly instead of a pre-extracted textual context.",
+                    view_ids=[view["view_id"] for view in ordered_views],
+                    direct_images=True,
+                ),
+            }
+        ]
+        for view in ordered_views:
+            content.extend(
+                [
+                    {
+                        "type": "input_text",
+                        "text": f"Panorama sector {view['view_id']}. The sectors are ordered clockwise, but the global heading is unknown.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": self._image_to_data_url(Path(view["path"])),
+                        "detail": "high",
+                    },
+                ]
+            )
+        return {
+            "model": self.model,
+            "instructions": build_spatial_alignment_instructions(direct_images=True),
+            "input": [{"role": "user", "content": content}],
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "spatial_alignment_direct_images",
+                    "strict": True,
+                    "schema": build_spatial_alignment_schema(
+                        candidate_room_ids,
+                        view_ids=[view["view_id"] for view in ordered_views],
+                        include_sector_alignment=True,
+                    ),
+                }
+            },
+        }
+
+    @staticmethod
+    def _observation_scores_from_distribution(parsed: dict, candidate_room_ids: list[str]) -> dict[str, float]:
+        scores = {room_id: 0.0 for room_id in candidate_room_ids}
+        raw_scores = parsed.get("room_distribution")
+        if isinstance(raw_scores, list):
+            for record in raw_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, float(score))
+        normalized_scores = RoomLocalizer._normalize_scores(scores)
+        if any(value > 0.0 for value in normalized_scores.values()):
+            return normalized_scores
+        uniform = 1.0 / len(candidate_room_ids)
+        return {room_id: uniform for room_id in candidate_room_ids}
+
+    def _create_response(self, request_body: dict) -> dict:
+        return self.model_client.create(request_body)
+
+    def _parse_output_payload(self, payload: dict) -> dict:
+        return parse_json_output(payload)
+
+    @staticmethod
+    def _clone_json(payload: dict | None) -> dict | None:
+        if payload is None:
+            return None
+        return json.loads(json.dumps(payload))
+
+    @staticmethod
+    def _image_to_data_url(image_path: Path) -> str:
+        mime_type, _ = mimetypes.guess_type(str(image_path))
+        if not mime_type:
+            mime_type = "image/png"
+        return f"data:{mime_type};base64,{b64encode(image_path.read_bytes()).decode('ascii')}"

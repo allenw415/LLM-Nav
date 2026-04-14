@@ -8,6 +8,7 @@ NAVIGATION_TASK_TYPES = (
     "gallery_goal_navigation",
     "gallery_instruction_following_navigation",
 )
+ALLOCENTRIC_DIRECTIONS = ("north", "east", "south", "west")
 
 
 def build_view_detection_instructions() -> str:
@@ -248,3 +249,180 @@ def build_localization_schema(room_ids: list[str]) -> dict:
         "required": ["predicted_room_id", "confidence", "evidence", "room_distribution", "summary"],
         "additionalProperties": False,
     }
+
+
+def build_spatial_context_extraction_instructions() -> str:
+    return " ".join(
+        [
+            "You are a museum panorama analyzer for indoor localization.",
+            "You are given several images captured from one panorama in clockwise order.",
+            "The global orientation is unknown, so do not assume any image is north, front, right, rear, or left.",
+            "Treat each image only as a panorama sector such as view_0 or view_1.",
+            "For each view, identify the most relevant exhibit themes or gallery themes visible in that sector.",
+            "Use concise theme labels grounded in the images, such as Assyria: Nimrud or Greek and Roman sculpture.",
+            "If the exact exhibit identity is uncertain, return the closest high-level theme rather than guessing a specific object.",
+            "Return JSON only.",
+        ]
+    )
+
+
+def build_spatial_context_extraction_input(*, view_ids: list[str], candidate_theme_labels: list[str]) -> str:
+    lines = [
+        f"Panorama sectors: {', '.join(view_ids)}.",
+        "The sectors are listed in clockwise order around the same panorama.",
+        "The global heading of the panorama is unknown.",
+        "",
+        "Known gallery or exhibit themes that may appear:",
+    ]
+    lines.extend(f"- {label}" for label in candidate_theme_labels)
+    lines.extend(
+        [
+            "",
+            "Task:",
+            "1. For each panorama sector, list the most relevant visible themes.",
+            "2. Provide confidence values between 0 and 1.",
+            "3. Keep the answer grounded in what is visible in that sector.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_spatial_context_extraction_schema(view_ids: list[str]) -> dict:
+    theme_schema = {
+        "type": "object",
+        "properties": {
+            "label": {"type": "string"},
+            "confidence": {"type": "number"},
+        },
+        "required": ["label", "confidence"],
+        "additionalProperties": False,
+    }
+    view_schema = {
+        "type": "object",
+        "properties": {
+            "view_id": {"type": "string", "enum": view_ids},
+            "themes": {"type": "array", "items": theme_schema},
+            "summary": {"type": "string"},
+        },
+        "required": ["view_id", "themes", "summary"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "views": {"type": "array", "items": view_schema},
+            "summary": {"type": "string"},
+        },
+        "required": ["views", "summary"],
+        "additionalProperties": False,
+    }
+
+
+def build_spatial_alignment_instructions(*, direct_images: bool = False) -> str:
+    base_parts = [
+        "You are a museum spatial alignment reasoner.",
+        "You are given candidate room spatial contexts from the museum map and either panorama-sector text summaries or the panorama images themselves.",
+        "The panorama heading is unknown.",
+        "Reason over rotation: determine which candidate room best matches the observed panorama after allowing a global rotation offset.",
+        "Also infer which allocentric direction the first panorama sector view_0 most likely corresponds to.",
+        "Use only the provided candidate rooms.",
+    ]
+    if direct_images:
+        base_parts.extend(
+            [
+                "When panorama images are provided directly, do not jump straight to a room prediction from one sign or one iconic object.",
+                "First infer the dominant visible theme of each relevant panorama sector.",
+                "Then align at least two sectors to allocentric directions and nearby candidate-room themes before deciding the room.",
+                "Your evidence and alignment trace must explicitly reference sector ids such as view_2 or view_5.",
+            ]
+        )
+    base_parts.append("Return JSON only.")
+    return " ".join(
+        base_parts
+    )
+
+
+def build_spatial_alignment_input(
+    *,
+    candidate_context_text: str,
+    ego_context_text: str,
+    view_ids: list[str],
+    direct_images: bool = False,
+) -> str:
+    lines = [
+        "Candidate room spatial contexts:",
+        candidate_context_text,
+        "",
+        "Observed panorama sectors:",
+        f"The panorama sectors are ordered clockwise as: {', '.join(view_ids)}.",
+        "The global heading is unknown, so the sector labels are not north, east, south, or west.",
+        ego_context_text,
+        "",
+        "Task:",
+        "1. Decide which candidate room is most consistent with the observed panorama after allowing rotation.",
+        "2. Infer which allocentric direction view_0 most likely corresponds to.",
+        "3. Output a normalized room distribution over the candidate rooms.",
+        "4. Briefly summarize the main supporting and conflicting evidence.",
+    ]
+    if direct_images:
+        lines.extend(
+            [
+                "5. Before choosing the room, determine which sectors provide the strongest directional clues.",
+                "6. Output a sector_alignment trace that maps at least two panorama sectors to allocentric directions and the candidate-room theme or neighbor they best match.",
+                "7. Do not rely only on one room sign if the wider spatial pattern points elsewhere.",
+            ]
+        )
+    return "\n".join(lines)
+
+
+def build_spatial_alignment_schema(
+    room_ids: list[str],
+    *,
+    view_ids: list[str] | None = None,
+    include_sector_alignment: bool = False,
+) -> dict:
+    room_score_schema = {
+        "type": "object",
+        "properties": {
+            "room_id": {"type": "string", "enum": room_ids},
+            "score": {"type": "number"},
+        },
+        "required": ["room_id", "score"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+            "confidence": {"type": "number"},
+            "view_0_allocentric_direction": {"type": ["string", "null"], "enum": list(ALLOCENTRIC_DIRECTIONS) + [None]},
+            "evidence": {"type": "array", "items": {"type": "string"}},
+            "room_distribution": {"type": "array", "items": room_score_schema},
+            "summary": {"type": "string"},
+        },
+        "required": [
+            "predicted_room_id",
+            "confidence",
+            "view_0_allocentric_direction",
+            "evidence",
+            "room_distribution",
+            "summary",
+        ],
+        "additionalProperties": False,
+    }
+    if include_sector_alignment:
+        sector_schema = {
+            "type": "object",
+            "properties": {
+                "view_id": {"type": "string", "enum": list(view_ids or [])},
+                "allocentric_direction": {"type": "string", "enum": list(ALLOCENTRIC_DIRECTIONS)},
+                "matched_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+                "matched_theme": {"type": "string"},
+                "rationale": {"type": "string"},
+            },
+            "required": ["view_id", "allocentric_direction", "matched_room_id", "matched_theme", "rationale"],
+            "additionalProperties": False,
+        }
+        schema["properties"]["sector_alignment"] = {"type": "array", "items": sector_schema}
+        schema["required"].append("sector_alignment")
+    return schema
