@@ -16,6 +16,7 @@ scripts/
 Data and artifact preparation scripts. These are not runtime navigation entrypoints.
 
 - `build_british_museum_artifacts.py`: build normalized room graph, pano graph, and grounding template artifacts
+- `batch_floor_room_grounding.py`: ground arbitrary floor panos in fixed-size batches
 - `batch_room_grounding.py`: batch-generate pano-to-room grounding candidates and review files
 - `pano2room_grounding.py`: run one-off pano-to-room grounding while operating on grounding artifacts
 - `summarize_room_grounding.py`: summarize grounding records for one room
@@ -45,12 +46,19 @@ Args:
 - `--pano-id`
 - `--room-id` (repeatable)
 - `--limit`
+- `--profile`
+- `--model-provider`
+- `--model-name`
+- `--api-key`
+- `--api-base`
+- `--api-kind`
 - `--gemini-api-key`
 - `--gemini-model`
 - `--vlm-timeout`
 - `--render-api-key`
 - `--render-output-dir`
 - `--heading-mode` (`museum | cardinal | grounding | graph`)
+- `--max-captures`
 - `--pitch`
 - `--fov`
 - `--width`
@@ -58,6 +66,46 @@ Args:
 - `--candidate-scope` (`same-floor | all`)
 - `--debug-trace`
 - `--full-output`
+
+`batch_floor_room_grounding.py`
+
+```bash
+python3 scripts/data/batch_floor_room_grounding.py --floor 0 --offset 0 --limit 100 --heading-mode museum --max-captures 8 --fov 45
+```
+
+Default outputs go under `dataset/sites/british_museum/normalized/room_grounding_batches/`:
+- `floor0_batch_0000_100.json`
+- `floor0_batch_0000_100.review.json`
+- `floor0_batch_0000_100.manual.json`
+
+Args:
+- `--artifacts-dir`
+- `--floor`
+- `--offset`
+- `--limit`
+- `--output-path`
+- `--review-output-path`
+- `--manual-output-path`
+- `--profile`
+- `--model-provider`
+- `--model-name`
+- `--api-key`
+- `--api-base`
+- `--api-kind`
+- `--gemini-api-key`
+- `--gemini-model`
+- `--vlm-timeout`
+- `--render-api-key`
+- `--render-output-dir`
+- `--heading-mode`
+- `--max-captures`
+- `--pitch`
+- `--fov`
+- `--width`
+- `--height`
+- `--candidate-scope`
+- `--min-confidence`
+- `--debug-trace`
 
 `batch_room_grounding.py`
 
@@ -76,6 +124,12 @@ Args:
 - `--review-output-path`
 - `--manual-output-path`
 - `--compact-output-path`
+- `--profile`
+- `--model-provider`
+- `--model-name`
+- `--api-key`
+- `--api-base`
+- `--api-kind`
 - `--min-confidence`
 - `--expansion-confidence`
 - `--gemini-api-key`
@@ -83,6 +137,8 @@ Args:
 - `--vlm-timeout`
 - `--render-api-key`
 - `--render-output-dir`
+- `--heading-mode`
+- `--max-captures`
 - `--pitch`
 - `--fov`
 - `--width`

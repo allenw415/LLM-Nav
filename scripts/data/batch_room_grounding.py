@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -13,11 +14,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from st_nav import PanoramaRenderer, load_dotenv
 from st_nav_data.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
 from st_nav_data.room_grounder import (
-    GeminiRoomGrounder,
+    ModelRoomGrounder,
     build_compact_pano_room_mapping,
     build_manual_annotation_records,
-    collect_seed_panos_for_rooms,
     collect_manual_seed_panos,
+    collect_seed_panos_for_rooms,
     expand_seed_panos_by_region_growing,
     expand_seed_panos_by_hops,
     merge_seed_panos_by_room,
@@ -28,7 +29,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Batch-generate pano-to-room grounding candidates with Gemini.")
+    parser = argparse.ArgumentParser(description="Batch-generate pano-to-room grounding candidates with the active model profile.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--room-id", action="append", default=[])
     parser.add_argument(
@@ -52,13 +53,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--compact-output-path",
         default="dataset/sites/british_museum/normalized/pano_room_grounding.json",
     )
+    parser.add_argument("--profile")
+    parser.add_argument("--model-provider")
+    parser.add_argument("--model-name")
+    parser.add_argument("--api-key")
+    parser.add_argument("--api-base")
+    parser.add_argument("--api-kind")
     parser.add_argument("--min-confidence", type=float, default=0.75)
     parser.add_argument("--expansion-confidence", type=float, default=0.8)
-    parser.add_argument("--gemini-api-key", default=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-    parser.add_argument("--gemini-model", default="gemini-2.5-flash")
+    parser.add_argument("--gemini-api-key", default=None)
+    parser.add_argument("--gemini-model", default=None)
     parser.add_argument("--vlm-timeout", type=float, default=180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/room_grounding")
+    parser.add_argument("--render-seed", type=int)
+    parser.add_argument("--heading-mode", choices=["museum", "cardinal", "grounding", "graph"], default="grounding")
+    parser.add_argument("--max-captures", type=int, default=4)
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=45)
     parser.add_argument("--width", type=int, default=512)
@@ -115,6 +125,7 @@ def ensure_manifest(
     render_api_key: str | None,
     render_output_dir: Path,
     pano_id: str,
+    heading_mode: str,
     pitch: float,
     fov: int,
     width: int,
@@ -126,7 +137,7 @@ def ensure_manifest(
         pano_id=pano_id,
         api_key=render_api_key,
         output_dir=str(render_output_dir),
-        heading_mode="grounding",
+        heading_mode=heading_mode,
         pitch=pitch,
         fov=fov,
         width=width,
@@ -193,7 +204,12 @@ def main() -> int:
         "manual_seed_pano_count": sum(len(pano_ids) for pano_ids in manual_seed_panos_by_room.values()),
         "missing_seed_rooms": missing_seed_rooms,
         "candidate_scope": args.candidate_scope,
-        "gemini_model": args.gemini_model,
+        "heading_mode": args.heading_mode,
+        "max_captures": max(args.max_captures, 1),
+        "render_seed": args.render_seed,
+        "model_name": args.model_name or args.gemini_model,
+        "profile": args.profile,
+        "provider": args.model_provider,
         "min_confidence": args.min_confidence,
         "expansion_confidence": args.expansion_confidence,
     }
@@ -237,14 +253,24 @@ def main() -> int:
         print(json.dumps(preview, ensure_ascii=False, indent=2))
         return 0
 
-    renderer = PanoramaRenderer(pano_graph)
-    grounder = GeminiRoomGrounder(
-        model=args.gemini_model,
-        api_key=args.gemini_api_key,
+    renderer = PanoramaRenderer(
+        pano_graph,
+        rng=random.Random(args.render_seed) if args.render_seed is not None else None,
+    )
+    grounder = ModelRoomGrounder(
+        profile=args.profile,
+        provider=args.model_provider,
+        model=args.model_name or args.gemini_model,
+        api_key=args.api_key or args.gemini_api_key,
+        api_base=args.api_base,
+        api_kind=args.api_kind,
         request_timeout=args.vlm_timeout,
         same_floor_only=(args.candidate_scope == "same-floor"),
-        max_captures=4,
+        max_captures=max(args.max_captures, 1),
     )
+    summary["model_name"] = grounder.model
+    summary["profile"] = grounder.profile
+    summary["provider"] = grounder.provider
 
     classification_cache: dict[str, dict] = {}
 
@@ -258,6 +284,7 @@ def main() -> int:
             render_api_key=args.render_api_key,
             render_output_dir=(PROJECT_ROOT / args.render_output_dir).resolve(),
             pano_id=pano_id,
+            heading_mode=args.heading_mode,
             pitch=args.pitch,
             fov=args.fov,
             width=args.width,

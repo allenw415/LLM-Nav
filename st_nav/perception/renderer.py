@@ -57,8 +57,8 @@ def build_streetview_url(
     return f"https://maps.googleapis.com/maps/api/streetview?{query}"
 
 
-def _download_image(url: str, output_path: Path) -> None:
-    with urllib.request.urlopen(url) as response:
+def _download_image(url: str, output_path: Path, *, timeout: float = 60.0) -> None:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
         content_type = response.headers.get("Content-Type", "")
         if "image" not in content_type:
             body = response.read(200).decode("utf-8", errors="replace")
@@ -76,10 +76,14 @@ class PanoramaRenderer:
         pano_graph: dict[str, dict],
         *,
         image_downloader: Callable[[str, Path], None] | None = None,
+        image_timeout: float = 60.0,
         rng: random.Random | None = None,
     ):
         self.pano_graph = pano_graph
-        self.image_downloader = image_downloader or _download_image
+        self.image_timeout = float(image_timeout)
+        self.image_downloader = image_downloader or (
+            lambda url, output_path: _download_image(url, output_path, timeout=self.image_timeout)
+        )
         self.rng = rng or random.Random()
 
     def render(
@@ -94,6 +98,7 @@ class PanoramaRenderer:
         width: int = 512,
         height: int = 512,
         graph_path: str | Path | None = None,
+        progress_callback: Callable[[dict], None] | None = None,
     ) -> dict:
         record = self._get_pano_record(pano_id, required=(heading_mode == "graph"))
         captures_to_render = self._resolve_captures(record, heading_mode)
@@ -117,6 +122,15 @@ class PanoramaRenderer:
         )
         if cached_manifest is not None:
             cached_manifest["manifest_path"] = str(manifest_path)
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "event": "render_cached",
+                        "pano_id": pano_id,
+                        "capture_count": len(captures_to_render),
+                        "manifest_path": str(manifest_path),
+                    }
+                )
             return cached_manifest
 
         captures = []
@@ -132,7 +146,31 @@ class PanoramaRenderer:
                 width=width,
                 height=height,
             )
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "event": "render_capture_start",
+                        "pano_id": pano_id,
+                        "capture_index": index + 1,
+                        "capture_count": len(captures_to_render),
+                        "label": label,
+                        "heading": heading,
+                        "path": str(image_path),
+                    }
+                )
             self.image_downloader(image_url, image_path)
+            if progress_callback is not None:
+                progress_callback(
+                    {
+                        "event": "render_capture_done",
+                        "pano_id": pano_id,
+                        "capture_index": index + 1,
+                        "capture_count": len(captures_to_render),
+                        "label": label,
+                        "heading": heading,
+                        "path": str(image_path),
+                    }
+                )
             captures.append(
                 {
                     "label": label,
@@ -156,6 +194,15 @@ class PanoramaRenderer:
         }
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         manifest["manifest_path"] = str(manifest_path)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "render_done",
+                    "pano_id": pano_id,
+                    "capture_count": len(captures_to_render),
+                    "manifest_path": str(manifest_path),
+                }
+            )
         return manifest
 
     @staticmethod

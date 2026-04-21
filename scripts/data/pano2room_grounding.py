@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 from pathlib import Path
 
@@ -11,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from st_nav import PanoramaRenderer, load_dotenv
-from st_nav_data.room_grounder import GeminiRoomGrounder, aggregate_gemini_usage_from_traces, invert_room_grounding
+from st_nav_data.room_grounder import ModelRoomGrounder, aggregate_model_usage_from_traces, invert_room_grounding
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -28,23 +29,32 @@ def format_usage(usage: dict) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run room grounding from rendered pano views using Gemini.")
+    parser = argparse.ArgumentParser(description="Run room grounding from rendered pano views using the active model profile.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--manifest-path")
     parser.add_argument("--pano-id")
     parser.add_argument("--room-id", action="append", default=[])
     parser.add_argument("--limit", type=int)
-    parser.add_argument("--gemini-api-key", default=os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
-    parser.add_argument("--gemini-model", default="gemini-2.5-flash")
+    parser.add_argument("--profile")
+    parser.add_argument("--model-provider")
+    parser.add_argument("--model-name")
+    parser.add_argument("--api-key")
+    parser.add_argument("--api-base")
+    parser.add_argument("--api-kind")
+    parser.add_argument("--gemini-api-key", default=None)
+    parser.add_argument("--gemini-model", default=None)
     parser.add_argument("--vlm-timeout", type=float, default=180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/room_grounding")
+    parser.add_argument("--render-seed", type=int)
     parser.add_argument("--heading-mode", choices=["museum", "cardinal", "grounding", "graph"], default="grounding")
+    parser.add_argument("--max-captures", type=int, default=4)
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=45)
     parser.add_argument("--width", type=int, default=512)
     parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--candidate-scope", choices=["same-floor", "all"], default="same-floor")
+    parser.add_argument("--no-grounding-cache", action="store_true")
     parser.add_argument("--debug-trace", action="store_true")
     parser.add_argument("--full-output", action="store_true")
     return parser
@@ -139,13 +149,21 @@ def main() -> int:
     if not targets:
         raise RuntimeError("No grounding evaluation targets found.")
 
-    renderer = PanoramaRenderer(pano_graph)
-    grounder = GeminiRoomGrounder(
-        model=args.gemini_model,
-        api_key=args.gemini_api_key,
+    renderer = PanoramaRenderer(
+        pano_graph,
+        rng=random.Random(args.render_seed) if args.render_seed is not None else None,
+    )
+    grounder = ModelRoomGrounder(
+        profile=args.profile,
+        provider=args.model_provider,
+        model=args.model_name or args.gemini_model,
+        api_key=args.api_key or args.gemini_api_key,
+        api_base=args.api_base,
+        api_kind=args.api_kind,
         request_timeout=args.vlm_timeout,
+        use_grounding_files=not args.no_grounding_cache,
         same_floor_only=(args.candidate_scope == "same-floor"),
-        max_captures=4,
+        max_captures=max(args.max_captures, 1),
     )
 
     results = []
@@ -178,7 +196,7 @@ def main() -> int:
             room_graph=room_graph,
             room_grounding=room_grounding,
         )
-        usage = aggregate_gemini_usage_from_traces(grounder.last_traces)
+        usage = aggregate_model_usage_from_traces(grounder.last_traces)
         expected_room_ids = target.get("expected_room_ids")
         if not isinstance(expected_room_ids, list):
             expected_room_ids = invert_room_grounding(room_grounding).get(str(result.get("pano_id")), [])
@@ -206,9 +224,10 @@ def main() -> int:
                     "evidence": result.get("evidence"),
                     "alternative_room_ids": result.get("alternative_room_ids"),
                     "summary": result.get("summary"),
-                    "candidate_count": len(result.get("candidate_room_ids", [])),
-                    "usage": format_usage(usage),
-                }
+                "candidate_count": len(result.get("candidate_room_ids", [])),
+                "render_capture_count": len(json.loads(Path(manifest_path).read_text(encoding="utf-8")).get("captures", [])),
+                "usage": format_usage(usage),
+            }
             )
         if args.debug_trace:
             payload["trace"] = grounder.last_traces
@@ -219,7 +238,14 @@ def main() -> int:
                 usage_totals[key] += value
 
     summary = {
-        "gemini_model": args.gemini_model,
+        "model_name": grounder.model,
+        "provider": grounder.provider,
+        "profile": grounder.profile,
+        "heading_mode": args.heading_mode,
+        "max_captures": max(args.max_captures, 1),
+        "fov": args.fov,
+        "render_seed": args.render_seed,
+        "use_grounding_cache": not args.no_grounding_cache,
         "usage": format_usage(usage_totals) if usage_totals["request_count"] > 0 else {},
     }
     if args.full_output:

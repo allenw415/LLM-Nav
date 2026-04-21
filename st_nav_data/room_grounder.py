@@ -13,6 +13,9 @@ from collections import deque
 from pathlib import Path
 from typing import Callable
 
+from st_nav.common.env import resolve_model_environment
+from st_nav.common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
+
 CARDINAL_CAPTURE_LABELS = ("north", "east", "south", "west")
 
 
@@ -614,6 +617,191 @@ class GeminiRoomGrounder:
         return [trace for trace in traces if isinstance(trace, dict)]
 
 
+class ModelRoomGrounder:
+    """
+    Ground a rendered multi-view pano to a candidate room using the shared model
+    client so the same workflow can run on Gemini, OpenAI-compatible servers,
+    or Ollama-backed Gemma models.
+    """
+
+    def __init__(
+        self,
+        *,
+        model: str | None = None,
+        provider: str | None = None,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
+        profile: str | None = None,
+        response_client: Callable[[dict], dict] | None = None,
+        use_grounding_files: bool = True,
+        same_floor_only: bool = True,
+        max_captures: int = 4,
+        max_retries: int = 5,
+        retry_backoff_seconds: float = 10.0,
+    ):
+        settings = resolve_model_environment(
+            default_model="gpt-5-mini",
+            default_api_base=DEFAULT_OPENAI_API_BASE,
+            default_api_kind="responses",
+            profile=profile,
+        )
+        self.provider = (provider or settings.provider or "").strip().lower() or None
+        self.model = model or settings.model_name or "gpt-5-mini"
+        self.api_key = api_key or settings.api_key
+        self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
+        self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
+        self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 180.0))
+        self.profile = profile or settings.active_profile
+        self.response_client = response_client
+        self.use_grounding_files = use_grounding_files
+        self.same_floor_only = same_floor_only
+        self.max_captures = max_captures
+        self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
+        self.last_traces: list[dict] = []
+        self.model_client = ModelResponseClient(
+            provider=self.provider,
+            api_key=self.api_key,
+            api_base=self.api_base,
+            api_kind=self.api_kind,
+            request_timeout=self.request_timeout,
+            num_ctx=settings.num_ctx,
+            temperature=settings.temperature,
+            response_client=self.response_client,
+        )
+
+    def ground(
+        self,
+        manifest_path: str | Path,
+        *,
+        room_graph: dict[str, dict],
+        room_grounding: dict[str, dict],
+    ) -> dict:
+        manifest_path = Path(manifest_path)
+        self.last_traces = []
+        output_path = manifest_path.with_name(f"{manifest_path.stem}_room_grounding.json")
+        trace_path = manifest_path.with_name(f"{manifest_path.stem}_room_grounding_trace.json")
+        if self.use_grounding_files and output_path.exists():
+            result = json.loads(output_path.read_text(encoding="utf-8"))
+            if trace_path.exists():
+                self.last_traces = GeminiRoomGrounder._load_trace_file(trace_path)
+            return result
+
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        candidates = build_room_candidates(
+            room_graph,
+            room_grounding,
+            floor=_string_or_none(manifest.get("floor")),
+            same_floor_only=self.same_floor_only,
+        )
+        if not candidates:
+            raise RuntimeError("No candidate rooms available for room grounding.")
+        if not self.model_client.is_configured():
+            raise RuntimeError("Missing model API configuration for room grounding.")
+
+        request_body = self._build_request_body(manifest, candidates)
+        payload = self._create_response(request_body)
+        usage = extract_model_usage_metadata(payload)
+        self.last_traces.append(
+            {
+                "request": self._redact_request_body(request_body),
+                "response": self._clone_json(payload),
+                "usage": usage,
+            }
+        )
+        parsed = parse_json_output(payload)
+        result = GeminiRoomGrounder._normalize_result(
+            parsed,
+            manifest=manifest,
+            manifest_path=manifest_path,
+            candidates=candidates,
+        )
+        output_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        trace_path.write_text(
+            json.dumps({"requests_and_responses": self.last_traces}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return result
+
+    def _create_response(self, request_body: dict) -> dict:
+        attempt = 0
+        while True:
+            try:
+                return self.model_client.create(request_body)
+            except RuntimeError as exc:
+                if not _is_transient_model_runtime_error(exc) or attempt >= self.max_retries:
+                    raise
+                sleep_seconds = _retry_delay_seconds(
+                    attempt=attempt,
+                    retry_after=None,
+                    base_seconds=self.retry_backoff_seconds,
+                )
+                time.sleep(sleep_seconds)
+                attempt += 1
+
+    def _build_request_body(self, manifest: dict, candidates: list[dict]) -> dict:
+        captures = [
+            capture
+            for capture in manifest.get("captures", [])
+            if isinstance(capture, dict) and isinstance(capture.get("path"), str) and capture.get("path")
+        ]
+        if not captures:
+            raise RuntimeError("Manifest does not contain any render captures.")
+        selected_captures = select_grounding_captures(captures, max_captures=self.max_captures)
+        candidate_room_ids = [str(candidate["room_id"]) for candidate in candidates]
+
+        content: list[dict] = [
+            {
+                "type": "input_text",
+                "text": build_room_grounding_prompt(manifest=manifest, candidates=candidates),
+            }
+        ]
+        for capture in selected_captures:
+            label = _string_or_none(capture.get("label")) or "unknown"
+            heading = capture.get("heading")
+            heading_text = f"{float(heading):.1f} deg" if isinstance(heading, (int, float)) else "unknown"
+            content.append({"type": "input_text", "text": f"View label: {label}. Heading: {heading_text}."})
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": _image_to_data_url(Path(str(capture["path"]))),
+                    "detail": "high",
+                }
+            )
+
+        return {
+            "model": self.model,
+            "input": [{"role": "user", "content": content}],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "room_grounding",
+                    "strict": True,
+                    "schema": build_room_grounding_schema(candidate_room_ids),
+                }
+            },
+        }
+
+    @staticmethod
+    def _clone_json(payload: dict) -> dict:
+        return json.loads(json.dumps(payload))
+
+    @classmethod
+    def _redact_request_body(cls, request_body: dict) -> dict:
+        cloned = cls._clone_json(request_body)
+        for item in cloned.get("input", []):
+            if not isinstance(item, dict):
+                continue
+            for block in item.get("content", []):
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "input_image" and "image_url" in block:
+                    block["image_url"] = "<IMAGE_BYTES_OMITTED>"
+        return cloned
+
+
 def _string_or_none(value: object) -> str | None:
     if isinstance(value, str) and value:
         return value
@@ -640,6 +828,28 @@ def _retry_delay_seconds(*, attempt: int, retry_after: str | None, base_seconds:
         if parsed is not None and parsed > 0:
             return parsed
     return max(base_seconds * (2**attempt), 1.0)
+
+
+def _is_transient_model_runtime_error(exc: RuntimeError) -> bool:
+    message = str(exc).upper()
+    transient_markers = (
+        "HTTP 429",
+        "HTTP 500",
+        "HTTP 502",
+        "HTTP 503",
+        "HTTP 504",
+        "UNAVAILABLE",
+        "SERVICE UNAVAILABLE",
+        "RATE LIMIT",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
+def _image_to_data_url(image_path: Path) -> str:
+    mime_type, _ = mimetypes.guess_type(str(image_path))
+    if not mime_type:
+        mime_type = "image/png"
+    return f"data:{mime_type};base64,{b64encode(image_path.read_bytes()).decode('ascii')}"
 
 
 def select_grounding_captures(captures: list[dict], *, max_captures: int = 4) -> list[dict]:
@@ -689,6 +899,7 @@ def build_manual_annotation_records(
     *,
     existing_manual_records: list[dict] | None = None,
     min_confidence: float = 0.75,
+    prefill_manual_room_id_from_prediction: bool = False,
 ) -> list[dict]:
     manual_by_pano: dict[str, dict] = {}
     for record in existing_manual_records or []:
@@ -705,6 +916,13 @@ def build_manual_annotation_records(
             continue
         seen_pano_ids.add(pano_id)
         existing = manual_by_pano.get(pano_id, {})
+        predicted_room_id = grounding_record.get("predicted_room_id")
+        default_manual_room_id = (
+            predicted_room_id
+            if prefill_manual_room_id_from_prediction and isinstance(predicted_room_id, str) and predicted_room_id
+            else None
+        )
+        needs_review = _record_requires_review(grounding_record, min_confidence=min_confidence)
         annotation_records.append(
             {
                 "pano_id": pano_id,
@@ -712,13 +930,13 @@ def build_manual_annotation_records(
                 "region_depth": grounding_record.get("region_depth"),
                 "frontier_room_ids": list(grounding_record.get("frontier_room_ids", [])),
                 "expansion_room_ids": list(grounding_record.get("expansion_room_ids", [])),
-                "gemini_predicted_room_id": grounding_record.get("predicted_room_id"),
+                "gemini_predicted_room_id": predicted_room_id,
                 "gemini_confidence": grounding_record.get("confidence"),
                 "gemini_alternative_room_ids": list(grounding_record.get("alternative_room_ids", [])),
                 "gemini_summary": grounding_record.get("summary"),
-                "needs_review": _record_requires_review(grounding_record, min_confidence=min_confidence),
-                "manual_status": existing.get("manual_status", "pending"),
-                "manual_room_id": existing.get("manual_room_id"),
+                "needs_review": needs_review,
+                "manual_status": existing.get("manual_status", "pending" if needs_review else "accepted"),
+                "manual_room_id": existing.get("manual_room_id", default_manual_room_id),
                 "notes": existing.get("notes", ""),
             }
         )
@@ -739,7 +957,7 @@ def _record_requires_review(record: dict, *, min_confidence: float) -> bool:
     if not isinstance(confidence, (int, float)) or float(confidence) < min_confidence:
         return True
     alternatives = record.get("alternative_room_ids")
-    return isinstance(alternatives, list) and len(alternatives) > 0
+    return isinstance(alternatives, list) and len(alternatives) > 0 and float(confidence) < 0.95
 
 
 def collect_manual_seed_panos(
@@ -804,6 +1022,45 @@ def extract_gemini_usage_metadata(payload: dict) -> dict | None:
     return normalized or None
 
 
+def extract_model_usage_metadata(payload: dict) -> dict | None:
+    gemini_usage = extract_gemini_usage_metadata(payload)
+    if gemini_usage is not None:
+        return gemini_usage
+
+    usage = payload.get("usage")
+    if isinstance(usage, dict):
+        mapped = {
+            "prompt_token_count": usage.get("prompt_tokens", usage.get("input_tokens")),
+            "candidates_token_count": usage.get("completion_tokens", usage.get("output_tokens")),
+            "total_token_count": usage.get("total_tokens"),
+            "thoughts_token_count": usage.get("reasoning_tokens"),
+            "cached_content_token_count": usage.get("cached_tokens"),
+        }
+        normalized = {
+            key: int(value)
+            for key, value in mapped.items()
+            if isinstance(value, int) or (isinstance(value, float) and float(value).is_integer())
+        }
+        if normalized:
+            return normalized
+
+    mapped = {
+        "prompt_token_count": payload.get("prompt_eval_count"),
+        "candidates_token_count": payload.get("eval_count"),
+    }
+    normalized = {
+        key: int(value)
+        for key, value in mapped.items()
+        if isinstance(value, int) or (isinstance(value, float) and float(value).is_integer())
+    }
+    if normalized:
+        normalized["total_token_count"] = (
+            normalized.get("prompt_token_count", 0) + normalized.get("candidates_token_count", 0)
+        )
+        return normalized
+    return None
+
+
 def aggregate_gemini_usage_from_traces(traces: list[dict]) -> dict:
     totals = {
         "request_count": 0,
@@ -823,6 +1080,43 @@ def aggregate_gemini_usage_from_traces(traces: list[dict]) -> dict:
             response = trace.get("response")
             if isinstance(response, dict):
                 usage = extract_gemini_usage_metadata(response)
+        if not isinstance(usage, dict):
+            continue
+        found_usage = True
+        totals["request_count"] += 1
+        for key in (
+            "prompt_token_count",
+            "candidates_token_count",
+            "total_token_count",
+            "thoughts_token_count",
+            "cached_content_token_count",
+        ):
+            value = usage.get(key)
+            if isinstance(value, int):
+                totals[key] += value
+
+    return totals if found_usage else {}
+
+
+def aggregate_model_usage_from_traces(traces: list[dict]) -> dict:
+    totals = {
+        "request_count": 0,
+        "prompt_token_count": 0,
+        "candidates_token_count": 0,
+        "total_token_count": 0,
+        "thoughts_token_count": 0,
+        "cached_content_token_count": 0,
+    }
+    found_usage = False
+
+    for trace in traces:
+        if not isinstance(trace, dict):
+            continue
+        usage = trace.get("usage")
+        if not isinstance(usage, dict):
+            response = trace.get("response")
+            if isinstance(response, dict):
+                usage = extract_model_usage_metadata(response)
         if not isinstance(usage, dict):
             continue
         found_usage = True

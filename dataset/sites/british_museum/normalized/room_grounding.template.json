@@ -1,4 +1,18 @@
 {
+  "Room 1": {
+    "room_id": "Room 1",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Enlightenment",
+      "Room 1"
+    ],
+    "anchor_entities": [
+      "Enlightenment",
+      "Themes"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
   "Room 10": {
     "room_id": "Room 10",
     "floor": "0",
@@ -169,6 +183,34 @@
     ],
     "notes": "Manual representative pano provided by user on 2026-03-26."
   },
+  "Room 2": {
+    "room_id": "Room 2",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Collecting the world",
+      "Room 2"
+    ],
+    "anchor_entities": [
+      "Collecting the world",
+      "Themes"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
+  "Room 2a": {
+    "room_id": "Room 2a",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "The Waddesdon Bequest",
+      "Room 2a"
+    ],
+    "anchor_entities": [
+      "The Waddesdon Bequest",
+      "Themes"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
   "Room 20": {
     "room_id": "Room 20",
     "floor": "0",
@@ -232,6 +274,104 @@
       "Ancient Greece and Rome"
     ],
     "notes": "Manual representative pano provided by user on 2026-03-26."
+  },
+  "Room 24": {
+    "room_id": "Room 24",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Living and Dying",
+      "Room 24"
+    ],
+    "anchor_entities": [
+      "Living and Dying",
+      "Themes"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
+  "Room 26": {
+    "room_id": "Room 26",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "North America",
+      "Room 26"
+    ],
+    "anchor_entities": [
+      "North America",
+      "Americas"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
+  "Room 27": {
+    "room_id": "Room 27",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Mexico",
+      "Room 27"
+    ],
+    "anchor_entities": [
+      "Mexico",
+      "Americas"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
+  "Room 29a": {
+    "room_id": "Room 29a",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Members' Room access",
+      "Room 29a"
+    ],
+    "anchor_entities": [
+      "Members' Room access",
+      "Members"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; title should be verified against onsite signage."
+  },
+  "Room 29b": {
+    "room_id": "Room 29b",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Members' Room access",
+      "Room 29b"
+    ],
+    "anchor_entities": [
+      "Members' Room access",
+      "Members"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; title should be verified against onsite signage."
+  },
+  "Room 3": {
+    "room_id": "Room 3",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Free displays",
+      "Room 3"
+    ],
+    "anchor_entities": [
+      "Free displays",
+      "Exhibitions"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+  },
+  "Room 30": {
+    "room_id": "Room 30",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "The Sainsbury Exhibitions Gallery",
+      "Room 30"
+    ],
+    "anchor_entities": [
+      "The Sainsbury Exhibitions Gallery",
+      "Exhibitions"
+    ],
+    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
   },
   "Room 4": {
     "room_id": "Room 4",

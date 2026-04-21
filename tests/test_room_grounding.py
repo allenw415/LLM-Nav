@@ -6,9 +6,11 @@ import unittest
 from pathlib import Path
 
 from st_nav_data.room_grounder import (
+    aggregate_model_usage_from_traces,
     aggregate_gemini_usage_from_traces,
     build_compact_pano_room_mapping,
     GeminiRoomGrounder,
+    ModelRoomGrounder,
     build_manual_annotation_records,
     build_room_candidates,
     collect_manual_seed_panos,
@@ -170,6 +172,155 @@ class RoomGroundingTests(unittest.TestCase):
             self.assertEqual(result["candidate_room_ids"], ["Room 23", "Room 8"])
             self.assertEqual(result["evidence"], ["stone reliefs", "assyrian guardian figure"])
 
+    def test_model_grounder_can_parse_openai_style_json_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            image_path = tmp_path / "view.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp_path / "sample_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-23",
+                        "floor": "0",
+                        "heading_mode": "grounding",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            room_graph = {
+                "Room 8": {
+                    "display_name": "Room 8",
+                    "floor": "0",
+                    "title": "Assyria: Nimrud",
+                    "category": "Middle East",
+                    "aliases": ["Room 8"],
+                },
+                "Room 23": {
+                    "display_name": "Room 23",
+                    "floor": "0",
+                    "title": "Greek and Roman sculpture",
+                    "category": "Ancient Greece and Rome",
+                    "aliases": ["Room 23"],
+                },
+            }
+            grounding = {
+                "Room 8": {"aliases": ["Assyria: Nimrud"], "anchor_entities": ["Lamassu"]},
+                "Room 23": {"aliases": ["Greek and Roman sculpture"], "anchor_entities": ["Marble statues"]},
+            }
+
+            grounder = ModelRoomGrounder(
+                model="gemma-4-31b-it",
+                response_client=lambda _: {
+                    "output_text": json.dumps(
+                        {
+                            "predicted_room_id": "Room 23",
+                            "confidence": 0.91,
+                            "evidence": ["marble statues", "classical sculpture hall"],
+                            "alternative_room_ids": ["Room 8"],
+                            "summary": "The views best match the Greek and Roman sculpture gallery.",
+                        }
+                    )
+                },
+                use_grounding_files=False,
+            )
+            result = grounder.ground(manifest_path, room_graph=room_graph, room_grounding=grounding)
+
+            self.assertEqual(result["predicted_room_id"], "Room 23")
+            self.assertEqual(result["candidate_room_ids"], ["Room 23", "Room 8"])
+            self.assertEqual(result["alternative_room_ids"], ["Room 8"])
+
+    def test_model_grounder_retries_transient_runtime_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            image_path = tmp_path / "view.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp_path / "sample_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-26",
+                        "floor": "0",
+                        "heading_mode": "museum",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            room_graph = {
+                "Room 26": {
+                    "display_name": "Room 26",
+                    "floor": "0",
+                    "title": "North America",
+                    "category": "Americas",
+                    "aliases": ["Room 26"],
+                }
+            }
+            grounding = {
+                "Room 26": {"aliases": ["North America", "Room 26"], "anchor_entities": ["Americas"]}
+            }
+
+            calls = {"count": 0}
+
+            def flaky_response(_: dict) -> dict:
+                calls["count"] += 1
+                if calls["count"] < 3:
+                    raise RuntimeError(
+                        "Model API request failed with HTTP 503 from https://example.test: Service Unavailable."
+                    )
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "predicted_room_id": "Room 26",
+                            "confidence": 0.98,
+                            "evidence": ["display cases", "Americas gallery"],
+                            "alternative_room_ids": [],
+                            "summary": "The panorama best matches North America.",
+                        }
+                    )
+                }
+
+            grounder = ModelRoomGrounder(
+                model="gemini-2.5-flash",
+                response_client=flaky_response,
+                use_grounding_files=False,
+                max_retries=3,
+                retry_backoff_seconds=0.0,
+            )
+            result = grounder.ground(manifest_path, room_graph=room_graph, room_grounding=grounding)
+
+            self.assertEqual(calls["count"], 3)
+            self.assertEqual(result["predicted_room_id"], "Room 26")
+
+    def test_aggregate_model_usage_from_traces_supports_openai_style_usage(self) -> None:
+        usage = aggregate_model_usage_from_traces(
+            [
+                {
+                    "response": {
+                        "usage": {
+                            "input_tokens": 120,
+                            "output_tokens": 25,
+                            "total_tokens": 145,
+                        }
+                    }
+                },
+                {
+                    "response": {
+                        "prompt_eval_count": 40,
+                        "eval_count": 12,
+                    }
+                },
+            ]
+        )
+
+        self.assertEqual(usage["request_count"], 2)
+        self.assertEqual(usage["prompt_token_count"], 160)
+        self.assertEqual(usage["candidates_token_count"], 37)
+        self.assertEqual(usage["total_token_count"], 197)
+
     def test_select_grounding_captures_prefers_four_cardinal_views(self) -> None:
         captures = [
             {"label": "north", "path": "n.png"},
@@ -325,6 +476,66 @@ class RoomGroundingTests(unittest.TestCase):
         self.assertEqual(records[0]["manual_room_id"], "Room 4")
         self.assertEqual(records[0]["notes"], "checked")
         self.assertFalse(records[0]["needs_review"])
+
+    def test_build_manual_annotation_records_can_prefill_manual_room_id(self) -> None:
+        records = build_manual_annotation_records(
+            [
+                {
+                    "pano_id": "pano-23",
+                    "manifest_path": "/tmp/pano-23.json",
+                    "predicted_room_id": "Room 23",
+                    "confidence": 0.9,
+                    "alternative_room_ids": [],
+                    "summary": "Greek and Roman sculpture",
+                }
+            ],
+            min_confidence=0.75,
+            prefill_manual_room_id_from_prediction=True,
+        )
+
+        self.assertEqual(records[0]["manual_status"], "accepted")
+        self.assertFalse(records[0]["needs_review"])
+        self.assertEqual(records[0]["manual_room_id"], "Room 23")
+
+    def test_build_manual_annotation_records_marks_high_confidence_predictions_accepted(self) -> None:
+        records = build_manual_annotation_records(
+            [
+                {
+                    "pano_id": "pano-26",
+                    "manifest_path": "/tmp/pano-26.json",
+                    "predicted_room_id": "Room 26",
+                    "confidence": 0.97,
+                    "alternative_room_ids": ["Room 27"],
+                    "summary": "North America gallery.",
+                }
+            ],
+            min_confidence=0.85,
+            prefill_manual_room_id_from_prediction=True,
+        )
+
+        self.assertEqual(records[0]["manual_status"], "accepted")
+        self.assertFalse(records[0]["needs_review"])
+        self.assertEqual(records[0]["manual_room_id"], "Room 26")
+
+    def test_build_manual_annotation_records_keeps_lower_confidence_alternatives_pending(self) -> None:
+        records = build_manual_annotation_records(
+            [
+                {
+                    "pano_id": "pano-29a",
+                    "manifest_path": "/tmp/pano-29a.json",
+                    "predicted_room_id": "Room 29a",
+                    "confidence": 0.9,
+                    "alternative_room_ids": ["Room 29b"],
+                    "summary": "Members access corridor.",
+                }
+            ],
+            min_confidence=0.85,
+            prefill_manual_room_id_from_prediction=True,
+        )
+
+        self.assertEqual(records[0]["manual_status"], "pending")
+        self.assertTrue(records[0]["needs_review"])
+        self.assertEqual(records[0]["manual_room_id"], "Room 29a")
 
     def test_collect_manual_seed_panos_uses_only_accepted_records(self) -> None:
         seed_panos_by_room = collect_manual_seed_panos(
