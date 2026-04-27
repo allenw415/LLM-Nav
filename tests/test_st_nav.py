@@ -11,9 +11,12 @@ from unittest import mock
 from pathlib import Path
 
 from st_nav import (
+    CandidateAction,
     EntityDetection,
+    EpisodeRunner,
     GroundingIndex,
     InstructionRoutePlanner,
+    LLMActionPolicy,
     LLMRoomLocalizer,
     LLMSpatialAlignmentLocalizer,
     LLMInstructionParser,
@@ -24,13 +27,17 @@ from st_nav import (
     Observation,
     PerceptionPipeline,
     PanoramaRenderer,
+    PolicyOutput,
+    ReasoningInput,
     RenderedView,
     RoomLocalizer,
     SourcePanoResolver,
     SourceResolutionWorkflow,
     SpatialEngine,
+    TaskSpec,
     ViewDetector,
     build_grounding_template,
+    build_spatial_context_extraction_instructions,
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
@@ -1427,6 +1434,730 @@ class STNavTests(unittest.TestCase):
         )
         self.assertEqual(updated.current_room_id, "Room 23")
         self.assertEqual(updated.room_belief, {"Room 23": 0.9})
+        self.assertIsNone(updated.grounded_room_id)
+
+    def test_spatial_update_stabilizes_room_when_localizer_switches_room_without_pano_change(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+
+        class FakeLocalizer:
+            def localize(self, **kwargs):
+                return {
+                    "predicted_room_id": "Room 23",
+                    "confidence": 0.88,
+                    "room_belief": {"Room 23": 0.88, "Room 8": 0.12},
+                    "transition_support": {"Room 8": 0.5, "Room 23": 0.5},
+                    "evidence": ["Greek and Roman sculpture"],
+                    "spatial_alignment": {"view_0_allocentric_direction": "south"},
+                }
+
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+            localizer=FakeLocalizer(),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
+
+        observation = Observation(
+            pano_id="pano-8",
+            heading_estimate=330.0,
+            metadata={},
+        )
+        updated = spatial.update(state, observation)
+
+        self.assertEqual(updated.current_room_id, "Room 8")
+        self.assertEqual(updated.room_belief, {"Room 8": 1.0})
+        self.assertEqual(observation.metadata["localized_room_id"], "Room 8")
+        self.assertEqual(observation.metadata["localized_room_id_raw"], "Room 23")
+        self.assertTrue(observation.metadata["localization_stabilized"])
+
+    def test_renderer_can_render_explicit_candidate_captures(self) -> None:
+        pano_graph = normalize_pano_graph(
+            {
+                "pano-start": {
+                    "panoID": "pano-start",
+                    "floor": "0",
+                    "lat": 1.0,
+                    "lng": 1.0,
+                    "links": [
+                        {"panoID": "pano-a", "heading": 323.0, "description": None},
+                        {"panoID": "pano-b", "heading": 54.0, "description": None},
+                        {"panoID": "pano-c", "heading": 146.0, "description": None},
+                    ],
+                }
+            }
+        )
+
+        def fake_downloader(_: str, output_path: Path) -> None:
+            output_path.write_bytes(b"fake-image")
+
+        renderer = PanoramaRenderer(pano_graph, image_downloader=fake_downloader, rng=random.Random(0))
+        custom_captures = [
+            ("candidate_00_pano-b", 54.0),
+            ("candidate_01_pano-c", 146.0),
+            ("candidate_02_pano-a", 323.0),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            manifest = renderer.render(
+                pano_id="pano-start",
+                api_key="test-key",
+                output_dir=tmpdir,
+                heading_mode="explicit",
+                custom_captures=custom_captures,
+                fov=90,
+            )
+
+        self.assertEqual(manifest["heading_mode"], "explicit")
+        self.assertEqual([capture["label"] for capture in manifest["captures"]], [label for label, _ in custom_captures])
+        self.assertEqual([capture["heading"] for capture in manifest["captures"]], [heading for _, heading in custom_captures])
+
+    def test_generate_candidates_prioritizes_route_subgoal_without_known_heading(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/sector_0.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/sector_1.png"),
+                RenderedView(label="south", heading=150.0, path="/tmp/sector_2.png"),
+                RenderedView(label="west", heading=240.0, path="/tmp/sector_3.png"),
+            ],
+            metadata={"spatial_alignment": {"view_0_allocentric_direction": "north"}},
+        )
+
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+
+        self.assertEqual(candidates[0].target_pano_id, "pano-23")
+        self.assertEqual(candidates[0].target_room_id, "Room 23")
+        self.assertEqual(candidates[0].route_step_index, 1)
+        self.assertIn("matches_subgoal", candidates[0].reason)
+        self.assertIsNotNone(candidates[0].relative_heading)
+        self.assertEqual(candidates[0].metadata["matching_strategy"], "spatial_alignment_direction")
+
+    def test_generate_candidates_prefers_grounded_room_for_target_pano(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        grounding["Room 8"]["pano_ids"] = ["pano-8", "pano-23"]
+        grounding["Room 23"]["pano_ids"] = []
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/sector_0.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/sector_1.png"),
+                RenderedView(label="south", heading=150.0, path="/tmp/sector_2.png"),
+                RenderedView(label="west", heading=240.0, path="/tmp/sector_3.png"),
+            ],
+            metadata={"spatial_alignment": {"view_0_allocentric_direction": "north"}},
+        )
+
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+
+        grounded = next(candidate for candidate in candidates if candidate.target_pano_id == "pano-23")
+        self.assertEqual(grounded.target_room_id, "Room 8")
+        self.assertEqual(grounded.metadata["grounded_target_room_id"], "Room 8")
+        self.assertEqual(grounded.metadata["inferred_target_room_id"], "Room 23")
+
+    def test_extract_visible_passages_uses_spatial_alignment_instead_of_agent_heading(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="sector_0", heading=0.0, path="/tmp/sector_0.png"),
+                RenderedView(label="sector_1", heading=90.0, path="/tmp/sector_1.png"),
+                RenderedView(label="sector_2", heading=180.0, path="/tmp/sector_2.png"),
+                RenderedView(label="sector_3", heading=270.0, path="/tmp/sector_3.png"),
+            ],
+            entities=[
+                EntityDetection(
+                    name="west doorway",
+                    confidence=0.92,
+                    kind="passage",
+                    source_view="sector_0",
+                    metadata={"source_views": ["sector_0"]},
+                )
+            ],
+            metadata={"spatial_alignment": {"view_0_allocentric_direction": "west"}},
+        )
+
+        passages = spatial.extract_visible_passages(state, observation)
+
+        self.assertEqual(len(passages), 1)
+        self.assertEqual(passages[0]["allocentric_directions"], ["west"])
+        self.assertEqual(passages[0]["matched_room_ids"], ["Room 23"])
+
+    def test_generate_candidates_matches_closest_egocentric_angle_after_alignment(self) -> None:
+        room_graph = normalize_room_graph(
+            {
+                "Room 8": {
+                    "name": "Room 8",
+                    "Level": 0,
+                    "category": "Middle East",
+                    "title": "Assyria: Nimrud",
+                    "links": [{"direction": "left", "name": "Room 23"}],
+                },
+                "Room 23": {
+                    "name": "Room 23",
+                    "Level": 0,
+                    "category": "Ancient Greece and Rome",
+                    "title": "Greek and Roman sculpture",
+                    "links": [{"direction": "right", "name": "Room 8"}],
+                },
+            }
+        )
+        pano_graph = normalize_pano_graph(
+            {
+                "pano-8": {
+                    "panoID": "pano-8",
+                    "floor": "0",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                    "links": [
+                        {"panoID": "pano-90", "heading": 180.0, "description": None},
+                        {"panoID": "pano-225", "heading": 315.0, "description": None},
+                        {"panoID": "pano-315", "heading": 45.0, "description": None},
+                    ],
+                },
+                "pano-90": {"panoID": "pano-90", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
+                "pano-225": {"panoID": "pano-225", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
+                "pano-315": {"panoID": "pano-315", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
+            }
+        )
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[RenderedView(label="view_0", heading=90.0, path="/tmp/view_0.png")],
+            metadata={"spatial_alignment": {"view_0_allocentric_direction": "north"}},
+        )
+
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+
+        self.assertEqual(candidates[0].target_pano_id, "pano-225")
+        self.assertAlmostEqual(candidates[0].metadata["target_relative_heading_deg"], 180.0)
+        self.assertAlmostEqual(candidates[0].metadata["target_relative_diff_deg"], 45.0)
+
+    def test_generate_candidates_prefers_sector_alignment_for_subgoal_view(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(
+            {
+                "pano-8": {
+                    "panoID": "pano-8",
+                    "floor": "0",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                    "links": [
+                        {"panoID": "pano-north", "heading": 323.3, "description": None},
+                        {"panoID": "pano-east", "heading": 54.2, "description": None},
+                        {"panoID": "pano-southwest", "heading": 146.5, "description": None},
+                    ],
+                },
+                "pano-north": {"panoID": "pano-north", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
+                "pano-east": {"panoID": "pano-east", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
+                "pano-southwest": {
+                    "panoID": "pano-southwest",
+                    "floor": "0",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                    "links": [],
+                },
+            }
+        )
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/view_0.png"),
+                RenderedView(label="north_to_east", heading=16.9, path="/tmp/view_1.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/view_2.png"),
+                RenderedView(label="east_to_south", heading=132.9, path="/tmp/view_3.png"),
+                RenderedView(label="south", heading=150.0, path="/tmp/view_4.png"),
+                RenderedView(label="south_to_west", heading=201.1, path="/tmp/view_5.png"),
+                RenderedView(label="west", heading=240.0, path="/tmp/view_6.png"),
+                RenderedView(label="west_to_north", heading=315.4, path="/tmp/view_7.png"),
+            ],
+            metadata={
+                "spatial_alignment": {
+                    "view_0_allocentric_direction": "north",
+                    "sector_alignment": [
+                        {
+                            "view_id": "view_5",
+                            "allocentric_direction": "west",
+                            "matched_room_id": "Room 23",
+                            "matched_theme": "Greek and Roman sculpture",
+                            "rationale": "The subgoal room is visible through this sector.",
+                        }
+                    ],
+                }
+            },
+        )
+
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+
+        self.assertEqual(candidates[0].target_pano_id, "pano-southwest")
+        self.assertEqual(candidates[0].metadata["target_heading_source"], "sector_alignment")
+        self.assertEqual(candidates[0].metadata["target_view_id"], "view_5")
+
+    def test_generate_candidates_attaches_spatial_context_per_candidate(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=0.0)
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/view_0.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/view_1.png"),
+                RenderedView(label="south", heading=150.0, path="/tmp/view_2.png"),
+                RenderedView(label="west", heading=240.0, path="/tmp/view_3.png"),
+            ],
+            entities=[
+                EntityDetection(
+                    name="Greek statue",
+                    confidence=0.92,
+                    kind="artwork",
+                    source_view="west",
+                    metadata={"source_views": ["west"]},
+                ),
+                EntityDetection(
+                    name="west passage",
+                    confidence=0.9,
+                    kind="passage",
+                    source_view="west",
+                    metadata={"source_views": ["west"]},
+                ),
+            ],
+            metadata={
+                "spatial_alignment": {
+                    "view_0_allocentric_direction": "north",
+                    "ego_context_views": [
+                        {"view_id": "view_3", "themes": [{"label": "Greek and Roman sculpture", "confidence": 0.88}]}
+                    ],
+                }
+            },
+        )
+
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+
+        target_candidate = next(candidate for candidate in candidates if candidate.target_pano_id == "pano-23")
+        spatial_context = target_candidate.metadata["spatial_context"]
+        self.assertEqual(spatial_context["supporting_views"][0]["label"], "west")
+        self.assertEqual(spatial_context["salient_entities"][0]["name"], "Greek statue")
+        self.assertEqual(spatial_context["theme_hints"][0]["label"], "Greek and Roman sculpture")
+
+    def test_generate_candidates_uses_context_observation_without_reusing_direction_alignment(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=330.0)
+        main_observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/view_0.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/view_1.png"),
+                RenderedView(label="south", heading=150.0, path="/tmp/view_2.png"),
+                RenderedView(label="west", heading=240.0, path="/tmp/view_3.png"),
+            ],
+            metadata={
+                "spatial_alignment": {
+                    "view_0_allocentric_direction": "north",
+                }
+            },
+        )
+        context_observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="candidate_00_pano-23", heading=240.0, path="/tmp/candidate_0.png"),
+                RenderedView(label="candidate_01_pano-9", heading=330.0, path="/tmp/candidate_1.png"),
+            ],
+            entities=[
+                EntityDetection(
+                    name="Greek statue",
+                    confidence=0.92,
+                    kind="artwork",
+                    source_view="candidate_00_pano-23",
+                    metadata={"source_views": ["candidate_00_pano-23"]},
+                ),
+                EntityDetection(
+                    name="Assyrian reliefs",
+                    confidence=0.95,
+                    kind="artwork",
+                    source_view="candidate_01_pano-9",
+                    metadata={"source_views": ["candidate_01_pano-9"]},
+                ),
+            ],
+            metadata={
+                "ego_spatial_context": {
+                    "views": [
+                        {
+                            "view_id": "view_0",
+                            "themes": [{"label": "Greek and Roman sculpture", "confidence": 0.88}],
+                        },
+                        {
+                            "view_id": "view_1",
+                            "themes": [{"label": "Assyria: Nineveh", "confidence": 0.91}],
+                        },
+                    ]
+                }
+            },
+        )
+
+        candidates = spatial.generate_candidates(
+            state,
+            ["Room 8", "Room 23"],
+            observation=main_observation,
+            context_observation=context_observation,
+        )
+
+        target_candidate = next(candidate for candidate in candidates if candidate.target_pano_id == "pano-23")
+        spatial_context = target_candidate.metadata["spatial_context"]
+        self.assertEqual(len(spatial_context["supporting_views"]), 1)
+        self.assertEqual(spatial_context["supporting_views"][0]["label"], "candidate_00_pano-23")
+        self.assertEqual(spatial_context["theme_hints"][0]["label"], "Greek and Roman sculpture")
+
+    def test_describe_view_contexts_uses_ego_spatial_context_metadata_when_alignment_views_missing(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        observation = Observation(
+            pano_id="pano-8",
+            views=[
+                RenderedView(label="north", heading=330.0, path="/tmp/view_0.png"),
+                RenderedView(label="east", heading=60.0, path="/tmp/view_1.png"),
+            ],
+            metadata={
+                "spatial_alignment": {"view_0_allocentric_direction": "north"},
+                "ego_spatial_context": {
+                    "views": [
+                        {
+                            "view_id": "view_1",
+                            "themes": [{"label": "Greek and Roman sculpture", "confidence": 0.88}],
+                        }
+                    ]
+                },
+            },
+        )
+
+        view_contexts = spatial.describe_view_contexts(observation)
+
+        self.assertEqual(view_contexts[1]["themes"][0]["label"], "Greek and Roman sculpture")
+        self.assertEqual(view_contexts[1]["allocentric_direction"], "east")
+
+    def test_spatial_context_extraction_instructions_allow_multiple_themes_per_view(self) -> None:
+        instructions = build_spatial_context_extraction_instructions()
+
+        self.assertIn("multiple adjacent gallery themes", instructions)
+        self.assertIn("Do not collapse the answer to only one dominant theme", instructions)
+
+    def test_build_current_room_context_includes_subgoal_theme_labels(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=330.0)
+
+        context = spatial.build_current_room_context(state, ["Room 8", "Room 23"])
+
+        self.assertEqual(context["subgoal_room_id"], "Room 23")
+        self.assertIn("Greek and Roman sculpture", context["subgoal_theme_labels"])
+        self.assertIn("Ancient Greece and Rome", context["subgoal_theme_labels"])
+
+    def test_llm_action_policy_can_choose_semantically_better_candidate_than_angle_nearest(self) -> None:
+        policy = LLMActionPolicy(
+            api_key="test-key",
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "selected_target_pano_id": "pano-southwest",
+                        "rationale": "The southwest-facing candidate shows Greek/Roman context and is more likely to connect toward Room 23 than the angle-nearest Assyria-facing candidate.",
+                    }
+                )
+            },
+        )
+        reasoning_input = ReasoningInput(
+            task=TaskSpec(
+                task_type="gallery_goal_navigation",
+                raw_instruction="Find the way from Room 8 to Room 23.",
+                source_room_id="Room 8",
+                goal_room_ids=["Room 23"],
+            ),
+            route=["Room 8", "Room 23"],
+            current_room_id="Room 8",
+            subgoal_room_id="Room 23",
+            current_room_context={
+                "room_id": "Room 8",
+                "title": "Assyria: Nimrud",
+                "subgoal_room_id": "Room 23",
+                "subgoal_title": "Greek and Roman sculpture",
+                "subgoal_theme_labels": ["Greek and Roman sculpture", "Ancient Greece and Rome"],
+                "neighbors": [
+                    {"target_room_id": "Room 23", "allocentric_direction": "west", "allocentric_heading_deg": 270.0}
+                ],
+            },
+            view_contexts=[
+                {"view_id": "view_0", "label": "north", "heading": 330.0, "allocentric_direction": "north"},
+                {"view_id": "view_2", "label": "east", "heading": 60.0, "allocentric_direction": "east"},
+                {"view_id": "view_4", "label": "south", "heading": 150.0, "allocentric_direction": "south"},
+                {"view_id": "view_6", "label": "west", "heading": 240.0, "allocentric_direction": "west"},
+            ],
+            candidates=[
+                CandidateAction(
+                    target_pano_id="pano-north",
+                    target_room_id="Room 9",
+                    absolute_heading=323.0,
+                    relative_heading=353.0,
+                    relative_label="front",
+                    route_step_index=None,
+                    score=5.0,
+                    reason="angle-nearest",
+                    metadata={
+                        "target_relative_diff_deg": 37.0,
+                        "spatial_context": {
+                            "supporting_views": [{"label": "north", "heading": 330.0}],
+                            "salient_entities": [{"name": "Assyrian reliefs", "kind": "artwork", "confidence": 0.95}],
+                            "theme_hints": [{"label": "Assyria: Nineveh", "confidence": 0.9}],
+                        },
+                    },
+                ),
+                CandidateAction(
+                    target_pano_id="pano-southwest",
+                    target_room_id="Room 8",
+                    absolute_heading=146.0,
+                    relative_heading=176.0,
+                    relative_label="back",
+                    route_step_index=0,
+                    score=3.0,
+                    reason="semantic-progress",
+                    metadata={
+                        "target_relative_diff_deg": 124.0,
+                        "spatial_context": {
+                            "supporting_views": [{"label": "south", "heading": 150.0}],
+                            "salient_entities": [{"name": "Greek statue", "kind": "artwork", "confidence": 0.92}],
+                            "theme_hints": [{"label": "Greek and Roman sculpture", "confidence": 0.88}],
+                        },
+                    },
+                ),
+            ],
+        )
+
+        output = policy.choose_next_action(reasoning_input)
+
+        self.assertIsNotNone(output.action)
+        self.assertEqual(output.action.target_pano_id, "pano-southwest")
+        self.assertIn("Greek/Roman", output.rationale)
+
+    def test_llm_action_policy_request_marks_directionally_competitive_candidates(self) -> None:
+        captured = {}
+
+        def response_client(body: dict) -> dict:
+            captured["body"] = body
+            return {
+                "output_text": json.dumps(
+                    {
+                        "selected_target_pano_id": "pano-a",
+                        "rationale": "Choose a directionally competitive candidate with plausible semantic support.",
+                    }
+                )
+            }
+
+        policy = LLMActionPolicy(api_key="test-key", response_client=response_client)
+        reasoning_input = ReasoningInput(
+            task=TaskSpec(
+                task_type="gallery_goal_navigation",
+                raw_instruction="Find the way from Room 8 to Room 23.",
+                source_room_id="Room 8",
+                goal_room_ids=["Room 23"],
+            ),
+            route=["Room 8", "Room 23"],
+            current_room_id="Room 8",
+            subgoal_room_id="Room 23",
+            current_room_context={
+                "subgoal_room_id": "Room 23",
+                "subgoal_title": "Greek and Roman sculpture",
+                "subgoal_theme_labels": ["Greek and Roman sculpture", "Ancient Greece and Rome"],
+            },
+            candidates=[
+                CandidateAction(
+                    target_pano_id="pano-a",
+                    target_room_id="Room 8",
+                    absolute_heading=146.0,
+                    relative_heading=176.0,
+                    relative_label="back",
+                    route_step_index=0,
+                    score=3.0,
+                    reason="competitive",
+                    metadata={"target_relative_diff_deg": 20.0, "spatial_context": {}},
+                ),
+                CandidateAction(
+                    target_pano_id="pano-b",
+                    target_room_id="Room 9",
+                    absolute_heading=323.0,
+                    relative_heading=353.0,
+                    relative_label="front",
+                    route_step_index=None,
+                    score=2.5,
+                    reason="competitive",
+                    metadata={"target_relative_diff_deg": 35.0, "spatial_context": {}},
+                ),
+                CandidateAction(
+                    target_pano_id="pano-c",
+                    target_room_id="Room 8",
+                    absolute_heading=54.0,
+                    relative_heading=84.0,
+                    relative_label="right",
+                    route_step_index=0,
+                    score=1.0,
+                    reason="noncompetitive",
+                    metadata={"target_relative_diff_deg": 140.0, "spatial_context": {}},
+                ),
+            ],
+        )
+
+        policy.choose_next_action(reasoning_input)
+        payload_text = captured["body"]["input"]
+        self.assertIn("directionally_competitive_target_pano_ids", payload_text)
+        self.assertIn("pano-a", payload_text)
+        self.assertIn("pano-b", payload_text)
+
+    def test_llm_action_policy_request_keeps_theme_supported_candidate_in_priority_set(self) -> None:
+        captured = {}
+
+        def response_client(body: dict) -> dict:
+            captured["body"] = body
+            return {
+                "output_text": json.dumps(
+                    {
+                        "selected_target_pano_id": "pano-best-angle",
+                        "rationale": "stub",
+                    }
+                )
+            }
+
+        policy = LLMActionPolicy(api_key="test-key", response_client=response_client)
+        reasoning_input = ReasoningInput(
+            task=TaskSpec(
+                task_type="gallery_goal_navigation",
+                raw_instruction="Find the way from Room 8 to Room 23.",
+                source_room_id="Room 8",
+                goal_room_ids=["Room 23"],
+            ),
+            route=["Room 8", "Room 23"],
+            current_room_id="Room 8",
+            subgoal_room_id="Room 23",
+            current_room_context={
+                "subgoal_room_id": "Room 23",
+                "subgoal_title": "Greek and Roman sculpture",
+                "subgoal_theme_labels": ["Greek and Roman sculpture", "Ancient Greece and Rome"],
+            },
+            candidates=[
+                CandidateAction(
+                    target_pano_id="pano-best-angle",
+                    target_room_id="Room 8",
+                    absolute_heading=323.0,
+                    relative_heading=353.0,
+                    relative_label="front",
+                    route_step_index=0,
+                    score=4.0,
+                    reason="best-angle",
+                    metadata={
+                        "target_relative_diff_deg": 53.0,
+                        "spatial_context": {"theme_hints": [{"label": "Assyria: Nineveh", "confidence": 0.9}]},
+                    },
+                ),
+                CandidateAction(
+                    target_pano_id="pano-theme-match",
+                    target_room_id="Room 8",
+                    absolute_heading=146.0,
+                    relative_heading=176.0,
+                    relative_label="back",
+                    route_step_index=0,
+                    score=3.2,
+                    reason="theme-match",
+                    metadata={
+                        "target_relative_diff_deg": 123.0,
+                        "spatial_context": {
+                            "theme_hints": [{"label": "Greek and Roman sculpture", "confidence": 0.88}]
+                        },
+                    },
+                ),
+                CandidateAction(
+                    target_pano_id="pano-bad",
+                    target_room_id="Room 8",
+                    absolute_heading=54.0,
+                    relative_heading=84.0,
+                    relative_label="right",
+                    route_step_index=0,
+                    score=2.0,
+                    reason="bad",
+                    metadata={
+                        "target_relative_diff_deg": 144.0,
+                        "spatial_context": {
+                            "theme_hints": [{"label": "Greek and Roman sculpture", "confidence": 0.55}]
+                        },
+                    },
+                ),
+            ],
+        )
+
+        policy.choose_next_action(reasoning_input)
+        payload_text = captured["body"]["input"]
+        self.assertIn("theme_supported_target_pano_ids", payload_text)
+        self.assertIn("priority_consideration_target_pano_ids", payload_text)
+        self.assertIn("pano-theme-match", payload_text)
 
     def test_room_localizer_combines_transition_and_entity_evidence(self) -> None:
         explicit_map = {
@@ -1737,6 +2468,14 @@ class STNavTests(unittest.TestCase):
                         RenderedView(label="north", heading=330.0, path=str(image_paths[0])),
                         RenderedView(label="east", heading=60.0, path=str(image_paths[1])),
                     ],
+                    entities=[
+                        EntityDetection(
+                            name="Assyria: Nimrud sign",
+                            confidence=0.95,
+                            kind="signage",
+                            source_view="north",
+                        )
+                    ],
                     metadata={"floor": "0"},
                 ),
                 prior_room_belief={"Room 23": 1.0},
@@ -1829,6 +2568,14 @@ class STNavTests(unittest.TestCase):
                 observation=Observation(
                     pano_id="pano-10",
                     views=[RenderedView(label="north", heading=330.0, path=str(image_path))],
+                    entities=[
+                        EntityDetection(
+                            name="Lion hunts relief",
+                            confidence=0.95,
+                            kind="artwork",
+                            source_view="north",
+                        )
+                    ],
                     metadata={"floor": "0"},
                 ),
                 prior_room_belief={"Room 23": 1.0},
@@ -1844,6 +2591,184 @@ class STNavTests(unittest.TestCase):
         self.assertIn("global heading is unknown", direct_input)
         self.assertIn("sector_alignment", direct_input)
         self.assertIn("do not jump straight to a room prediction from one sign", localizer.last_alignment_request_body["instructions"])
+
+    def test_llm_spatial_alignment_localizer_reuses_alignment_cache(self) -> None:
+        explicit_map = {
+            "Room 8": {
+                "name": "Room 8",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "links": [{"direction": "left", "name": "Room 23"}],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [{"direction": "right", "name": "Room 8"}],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        grounding = build_grounding_template(room_graph)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            image_path = tmp_path / "view_0.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp_path / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "heading_mode": "museum",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            request_count = 0
+
+            def response_client(_: dict) -> dict:
+                nonlocal request_count
+                request_count += 1
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "predicted_room_id": "Room 8",
+                            "confidence": 0.91,
+                            "view_0_allocentric_direction": "west",
+                            "sector_alignment": [
+                                {
+                                    "view_id": "view_0",
+                                    "allocentric_direction": "west",
+                                    "matched_room_id": "Room 8",
+                                    "matched_theme": "Assyria: Nimrud",
+                                    "rationale": "The sector best matches the current gallery.",
+                                }
+                            ],
+                            "evidence": ["Room 8 aligns best after rotation."],
+                            "room_distribution": [
+                                {"room_id": "Room 8", "score": 0.91},
+                                {"room_id": "Room 23", "score": 0.09},
+                            ],
+                            "summary": "Cached direct visual alignment favors Room 8.",
+                        }
+                    )
+                }
+
+            localizer = LLMSpatialAlignmentLocalizer(
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+                alignment_mode="direct_images",
+                response_client=response_client,
+            )
+            observation = Observation(
+                pano_id="pano-8",
+                views=[RenderedView(label="north", heading=330.0, path=str(image_path))],
+                entities=[
+                    EntityDetection(
+                        name="Assyria: Nimrud sign",
+                        confidence=0.95,
+                        kind="signage",
+                        source_view="north",
+                    )
+                ],
+                metadata={"floor": "0", "manifest_path": str(manifest_path)},
+            )
+
+            first = localizer.localize(
+                observation=observation,
+                prior_room_belief={"Room 8": 1.0},
+                fallback_room_id="Room 8",
+            )
+            second = localizer.localize(
+                observation=observation,
+                prior_room_belief={"Room 8": 1.0},
+                fallback_room_id="Room 8",
+            )
+
+            self.assertEqual(request_count, 1)
+            self.assertEqual(first["predicted_room_id"], "Room 8")
+            self.assertEqual(second["predicted_room_id"], "Room 8")
+            self.assertIsNone(localizer.last_alignment_request_body)
+            cache_path = manifest_path.with_name("pano-8_manifest_spatial_alignment_direct_images.json")
+            self.assertTrue(cache_path.exists())
+
+    def test_llm_spatial_alignment_localizer_fuses_entity_and_alignment_likelihoods(self) -> None:
+        explicit_map = {
+            "Room 8": {
+                "name": "Room 8",
+                "Level": 0,
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "links": [{"direction": "left", "name": "Room 23"}],
+            },
+            "Room 23": {
+                "name": "Room 23",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greek and Roman sculpture",
+                "links": [{"direction": "right", "name": "Room 8"}],
+            },
+        }
+        room_graph = normalize_room_graph(explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = LLMSpatialAlignmentLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            alignment_mode="direct_images",
+            response_client=lambda _: {
+                "output_text": json.dumps(
+                    {
+                        "predicted_room_id": "Room 23",
+                        "confidence": 0.95,
+                        "view_0_allocentric_direction": "west",
+                        "room_distribution": [
+                            {"room_id": "Room 8", "score": 0.05},
+                            {"room_id": "Room 23", "score": 0.95},
+                        ],
+                        "summary": "Alignment favors Room 23.",
+                    }
+                )
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_path = Path(tmpdir) / "view_0.png"
+            image_path.write_bytes(b"fake-image")
+            localization = localizer.localize(
+                observation=Observation(
+                    pano_id="pano-8",
+                    views=[RenderedView(label="north", heading=330.0, path=str(image_path))],
+                    entities=[
+                        EntityDetection(
+                            name="Assyria: Nimrud sign",
+                            confidence=0.95,
+                            kind="signage",
+                            source_view="north",
+                            metadata={"predicted_room_id": "Room 8"},
+                        )
+                    ],
+                    metadata={"floor": "0"},
+                ),
+                prior_room_belief={"Room 8": 1.0},
+                fallback_room_id="Room 8",
+            )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 23")
+        self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
+        self.assertGreater(
+            localization["observation_likelihood"]["Room 23"],
+            localization["entity_observation_distribution"]["Room 23"],
+        )
+        self.assertLess(
+            localization["observation_likelihood"]["Room 8"],
+            localization["entity_observation_distribution"]["Room 8"],
+        )
+        self.assertEqual(localization["spatial_alignment"]["alignment_predicted_room_id"], "Room 23")
 
     def test_spatial_engine_can_use_injected_llm_localizer(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -1994,6 +2919,115 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(result.task.source_room_id, "Room 8")
         self.assertEqual(result.source_pano.pano_id, "pano-8")
 
+    def test_episode_runner_passes_subgoal_and_alignment_context_to_policy(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+
+        class FakePerceptionProvider:
+            def observe_from_manifest(self, manifest_path, *, current_heading):
+                return Observation(
+                    pano_id="pano-8",
+                    views=[
+                        RenderedView(label="sector_0", heading=0.0, path="/tmp/sector_0.png"),
+                        RenderedView(label="sector_1", heading=90.0, path="/tmp/sector_1.png"),
+                        RenderedView(label="sector_2", heading=180.0, path="/tmp/sector_2.png"),
+                        RenderedView(label="sector_3", heading=270.0, path="/tmp/sector_3.png"),
+                    ],
+                    entities=[
+                        EntityDetection(
+                            name="west doorway",
+                            confidence=0.92,
+                            kind="passage",
+                            source_view="sector_0",
+                            metadata={"source_views": ["sector_0"]},
+                        )
+                    ],
+                    metadata={
+                        "localized_room_id": "Room 8",
+                        "localization_confidence": 0.95,
+                        "spatial_alignment": {"view_0_allocentric_direction": "west"},
+                    },
+                )
+
+        class RecordingPolicy:
+            def __init__(self) -> None:
+                self.last_reasoning_input = None
+
+            def choose_next_action(self, reasoning_input):
+                self.last_reasoning_input = reasoning_input
+                return PolicyOutput(action=None, rationale="stop after inspection")
+
+        policy = RecordingPolicy()
+        runner = EpisodeRunner(
+            perception_provider=FakePerceptionProvider(),
+            spatial_engine=SpatialEngine(
+                room_graph=room_graph,
+                pano_graph=pano_graph,
+                grounding_index=GroundingIndex(grounding),
+            ),
+            policy=policy,
+        )
+
+        final_state, traces = runner.run(
+            task=TaskSpec(
+                task_type="gallery_goal_navigation",
+                raw_instruction="Find the way from Room 8 to Room 23.",
+                source_room_id="Room 8",
+                goal_room_ids=["Room 23"],
+            ),
+            start_pano_id="pano-8",
+            start_room_id="Room 8",
+            manifest_paths={"pano-8": "/tmp/pano-8_manifest.json"},
+            step_budget=1,
+        )
+
+        self.assertEqual(final_state.current_room_id, "Room 8")
+        self.assertEqual(len(traces), 1)
+        self.assertIsNotNone(policy.last_reasoning_input)
+        self.assertEqual(policy.last_reasoning_input.subgoal_room_id, "Room 23")
+        self.assertEqual(policy.last_reasoning_input.current_room_context["room_id"], "Room 8")
+        self.assertEqual(policy.last_reasoning_input.visible_passages[0]["matched_room_ids"], ["Room 23"])
+        self.assertEqual(
+            policy.last_reasoning_input.spatial_alignment["view_0_allocentric_direction"],
+            "west",
+        )
+
+    def test_goal_reached_uses_grounded_pano_room_not_localized_room(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_grounding_template(room_graph)
+        grounding["Room 8"]["pano_ids"] = ["pano-8", "pano-23"]
+        grounding["Room 23"]["pano_ids"] = []
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
+        updated = spatial.update(
+            state,
+            Observation(
+                pano_id="pano-23",
+                heading_estimate=60.0,
+                metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
+            ),
+        )
+
+        self.assertEqual(updated.current_room_id, "Room 23")
+        self.assertEqual(updated.grounded_room_id, "Room 8")
+        self.assertFalse(
+            spatial.goal_reached(
+                TaskSpec(
+                    task_type="gallery_goal_navigation",
+                    raw_instruction="Find the way from Room 8 to Room 23.",
+                    source_room_id="Room 8",
+                    goal_room_ids=["Room 23"],
+                ),
+                updated,
+            )
+        )
+
     def test_navigation_pipeline_runs_source_resolution_then_episode_runner(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         grounding = build_grounding_template(room_graph)
@@ -2058,9 +3092,12 @@ class STNavTests(unittest.TestCase):
         room_graph = normalize_room_graph(self.explicit_map)
         grounding = build_grounding_template(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
-        grounding_index = GroundingIndex(grounding)
+        grounding_index = GroundingIndex(grounding, pano_to_room={"mappings": {"pano-23": "Room 23"}})
         self.assertEqual(grounding_index.primary_pano_for_room("Room 8"), "pano-8")
         self.assertIsNone(grounding_index.primary_pano_for_room("Room 23"))
+        self.assertEqual(grounding_index.room_for_pano("pano-8"), "Room 8")
+        self.assertEqual(grounding_index.room_for_pano("pano-23"), "Room 23")
+        self.assertIsNone(grounding_index.room_for_pano("missing"))
 
 
 if __name__ == "__main__":

@@ -27,8 +27,26 @@ def build_grounding_template(room_graph: dict[str, dict]) -> dict[str, dict]:
 
 
 class GroundingIndex:
-    def __init__(self, grounding: dict[str, dict]):
+    def __init__(self, grounding: dict[str, dict], pano_to_room: dict | None = None):
         self._grounding = grounding
+        self._pano_to_room: dict[str, str] = {}
+        for room_id, entry in grounding.items():
+            if not isinstance(room_id, str) or not room_id:
+                continue
+            pano_ids = entry.get("pano_ids", []) if isinstance(entry, dict) else []
+            for pano_id in pano_ids:
+                if not isinstance(pano_id, str) or not pano_id:
+                    continue
+                self._pano_to_room[pano_id] = room_id
+        if isinstance(pano_to_room, dict):
+            mappings = pano_to_room.get("mappings", pano_to_room)
+            if isinstance(mappings, dict):
+                for pano_id, room_id in mappings.items():
+                    if not isinstance(pano_id, str) or not pano_id:
+                        continue
+                    if not isinstance(room_id, str) or not room_id or room_id == "null":
+                        continue
+                    self._pano_to_room[pano_id] = room_id
 
     def room_entry(self, room_id: str) -> dict | None:
         return self._grounding.get(room_id)
@@ -41,6 +59,14 @@ class GroundingIndex:
         if not pano_ids:
             return None
         return str(pano_ids[0])
+
+    def room_for_pano(self, pano_id: str) -> str | None:
+        room_id = self._pano_to_room.get(pano_id)
+        if not isinstance(room_id, str) or not room_id:
+            return None
+        if room_id == "null":
+            return None
+        return room_id
 
 
 class SourcePanoResolver:

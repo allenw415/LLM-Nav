@@ -40,7 +40,7 @@ from .common import (
     resolve_model_environment,
     resolve_api_kind,
 )
-from .decision import GreedyActionPolicy, LLMInstructionParser
+from .decision import GreedyActionPolicy, LLMActionPolicy, LLMInstructionParser
 from .execution import EpisodeRunner, EpisodeTrace
 from .perception import ManifestPerceptionProvider, MultiViewAggregator, PanoramaRenderer, PerceptionPipeline, ViewDetector
 from .pipeline import NavigationPipeline, NavigationPipelineResult, SourceResolutionResult, SourceResolutionWorkflow
@@ -65,6 +65,7 @@ __all__ = [
     "EpisodeTrace",
     "GroundingIndex",
     "GreedyActionPolicy",
+    "LLMActionPolicy",
     "InstructionRoutePlanner",
     "LLMSpatialAlignmentLocalizer",
     "LLMRoomLocalizer",

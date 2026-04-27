@@ -220,6 +220,7 @@ ST_NAV_ACTIVE_PROFILE=gemini
 - `plan_room_route.py`: inspect shortest-room-route planning from explicit room ids
 - `run_pano_perception.py`: run perception directly on one pano id
 - `run_localization.py`: run localization on synthetic, manifest-based, or cached perception inputs
+- `run_navigation.py`: run the end-to-end navigation loop with subgoals, candidate paths, and reasoning traces
 
 ### Commands
 
@@ -310,6 +311,33 @@ Args:
 - `--top-k`
 - `--json`
 - `--full-json`
+- `--output-path`
+
+`run_navigation.py`
+
+```bash
+python3 scripts/demo/run_navigation.py --instruction "Find the way from Room 8 to Room 23."
+```
+
+Args:
+- `--instruction`
+- `--artifacts-dir`
+- `--localizer` (`heuristic | llm | spatial-alignment-a | spatial-alignment-b`)
+- `--manifest-map-json`
+- `--step-budget`
+- `--start-heading`
+- `--llm-model`
+- `--llm-api-key`
+- `--llm-api-kind` (`responses | chat_completions`)
+- `--llm-api-base`
+- `--llm-timeout`
+- `--render-api-key`
+- `--render-output-dir`
+- `--render-heading-mode` (`museum | cardinal | graph`)
+- `--render-pitch`
+- `--render-fov`
+- `--render-width`
+- `--render-height`
 - `--output-path`
 
 ## Keep vs Remove

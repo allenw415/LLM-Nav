@@ -26,14 +26,37 @@ class NavigationPipeline:
         self.source_resolution_workflow = source_resolution_workflow
         self.episode_runner = episode_runner
 
-    def run(self, instruction: str, **episode_kwargs) -> NavigationPipelineResult:
+    def run(self, instruction: str, progress_callback=None, **episode_kwargs) -> NavigationPipelineResult:
+        if progress_callback is not None:
+            progress_callback({"event": "pipeline_start", "instruction": instruction})
+            progress_callback({"event": "source_resolution_start", "instruction": instruction})
         source = self.source_resolution_workflow.run(instruction)
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "source_resolution_done",
+                    "source_room_id": source.task.source_room_id,
+                    "source_pano_id": source.source_pano.pano_id,
+                    "goal_room_ids": list(source.task.goal_room_ids),
+                    "waypoint_room_ids": list(source.task.waypoint_room_ids),
+                }
+            )
         final_state, traces = self.episode_runner.run(
             task=source.task,
             start_pano_id=source.source_pano.pano_id,
             start_room_id=source.task.source_room_id,
+            progress_callback=progress_callback,
             **episode_kwargs,
         )
+        if progress_callback is not None:
+            progress_callback(
+                {
+                    "event": "pipeline_done",
+                    "final_pano_id": getattr(final_state, "current_pano_id", None),
+                    "final_room_id": getattr(final_state, "current_room_id", None),
+                    "trace_count": len(traces),
+                }
+            )
         return NavigationPipelineResult(
             instruction=instruction,
             task=source.task,

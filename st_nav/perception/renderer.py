@@ -93,6 +93,7 @@ class PanoramaRenderer:
         api_key: str,
         output_dir: str | Path,
         heading_mode: str = "cardinal",
+        custom_captures: list[tuple[str, float]] | None = None,
         pitch: float = 0.0,
         fov: int = 45,
         width: int = 512,
@@ -101,7 +102,11 @@ class PanoramaRenderer:
         progress_callback: Callable[[dict], None] | None = None,
     ) -> dict:
         record = self._get_pano_record(pano_id, required=(heading_mode == "graph"))
-        captures_to_render = self._resolve_captures(record, heading_mode)
+        captures_to_render = (
+            [(str(label), normalize_heading(float(heading))) for label, heading in custom_captures]
+            if custom_captures is not None
+            else self._resolve_captures(record, heading_mode)
+        )
 
         output_dir = Path(output_dir)
         pano_slug = sanitize_name(pano_id)

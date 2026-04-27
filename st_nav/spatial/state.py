@@ -30,11 +30,13 @@ class StateEstimator:
         start_room_id: str | None = None,
         start_heading: float = 330.0,
     ) -> BeliefState:
+        grounded_room_id = self.grounding_index.room_for_pano(start_pano_id) or start_room_id
         room_belief = {start_room_id: 1.0} if start_room_id else {}
         visited_rooms = {start_room_id} if start_room_id else set()
         return BeliefState(
             current_pano_id=start_pano_id,
             current_room_id=start_room_id,
+            grounded_room_id=grounded_room_id,
             current_heading=normalize_heading(start_heading),
             pano_belief={start_pano_id: 1.0},
             room_belief=room_belief,
@@ -43,7 +45,11 @@ class StateEstimator:
         )
 
     def update(self, state: BeliefState, observation: Observation) -> BeliefState:
+        previous_pano_id = state.current_pano_id
+        previous_room_id = state.current_room_id
         state.current_pano_id = observation.pano_id
+        state.grounded_room_id = self.grounding_index.room_for_pano(observation.pano_id)
+        observation.metadata["grounded_room_id"] = state.grounded_room_id
         state.visited_panos.add(observation.pano_id)
         state.pano_belief = {observation.pano_id: 1.0}
         if observation.heading_estimate is not None:
@@ -74,14 +80,32 @@ class StateEstimator:
                 prior_room_belief=state.room_belief,
                 fallback_room_id=state.current_room_id,
             )
-            localized_room_id = localization.get("predicted_room_id")
+            raw_localized_room_id = localization.get("predicted_room_id")
+            localized_room_id = raw_localized_room_id
+            if (
+                observation.pano_id == previous_pano_id
+                and isinstance(previous_room_id, str)
+                and previous_room_id in self.room_graph
+                and isinstance(raw_localized_room_id, str)
+                and raw_localized_room_id in self.room_graph
+                and raw_localized_room_id != previous_room_id
+            ):
+                localized_room_id = previous_room_id
+                observation.metadata["localized_room_id_raw"] = raw_localized_room_id
+                observation.metadata["localization_stabilized"] = True
             if isinstance(localized_room_id, str) and localized_room_id in self.room_graph:
                 state.current_room_id = localized_room_id
-                state.room_belief = dict(localization.get("room_belief", {}))
+                if observation.metadata.get("localization_stabilized"):
+                    state.room_belief = {localized_room_id: 1.0}
+                else:
+                    state.room_belief = dict(localization.get("room_belief", {}))
                 state.visited_rooms.add(localized_room_id)
                 observation.metadata["localized_room_id"] = localized_room_id
                 observation.metadata["localization_confidence"] = float(localization.get("confidence", 0.0))
-                observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
+                if observation.metadata.get("localization_stabilized"):
+                    observation.metadata["room_belief"] = {localized_room_id: 1.0}
+                else:
+                    observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
                 spatial_alignment = localization.get("spatial_alignment")
@@ -97,11 +121,12 @@ class StateEstimator:
 
         return state
 
-    @staticmethod
-    def goal_reached(task: TaskSpec, state: BeliefState) -> bool:
+    def goal_reached(self, task: TaskSpec, state: BeliefState) -> bool:
         if not task.goal_room_ids:
             return False
-        return state.current_room_id == task.goal_room_ids[-1]
+        goal_room_id = task.goal_room_ids[-1]
+        grounded_room_id = self.grounding_index.room_for_pano(state.current_pano_id)
+        return grounded_room_id == goal_room_id
 
     def _unexplored_neighbor_count(self, state: BeliefState) -> int:
         pano_record = self.pano_graph.get(state.current_pano_id, {})

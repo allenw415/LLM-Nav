@@ -259,6 +259,9 @@ def build_spatial_context_extraction_instructions() -> str:
             "The global orientation is unknown, so do not assume any image is north, front, right, rear, or left.",
             "Treat each image only as a panorama sector such as view_0 or view_1.",
             "For each view, identify the most relevant exhibit themes or gallery themes visible in that sector.",
+            "A single sector may legitimately show multiple adjacent gallery themes at once.",
+            "Keep side glimpses into neighboring rooms or cross-gallery openings when they are visually present.",
+            "Do not collapse the answer to only one dominant theme if two or three distinct themes are simultaneously visible.",
             "Use concise theme labels grounded in the images, such as Assyria: Nimrud or Greek and Roman sculpture.",
             "If the exact exhibit identity is uncertain, return the closest high-level theme rather than guessing a specific object.",
             "Return JSON only.",
@@ -279,9 +282,10 @@ def build_spatial_context_extraction_input(*, view_ids: list[str], candidate_the
         [
             "",
             "Task:",
-            "1. For each panorama sector, list the most relevant visible themes.",
+            "1. For each panorama sector, list the most relevant visible themes, including multiple simultaneous themes when clearly visible.",
             "2. Provide confidence values between 0 and 1.",
             "3. Keep the answer grounded in what is visible in that sector.",
+            "4. If a sector contains views into adjacent galleries, include those adjacent gallery themes instead of suppressing them.",
         ]
     )
     return "\n".join(lines)

@@ -105,6 +105,7 @@ class Observation:
 class BeliefState:
     current_pano_id: str
     current_room_id: str | None = None
+    grounded_room_id: str | None = None
     current_heading: float = 0.0
     pano_belief: dict[str, float] = field(default_factory=dict)
     room_belief: dict[str, float] = field(default_factory=dict)
@@ -118,11 +119,13 @@ class BeliefState:
 class CandidateAction:
     target_pano_id: str
     absolute_heading: float
-    relative_heading: float
-    relative_label: str
+    relative_heading: float | None
+    relative_label: str | None
     target_room_id: str | None
     score: float
     reason: str
+    route_step_index: int | None = None
+    metadata: JsonDict = field(default_factory=dict)
 
 
 @dataclass
@@ -166,3 +169,8 @@ class ReasoningInput:
     route: list[str]
     candidates: list[CandidateAction] = field(default_factory=list)
     current_room_id: str | None = None
+    subgoal_room_id: str | None = None
+    current_room_context: JsonDict = field(default_factory=dict)
+    visible_passages: list[JsonDict] = field(default_factory=list)
+    spatial_alignment: JsonDict = field(default_factory=dict)
+    view_contexts: list[JsonDict] = field(default_factory=list)

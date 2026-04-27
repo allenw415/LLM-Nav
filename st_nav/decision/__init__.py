@@ -1,4 +1,4 @@
-from .action_policy import GreedyActionPolicy
+from .action_policy import GreedyActionPolicy, LLMActionPolicy
 from .instruction_parser import LLMInstructionParser
 
-__all__ = ["GreedyActionPolicy", "LLMInstructionParser"]
+__all__ = ["GreedyActionPolicy", "LLMActionPolicy", "LLMInstructionParser"]

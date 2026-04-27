@@ -46,6 +46,7 @@ class NormalizedArtifacts:
     room_graph: dict | None = None
     pano_graph: dict | None = None
     grounding: dict | None = None
+    pano_room_grounding: dict | None = None
 
 
 def load_normalized_artifacts(
@@ -54,6 +55,7 @@ def load_normalized_artifacts(
     room_graph: bool = False,
     pano_graph: bool = False,
     grounding: bool = False,
+    pano_room_grounding: bool = False,
 ) -> NormalizedArtifacts:
     resolved_dir = resolve_project_path(artifacts_dir)
     return NormalizedArtifacts(
@@ -61,4 +63,5 @@ def load_normalized_artifacts(
         room_graph=load_json(resolved_dir / "room_graph.json") if room_graph else None,
         pano_graph=load_json(resolved_dir / "pano_graph.json") if pano_graph else None,
         grounding=load_json(resolved_dir / "room_grounding.template.json") if grounding else None,
+        pano_room_grounding=load_json(resolved_dir / "pano_room_grounding.json") if pano_room_grounding else None,
     )
