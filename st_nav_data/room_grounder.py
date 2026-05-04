@@ -1157,19 +1157,22 @@ def build_compact_pano_room_mapping(
         manual_record = manual_by_pano.get(pano_id, {})
         manual_status = manual_record.get("manual_status")
         manual_room_id = manual_record.get("manual_room_id")
-        if (
-            isinstance(manual_status, str)
-            and manual_status in {"accepted", "boundary", "ambiguous"}
-            and isinstance(manual_room_id, str)
-            and manual_room_id
-        ):
-            mappings[pano_id] = manual_room_id
-            sources[pano_id] = f"manual:{manual_status}"
-            continue
+        if isinstance(manual_status, str) and manual_status in {"accepted", "boundary", "ambiguous"}:
+            normalized_manual_room_id = manual_room_id.strip() if isinstance(manual_room_id, str) else manual_room_id
+            if normalized_manual_room_id is None or (
+                isinstance(normalized_manual_room_id, str) and normalized_manual_room_id.lower() == "null"
+            ):
+                mappings[pano_id] = "null"
+                sources[pano_id] = f"manual:{manual_status}"
+                continue
+            if isinstance(normalized_manual_room_id, str) and normalized_manual_room_id:
+                mappings[pano_id] = normalized_manual_room_id
+                sources[pano_id] = f"manual:{manual_status}"
+                continue
 
         predicted_room_id = record.get("predicted_room_id")
-        if isinstance(predicted_room_id, str) and predicted_room_id:
-            mappings[pano_id] = predicted_room_id
+        if isinstance(predicted_room_id, str) and predicted_room_id.strip():
+            mappings[pano_id] = predicted_room_id.strip()
             sources[pano_id] = "gemini"
 
     return {

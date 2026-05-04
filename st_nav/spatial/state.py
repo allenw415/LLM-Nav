@@ -35,6 +35,7 @@ class StateEstimator:
         visited_rooms = {start_room_id} if start_room_id else set()
         return BeliefState(
             current_pano_id=start_pano_id,
+            previous_pano_id=None,
             current_room_id=start_room_id,
             grounded_room_id=grounded_room_id,
             current_heading=normalize_heading(start_heading),
@@ -45,8 +46,6 @@ class StateEstimator:
         )
 
     def update(self, state: BeliefState, observation: Observation) -> BeliefState:
-        previous_pano_id = state.current_pano_id
-        previous_room_id = state.current_room_id
         state.current_pano_id = observation.pano_id
         state.grounded_room_id = self.grounding_index.room_for_pano(observation.pano_id)
         observation.metadata["grounded_room_id"] = state.grounded_room_id
@@ -80,33 +79,29 @@ class StateEstimator:
                 prior_room_belief=state.room_belief,
                 fallback_room_id=state.current_room_id,
             )
-            raw_localized_room_id = localization.get("predicted_room_id")
-            localized_room_id = raw_localized_room_id
-            if (
-                observation.pano_id == previous_pano_id
-                and isinstance(previous_room_id, str)
-                and previous_room_id in self.room_graph
-                and isinstance(raw_localized_room_id, str)
-                and raw_localized_room_id in self.room_graph
-                and raw_localized_room_id != previous_room_id
-            ):
-                localized_room_id = previous_room_id
-                observation.metadata["localized_room_id_raw"] = raw_localized_room_id
-                observation.metadata["localization_stabilized"] = True
+            localized_room_id = localization.get("predicted_room_id")
             if isinstance(localized_room_id, str) and localized_room_id in self.room_graph:
                 state.current_room_id = localized_room_id
-                if observation.metadata.get("localization_stabilized"):
-                    state.room_belief = {localized_room_id: 1.0}
-                else:
-                    state.room_belief = dict(localization.get("room_belief", {}))
+                state.room_belief = dict(localization.get("room_belief", {}))
                 state.visited_rooms.add(localized_room_id)
                 observation.metadata["localized_room_id"] = localized_room_id
                 observation.metadata["localization_confidence"] = float(localization.get("confidence", 0.0))
-                if observation.metadata.get("localization_stabilized"):
-                    observation.metadata["room_belief"] = {localized_room_id: 1.0}
-                else:
-                    observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
+                observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
+                observation.metadata["transition_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
+                observation.metadata["observation_likelihood"] = dict(localization.get("observation_likelihood", {}))
+                observation.metadata["entity_observation_distribution"] = dict(
+                    localization.get("entity_observation_distribution", {})
+                )
+                observation.metadata["alignment_observation_distribution"] = dict(
+                    localization.get("alignment_observation_distribution", {})
+                )
+                observation.metadata["entity_transition_room_belief"] = dict(
+                    localization.get("entity_transition_room_belief", {})
+                )
+                observation.metadata["alignment_fusion_applied"] = bool(
+                    localization.get("alignment_fusion_applied", False)
+                )
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
                 spatial_alignment = localization.get("spatial_alignment")
                 if isinstance(spatial_alignment, dict):

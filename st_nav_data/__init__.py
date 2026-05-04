@@ -23,6 +23,22 @@ from .room_grounder import (
     merge_seed_panos_by_room,
     select_grounding_captures,
 )
+from .pano_visualization import (
+    build_dot,
+    build_floor_overview_svg,
+    build_geojson,
+    build_gexf,
+    build_graphml,
+    build_room_color_map,
+    build_visualization_payload,
+    extract_grounding_mapping,
+    shortest_pano_path,
+)
+from .pano_room_grounding import (
+    find_batch_result_paths,
+    rebuild_pano_room_grounding_from_batches,
+    write_pano_room_grounding,
+)
 
 __all__ = [
     "BRITISH_MUSEUM_DIRECTION_OVERRIDES",
@@ -33,12 +49,21 @@ __all__ = [
     "GeminiRoomGrounder",
     "aggregate_gemini_usage_from_traces",
     "build_compact_pano_room_mapping",
+    "build_dot",
+    "build_floor_overview_svg",
+    "build_geojson",
+    "build_gexf",
+    "build_graphml",
+    "build_room_color_map",
     "build_manual_annotation_records",
+    "build_visualization_payload",
     "build_room_candidates",
     "collect_manual_seed_panos",
     "collect_seed_panos_for_rooms",
     "expand_seed_panos_by_hops",
     "expand_seed_panos_by_region_growing",
+    "extract_grounding_mapping",
+    "find_batch_result_paths",
     "invert_room_grounding",
     "load_json",
     "merge_records_by_pano_id",
@@ -46,4 +71,7 @@ __all__ = [
     "normalize_pano_graph",
     "normalize_room_graph",
     "select_grounding_captures",
+    "shortest_pano_path",
+    "rebuild_pano_room_grounding_from_batches",
+    "write_pano_room_grounding",
 ]

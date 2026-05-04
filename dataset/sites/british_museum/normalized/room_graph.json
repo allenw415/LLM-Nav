@@ -1,17 +1,4 @@
 {
-  "Room 1": {
-    "room_id": "Room 1",
-    "display_name": "Room 1",
-    "floor": "0",
-    "category": "Themes",
-    "title": "Enlightenment",
-    "aliases": [
-      "Enlightenment",
-      "Room 1"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
   "Room 10": {
     "room_id": "Room 10",
     "display_name": "Room 10",
@@ -45,7 +32,7 @@
     "display_name": "Room 12",
     "floor": "0",
     "category": "Ancient Greece and Rome",
-    "title": "Greece: Minoans and Mycenaeans",
+    "title": null,
     "aliases": [
       "Room 12"
     ],
@@ -356,32 +343,6 @@
     ],
     "synthetic": false
   },
-  "Room 2": {
-    "room_id": "Room 2",
-    "display_name": "Room 2",
-    "floor": "0",
-    "category": "Themes",
-    "title": "Collecting the world",
-    "aliases": [
-      "Collecting the world",
-      "Room 2"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 2a": {
-    "room_id": "Room 2a",
-    "display_name": "Room 2a",
-    "floor": "0",
-    "category": "Themes",
-    "title": "The Waddesdon Bequest",
-    "aliases": [
-      "The Waddesdon Bequest",
-      "Room 2a"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
   "Room 20": {
     "room_id": "Room 20",
     "display_name": "Room 20",
@@ -508,97 +469,6 @@
     ],
     "synthetic": false
   },
-  "Room 24": {
-    "room_id": "Room 24",
-    "display_name": "Room 24",
-    "floor": "0",
-    "category": "Themes",
-    "title": "Living and Dying",
-    "aliases": [
-      "Living and Dying",
-      "Room 24"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 26": {
-    "room_id": "Room 26",
-    "display_name": "Room 26",
-    "floor": "0",
-    "category": "Americas",
-    "title": "North America",
-    "aliases": [
-      "North America",
-      "Room 26"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 27": {
-    "room_id": "Room 27",
-    "display_name": "Room 27",
-    "floor": "0",
-    "category": "Americas",
-    "title": "Mexico",
-    "aliases": [
-      "Mexico",
-      "Room 27"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 29a": {
-    "room_id": "Room 29a",
-    "display_name": "Room 29a",
-    "floor": "0",
-    "category": "Members",
-    "title": "Members' Room access",
-    "aliases": [
-      "Members' Room access",
-      "Room 29a"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 29b": {
-    "room_id": "Room 29b",
-    "display_name": "Room 29b",
-    "floor": "0",
-    "category": "Members",
-    "title": "Members' Room access",
-    "aliases": [
-      "Members' Room access",
-      "Room 29b"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 3": {
-    "room_id": "Room 3",
-    "display_name": "Room 3",
-    "floor": "0",
-    "category": "Exhibitions",
-    "title": "Free displays",
-    "aliases": [
-      "Free displays",
-      "Room 3"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
-  "Room 30": {
-    "room_id": "Room 30",
-    "display_name": "Room 30",
-    "floor": "0",
-    "category": "Exhibitions",
-    "title": "The Sainsbury Exhibitions Gallery",
-    "aliases": [
-      "The Sainsbury Exhibitions Gallery",
-      "Room 30"
-    ],
-    "neighbors": [],
-    "synthetic": true
-  },
   "Room 4": {
     "room_id": "Room 4",
     "display_name": "Room 4",
@@ -627,7 +497,7 @@
       {
         "target_room_id": "Room 9",
         "target_display_name": "Room 9",
-        "allocentric_direction": "west",
+        "allocentric_direction": "east",
         "allocentric_heading_deg": 90.0,
         "transition_type": "passage"
       }

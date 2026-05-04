@@ -197,7 +197,6 @@ def build_localization_input(*, observation_entities: list[dict], candidates: li
     for candidate in candidates:
         parts = [
             f"room_id={candidate['room_id']}",
-            f"transition_support={candidate['transition_support']:.4f}",
             f"title={candidate.get('title') or 'unknown'}",
             f"category={candidate.get('category') or 'unknown'}",
         ]

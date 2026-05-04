@@ -24,6 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--floor", default="0")
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument(
+        "--pano-id-file",
+        help="Optional newline or JSON list file of pano ids to ground instead of selecting by floor offset.",
+    )
     parser.add_argument("--output-path")
     parser.add_argument("--review-output-path")
     parser.add_argument("--manual-output-path")
@@ -66,6 +70,18 @@ def select_floor_pano_ids(pano_graph: dict[str, dict], floor: str) -> list[str]:
         for pano_id, record in pano_graph.items()
         if isinstance(record, dict) and str(record.get("floor")) == floor_text
     )
+
+
+def load_pano_id_file(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8").strip()
+    if not text:
+        return []
+    if text.startswith("["):
+        payload = json.loads(text)
+        if not isinstance(payload, list):
+            raise ValueError(f"Expected JSON list in {path}")
+        return [str(item).strip() for item in payload if str(item).strip()]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.strip().startswith("#")]
 
 
 def default_batch_output_path(*, artifacts_dir: Path, floor: str, offset: int, limit: int) -> Path:
@@ -159,10 +175,23 @@ def main() -> int:
     pano_graph = load_json(artifacts_dir / "pano_graph.json")
     room_grounding = load_json(artifacts_dir / "room_grounding.template.json")
 
-    floor_pano_ids = select_floor_pano_ids(pano_graph, args.floor)
-    start = max(args.offset, 0)
-    end = start + max(args.limit, 0)
-    batch_pano_ids = floor_pano_ids[start:end]
+    if args.pano_id_file:
+        requested_pano_ids = load_pano_id_file((PROJECT_ROOT / args.pano_id_file).resolve())
+        missing_pano_ids = [pano_id for pano_id in requested_pano_ids if pano_id not in pano_graph]
+        if missing_pano_ids:
+            raise RuntimeError(
+                f"{len(missing_pano_ids)} pano ids from --pano-id-file are missing from pano_graph.json. "
+                f"First examples: {missing_pano_ids[:5]}"
+            )
+        floor_pano_ids = requested_pano_ids
+        start = 0
+        end = len(floor_pano_ids)
+        batch_pano_ids = floor_pano_ids[: max(args.limit, 0)]
+    else:
+        floor_pano_ids = select_floor_pano_ids(pano_graph, args.floor)
+        start = max(args.offset, 0)
+        end = start + max(args.limit, 0)
+        batch_pano_ids = floor_pano_ids[start:end]
     if not batch_pano_ids:
         raise RuntimeError(f"No floor panos selected for floor={args.floor}, offset={args.offset}, limit={args.limit}.")
 
@@ -254,6 +283,7 @@ def main() -> int:
             "limit": max(args.limit, 0),
             "batch_count": len(results),
             "floor_pano_count": len(floor_pano_ids),
+            "pano_id_file": args.pano_id_file,
             "candidate_scope": args.candidate_scope,
             "heading_mode": args.heading_mode,
             "max_captures": max(args.max_captures, 1),

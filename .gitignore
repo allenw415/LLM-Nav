@@ -6,6 +6,11 @@ __pycache__/
 .mypy_cache/
 
 .env
+.env.*
+!.env.example
+.env.js
+**/.env.js
+artifacts/
 venv/
 renders/
 outputs/

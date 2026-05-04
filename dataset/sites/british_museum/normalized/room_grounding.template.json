@@ -1,24 +1,8 @@
 {
-  "Room 1": {
-    "room_id": "Room 1",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Enlightenment",
-      "Room 1"
-    ],
-    "anchor_entities": [
-      "Enlightenment",
-      "Themes"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
   "Room 10": {
     "room_id": "Room 10",
     "floor": "0",
-    "pano_ids": [
-      "tJAQTW7ZNYdZICiHtNktNw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
       "Room 10"
@@ -27,28 +11,24 @@
       "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
       "Middle East"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 12": {
     "room_id": "Room 12",
     "floor": "0",
-    "pano_ids": [
-      "uT5ZKwGm1UqfivkOM_vZcQ"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Room 12"
     ],
     "anchor_entities": [
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 13": {
     "room_id": "Room 13",
     "floor": "0",
-    "pano_ids": [
-      "3ZYo17kvN9l4bCB0BK6Rmw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greece 1050–520 BC",
       "Room 13"
@@ -57,14 +37,12 @@
       "Greece 1050–520 BC",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 14": {
     "room_id": "Room 14",
     "floor": "0",
-    "pano_ids": [
-      "whelt5HTK-I4qYnkAvWT-A"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greek vases",
       "Room 14"
@@ -73,14 +51,12 @@
       "Greek vases",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 15": {
     "room_id": "Room 15",
     "floor": "0",
-    "pano_ids": [
-      "oKtDTX0r2nUcko-uHWi9fg"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Athens and Lycia",
       "Room 15"
@@ -89,14 +65,12 @@
       "Athens and Lycia",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 16": {
     "room_id": "Room 16",
     "floor": "0",
-    "pano_ids": [
-      "aL2fL8qUt2wd4NhbL3y2Gg"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greece: Bassai sculptures",
       "Room 16"
@@ -105,14 +79,12 @@
       "Greece: Bassai sculptures",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 17": {
     "room_id": "Room 17",
     "floor": "0",
-    "pano_ids": [
-      "DfS00xyiDnlXQ4gsitRKFg"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Nereid Monument",
       "Room 17"
@@ -121,7 +93,7 @@
       "Nereid Monument",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 18": {
     "room_id": "Room 18",
@@ -135,7 +107,7 @@
       "Greece: Parthenon",
       "Ancient Greece and Rome"
     ],
-    "notes": "User-provided pano id NH7eJxyFuHq1IJvG6ti-jQ was not found in normalized pano_graph.json; needs verification."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 18a": {
     "room_id": "Room 18a",
@@ -150,7 +122,7 @@
       "Greece: Parthenon",
       "Ancient Greece and Rome"
     ],
-    "notes": "User-provided pano id eV7KMwILIxo-agy2wdbfjA was not found in normalized pano_graph.json; needs verification."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 18b": {
     "room_id": "Room 18b",
@@ -165,14 +137,12 @@
       "Greece: Parthenon",
       "Ancient Greece and Rome"
     ],
-    "notes": "User-provided pano id 8qi_EL26_ztTobcQaPGn7w was not found in normalized pano_graph.json; needs verification."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 19": {
     "room_id": "Room 19",
     "floor": "0",
-    "pano_ids": [
-      "eypGO5CD3CS4Co2oKTjTmw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greece: Athens",
       "Room 19"
@@ -181,42 +151,12 @@
       "Greece: Athens",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
-  },
-  "Room 2": {
-    "room_id": "Room 2",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Collecting the world",
-      "Room 2"
-    ],
-    "anchor_entities": [
-      "Collecting the world",
-      "Themes"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
-  "Room 2a": {
-    "room_id": "Room 2a",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "The Waddesdon Bequest",
-      "Room 2a"
-    ],
-    "anchor_entities": [
-      "The Waddesdon Bequest",
-      "Themes"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 20": {
     "room_id": "Room 20",
     "floor": "0",
-    "pano_ids": [
-      "0Z6ljLQGZ0avP396GHBi6w"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greeks and Lycians 400–325 BC",
       "Room 20"
@@ -225,14 +165,12 @@
       "Greeks and Lycians 400–325 BC",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 21": {
     "room_id": "Room 21",
     "floor": "0",
-    "pano_ids": [
-      "Kn-B1GSytjiXoF94USwlnw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Mausoleum of Halikarnassos",
       "Room 21"
@@ -241,14 +179,12 @@
       "Mausoleum of Halikarnassos",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 22": {
     "room_id": "Room 22",
     "floor": "0",
-    "pano_ids": [
-      "CsgRUbjO9LWuLrL1G64tOw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Room 22",
       "The world of Alexander"
@@ -257,14 +193,12 @@
       "The world of Alexander",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 23": {
     "room_id": "Room 23",
     "floor": "0",
-    "pano_ids": [
-      "6NL7LiZ1lgnAM6AGrACYyw"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Greek and Roman sculpture",
       "Room 23"
@@ -273,112 +207,12 @@
       "Greek and Roman sculpture",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
-  },
-  "Room 24": {
-    "room_id": "Room 24",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Living and Dying",
-      "Room 24"
-    ],
-    "anchor_entities": [
-      "Living and Dying",
-      "Themes"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
-  "Room 26": {
-    "room_id": "Room 26",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "North America",
-      "Room 26"
-    ],
-    "anchor_entities": [
-      "North America",
-      "Americas"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
-  "Room 27": {
-    "room_id": "Room 27",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Mexico",
-      "Room 27"
-    ],
-    "anchor_entities": [
-      "Mexico",
-      "Americas"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
-  "Room 29a": {
-    "room_id": "Room 29a",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Members' Room access",
-      "Room 29a"
-    ],
-    "anchor_entities": [
-      "Members' Room access",
-      "Members"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; title should be verified against onsite signage."
-  },
-  "Room 29b": {
-    "room_id": "Room 29b",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Members' Room access",
-      "Room 29b"
-    ],
-    "anchor_entities": [
-      "Members' Room access",
-      "Members"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; title should be verified against onsite signage."
-  },
-  "Room 3": {
-    "room_id": "Room 3",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "Free displays",
-      "Room 3"
-    ],
-    "anchor_entities": [
-      "Free displays",
-      "Exhibitions"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
-  },
-  "Room 30": {
-    "room_id": "Room 30",
-    "floor": "0",
-    "pano_ids": [],
-    "aliases": [
-      "The Sainsbury Exhibitions Gallery",
-      "Room 30"
-    ],
-    "anchor_entities": [
-      "The Sainsbury Exhibitions Gallery",
-      "Exhibitions"
-    ],
-    "notes": "Draft metadata added from the user-provided British Museum ground-floor guide on 2026-04-20; representative pano still needed."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 4": {
     "room_id": "Room 4",
     "floor": "0",
-    "pano_ids": [
-      "EHxw9_EDNIdfU9crcNi3dg"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Egyptian sculpture",
       "Room 4"
@@ -387,14 +221,12 @@
       "Egyptian sculpture",
       "Ancient Egypt"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 6": {
     "room_id": "Room 6",
     "floor": "0",
-    "pano_ids": [
-      "YneQS15VpAn_V7g1b8BC7g"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Assyrian sculpture and Balawat Gates",
       "Early Greece",
@@ -405,14 +237,12 @@
       "Early Greece",
       "Ancient Greece and Rome"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 7": {
     "room_id": "Room 7",
     "floor": "0",
-    "pano_ids": [
-      "2xNtGbJsLR1JBBpXvvFshg"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Assyria: Nimrud",
       "Room 7"
@@ -421,14 +251,12 @@
       "Assyria: Nimrud",
       "Middle East"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 8": {
     "room_id": "Room 8",
     "floor": "0",
-    "pano_ids": [
-      "7grGsbOXqpEMDLgTG6VfmQ"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Assyria: Nimrud",
       "Room 8"
@@ -437,14 +265,12 @@
       "Assyria: Nimrud",
       "Middle East"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   },
   "Room 9": {
     "room_id": "Room 9",
     "floor": "0",
-    "pano_ids": [
-      "pwtq77pKUH27dUWqr3w3QQ"
-    ],
+    "pano_ids": [],
     "aliases": [
       "Assyria: Nineveh",
       "Room 9"
@@ -453,6 +279,6 @@
       "Assyria: Nineveh",
       "Middle East"
     ],
-    "notes": "Manual representative pano provided by user on 2026-03-26."
+    "notes": "Fill pano_ids after manual alignment."
   }
 }

@@ -63,7 +63,21 @@ class SpatialEngine:
             observation.metadata["localized_room_id"] = localized_room_id
             observation.metadata["localization_confidence"] = float(localization.get("confidence", 0.0))
             observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
+            observation.metadata["transition_support"] = dict(localization.get("transition_support", {}))
             observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
+            observation.metadata["observation_likelihood"] = dict(localization.get("observation_likelihood", {}))
+            observation.metadata["entity_observation_distribution"] = dict(
+                localization.get("entity_observation_distribution", {})
+            )
+            observation.metadata["alignment_observation_distribution"] = dict(
+                localization.get("alignment_observation_distribution", {})
+            )
+            observation.metadata["entity_transition_room_belief"] = dict(
+                localization.get("entity_transition_room_belief", {})
+            )
+            observation.metadata["alignment_fusion_applied"] = bool(
+                localization.get("alignment_fusion_applied", False)
+            )
             observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
         spatial_alignment = localization.get("spatial_alignment")
         if isinstance(spatial_alignment, dict):
@@ -301,29 +315,22 @@ class SpatialEngine:
         inferred_current_heading = self._infer_current_heading_from_alignment(observation)
         target_relative_heading = None
         target_heading_metadata: JsonDict = {}
-        aligned_target_heading, aligned_target_metadata = self._target_relative_heading_from_sector_alignment(
-            observation,
-            subgoal_room_id=subgoal_room_id,
-            desired_heading=desired_heading,
-            inferred_current_heading=inferred_current_heading,
-        )
-        if aligned_target_heading is not None:
-            target_relative_heading = aligned_target_heading
-            target_heading_metadata = aligned_target_metadata
-        if desired_heading is not None and inferred_current_heading is not None:
-            if target_relative_heading is None:
-                target_relative_heading = normalize_heading(desired_heading - inferred_current_heading)
-                target_heading_metadata = {
-                    "target_heading_source": "allocentric_subgoal",
-                    "target_allocentric_direction": self._heading_to_allocentric_direction(desired_heading),
-                }
+        if desired_heading is not None:
+            target_relative_heading = desired_heading
+            target_heading_metadata = {
+                "target_heading_source": "allocentric_subgoal",
+                "target_allocentric_direction": self._heading_to_allocentric_direction(desired_heading),
+            }
         candidates: list[CandidateAction] = []
         for neighbor in neighbors:
             target_pano_id = str(neighbor["target_pano_id"])
+            is_immediate_backtrack = (
+                isinstance(state.previous_pano_id, str)
+                and state.previous_pano_id
+                and target_pano_id == state.previous_pano_id
+            )
             absolute_heading = float(neighbor["geocentric_heading_deg"])
-            allocentric_heading = None
-            if inferred_current_heading is not None:
-                allocentric_heading = normalize_heading(absolute_heading - inferred_current_heading)
+            allocentric_heading = self._candidate_allocentric_heading(absolute_heading)
             inferred_target_room_id, room_transition = self._match_room_transition(
                 state.current_room_id,
                 absolute_heading,
@@ -374,6 +381,7 @@ class SpatialEngine:
                 "target_relative_diff_deg": target_relative_diff,
                 "grounded_target_room_id": grounded_target_room_id,
                 "inferred_target_room_id": inferred_target_room_id,
+                "is_immediate_backtrack": is_immediate_backtrack,
             }
             if view_contexts:
                 metadata["spatial_context"] = self._candidate_spatial_context(
@@ -401,6 +409,14 @@ class SpatialEngine:
                     metadata=metadata,
                 )
             )
+
+        non_backtracking_candidates = [
+            candidate
+            for candidate in candidates
+            if not candidate.metadata.get("is_immediate_backtrack")
+        ]
+        if non_backtracking_candidates:
+            candidates = non_backtracking_candidates
 
         if not candidates and state.junction_stack:
             target_pano_id = state.junction_stack[-1]
@@ -430,6 +446,11 @@ class SpatialEngine:
             )
         )
         return candidates
+
+    @staticmethod
+    def _candidate_allocentric_heading(geocentric_heading: float) -> float:
+        # British Museum pano headings use a stable +30deg offset from the room-map allocentric frame.
+        return normalize_heading(float(geocentric_heading) + 30.0)
 
     def _candidate_spatial_context(
         self,
@@ -501,7 +522,7 @@ class SpatialEngine:
                 break
 
         return {
-            "candidate_absolute_heading_deg": float(absolute_heading),
+            "candidate_geocentric_heading_deg": float(absolute_heading),
             "candidate_allocentric_heading_deg": float(allocentric_heading) if allocentric_heading is not None else None,
             "supporting_views": supporting_views,
             "salient_entities": salient_entities,

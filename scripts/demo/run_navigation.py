@@ -51,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="spatial-alignment-a",
     )
     parser.add_argument("--manifest-map-json")
-    parser.add_argument("--step-budget", type=int, default=10)
+    parser.add_argument("--step-budget", type=int, default=15)
     parser.add_argument(
         "--start-heading",
         type=float,
@@ -103,6 +103,7 @@ def build_localizer(args, *, room_graph: dict[str, dict], grounding_index: Groun
         room_graph=room_graph,
         grounding_index=grounding_index,
         alignment_mode="text_from_images" if args.localizer == "spatial-alignment-a" else "direct_images",
+        entity_distribution_mode="llm",
         model=args.llm_model,
         api_key=args.llm_api_key,
         api_base=args.llm_api_base,
@@ -126,11 +127,12 @@ def serialize_candidate(candidate) -> dict:
 
 
 def serialize_trace(trace) -> dict:
+    observation_metadata = trace.observation.metadata
     return {
         "step_index": trace.step_index,
         "pano_id": trace.pano_id,
         "room_id": trace.room_id,
-        "grounded_room_id": trace.observation.metadata.get("grounded_room_id"),
+        "grounded_room_id": observation_metadata.get("grounded_room_id"),
         "route": list(trace.route),
         "subgoal_room_id": trace.subgoal_room_id,
         "current_room_context": dict(trace.current_room_context),
@@ -140,9 +142,18 @@ def serialize_trace(trace) -> dict:
         "observation": {
             "pano_id": trace.observation.pano_id,
             "heading_estimate": trace.observation.heading_estimate,
-            "localized_room_id": trace.observation.metadata.get("localized_room_id"),
-            "grounded_room_id": trace.observation.metadata.get("grounded_room_id"),
-            "spatial_alignment": trace.observation.metadata.get("spatial_alignment"),
+            "localized_room_id": observation_metadata.get("localized_room_id"),
+            "grounded_room_id": observation_metadata.get("grounded_room_id"),
+            "transition_support": observation_metadata.get("transition_support")
+            or observation_metadata.get("transition_room_support"),
+            "entity_observation_distribution": observation_metadata.get("entity_observation_distribution"),
+            "alignment_observation_distribution": observation_metadata.get("alignment_observation_distribution"),
+            "entity_transition_room_belief": observation_metadata.get("entity_transition_room_belief"),
+            "alignment_fusion_applied": observation_metadata.get("alignment_fusion_applied"),
+            "observation_likelihood": observation_metadata.get("observation_likelihood")
+            or observation_metadata.get("observation_distribution"),
+            "room_belief": observation_metadata.get("room_belief"),
+            "spatial_alignment": observation_metadata.get("spatial_alignment"),
             "entities": [
                 {
                     "name": entity.name,
@@ -219,9 +230,7 @@ def print_progress(event: dict, *, stream=None) -> None:
     if event_name == "step_start":
         print(
             f"[progress] step {event.get('step_index')} start:"
-            f" pano={event.get('current_pano_id')}"
-            f" localized_room={event.get('current_room_id')}"
-            f" grounded_room={event.get('grounded_room_id')}",
+            f" pano={event.get('current_pano_id')}",
             file=stream,
         )
         return
@@ -334,18 +343,25 @@ def print_progress(event: dict, *, stream=None) -> None:
 
 
 def make_progress_callback(*, log_stream=None):
+    trace_stream = None
+    if log_stream is not None:
+        trace_path = Path(log_stream.name + ".trace.jsonl")
+        trace_path.parent.mkdir(parents=True, exist_ok=True)
+        trace_stream = trace_path.open("w", encoding="utf-8")
+
     def _callback(event):
         if event.get("event") != "trace_recorded":
             print_progress(event, stream=sys.stderr)
             sys.stderr.flush()
         if log_stream is not None:
-            if event.get("event") == "trace_recorded":
-                print("[trace]", file=log_stream)
-                print(render_json(event.get("trace")), file=log_stream)
-            else:
+            if event.get("event") != "trace_recorded":
                 print_progress(event, stream=log_stream)
             log_stream.flush()
+        if trace_stream is not None and event.get("event") == "trace_recorded":
+            print(render_json(event.get("trace")), file=trace_stream)
+            trace_stream.flush()
 
+    _callback.trace_stream = trace_stream
     return _callback
 
 
@@ -468,13 +484,19 @@ def main() -> int:
         }
         output_text = render_json(payload)
         write_text_if_requested(output_text, args.output_path)
+        trace_stream = getattr(progress_callback, "trace_stream", None)
+        if trace_stream is not None:
+            print(output_text, file=trace_stream)
+            trace_stream.flush()
         if log_stream:
-            print(output_text, file=log_stream)
-            log_stream.flush()
             print(f"Wrote navigation log to {log_path}")
         else:
             print(output_text)
     finally:
+        trace_stream = locals().get("progress_callback", None)
+        trace_stream = getattr(trace_stream, "trace_stream", None)
+        if trace_stream is not None:
+            trace_stream.close()
         if log_stream is not None:
             log_stream.close()
     return 0

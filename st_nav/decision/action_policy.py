@@ -171,16 +171,18 @@ class LLMActionPolicy:
                 "You are the navigation reasoning layer for museum indoor navigation.",
                 "Choose exactly one next candidate action from the provided candidate list.",
                 "Do not minimize angle difference alone.",
-                "Use the allocentric target relation, the egocentric-to-allocentric alignment, and each candidate's spatial context.",
-                "Spatial context includes visible passages, landmarks, exhibit themes, and nearby semantic cues for that direction.",
+                "Use the allocentric target relation and each candidate's spatial context.",
+                "Spatial context includes visible passages, landmarks, exhibit themes, and nearby semantic cues.",
                 "A candidate with a worse angular difference can still be better if its semantic context is more consistent with the goal room or more likely to connect toward it.",
-                "However, when multiple candidates are directionally competitive with the target direction, prefer comparing semantic context among those directionally competitive candidates first.",
+                "First judge whether each candidate is directionally plausible toward the target, rather than simply preferring the numerically closest angle.",
+                "If multiple candidates are directionally plausible, use semantic evidence and passage context to choose among them.",
+                "If no candidate is clearly directionally plausible, rely more on semantic evidence, visible passages, and local spatial context.",
+                "Do not over-weight small angular differences when all candidates are poorly aligned with the target direction.",
                 "The current_room_context may include subgoal_theme_labels; treat those labels as direct goal-theme supervision.",
-                "When a directionally competitive candidate directly matches subgoal_theme_labels in its theme hints or candidate-localized room theme, strongly prefer it.",
-                "If a candidate has a direct, strong subgoal-theme match, do not exclude it solely because its angular mismatch is moderately worse than the best candidate.",
-                "Theme-supported candidates that still plausibly point toward the goal should remain in the priority comparison set.",
-                "Do not pick a candidate with a much larger angular mismatch when one or more directionally competitive candidates still have plausible semantic support.",
-                "Treat large angular mismatch candidates as fallback options, not first-choice options.",
+                "A direct match between a candidate's local themes and subgoal_theme_labels is strong evidence in favor of that candidate.",
+                "Evaluate all candidate actions jointly instead of privileging a prefiltered subset.",
+                "Use the provided headings to judge directional plausibility yourself.",
+                "Do not let any single heuristic field dominate if semantic evidence and passage connectivity suggest a better route.",
                 "Reason about direction, semantics, and likely connectivity together.",
                 "Return JSON only.",
             ]
@@ -196,13 +198,8 @@ class LLMActionPolicy:
             "current_room_id": reasoning_input.current_room_id,
             "subgoal_room_id": reasoning_input.subgoal_room_id,
             "route": list(reasoning_input.route),
-            "current_room_context": dict(reasoning_input.current_room_context),
-            "visible_passages": list(reasoning_input.visible_passages),
-            "egocentric_allocentric_alignment": self._alignment_payload(reasoning_input),
-            "directional_guidance": self._directional_guidance(
-                ordered_candidates,
-                current_room_context=reasoning_input.current_room_context,
-            ),
+            "current_room_context": self._serialize_current_room_context(reasoning_input.current_room_context),
+            "visible_passages": self._serialize_visible_passages(reasoning_input.visible_passages),
             "candidate_actions": [self._serialize_candidate(candidate) for candidate in ordered_candidates],
         }
         return "\n".join(
@@ -223,98 +220,54 @@ class LLMActionPolicy:
         }
 
     @staticmethod
+    def _serialize_current_room_context(context: dict | None) -> dict:
+        if not isinstance(context, dict):
+            return {}
+        return {
+            "room_id": context.get("room_id"),
+            "title": context.get("title"),
+            "category": context.get("category"),
+            "subgoal_room_id": context.get("subgoal_room_id"),
+            "subgoal_title": context.get("subgoal_title"),
+            "subgoal_theme_labels": list(context.get("subgoal_theme_labels", []))
+            if isinstance(context.get("subgoal_theme_labels"), list)
+            else [],
+            "remaining_route": list(context.get("remaining_route", []))
+            if isinstance(context.get("remaining_route"), list)
+            else [],
+        }
+
+    @staticmethod
+    def _serialize_visible_passages(passages: list[dict] | None) -> list[dict]:
+        cleaned: list[dict] = []
+        for passage in passages or []:
+            if not isinstance(passage, dict):
+                continue
+            cleaned.append(
+                {
+                    "name": passage.get("name"),
+                    "confidence": passage.get("confidence"),
+                    "source_views": list(passage.get("source_views", []))
+                    if isinstance(passage.get("source_views"), list)
+                    else [],
+                }
+            )
+        return cleaned
+
+    @staticmethod
     def _serialize_candidate(candidate: CandidateAction) -> dict:
         metadata = dict(candidate.metadata or {})
         spatial_context = metadata.get("spatial_context")
         return {
             "target_pano_id": candidate.target_pano_id,
-            "target_room_id": candidate.target_room_id,
-            "absolute_heading_deg": candidate.absolute_heading,
-            "relative_heading_deg": candidate.relative_heading,
-            "relative_label": candidate.relative_label,
+            "candidate_geocentric_heading_deg": candidate.absolute_heading,
             "route_step_index": candidate.route_step_index,
-            "heuristic_score": candidate.score,
-            "grounded_target_room_id": metadata.get("grounded_target_room_id"),
-            "inferred_target_room_id": metadata.get("inferred_target_room_id"),
             "candidate_allocentric_heading_deg": metadata.get("candidate_allocentric_heading_deg"),
+            "target_allocentric_heading_deg": metadata.get("desired_allocentric_heading_deg"),
             "target_heading_source": metadata.get("target_heading_source"),
-            "target_matched_room_id": metadata.get("target_matched_room_id"),
             "target_allocentric_direction": metadata.get("target_allocentric_direction"),
-            "target_relative_heading_deg": metadata.get("target_relative_heading_deg"),
-            "target_relative_diff_deg": metadata.get("target_relative_diff_deg"),
             "spatial_context": spatial_context if isinstance(spatial_context, dict) else {},
         }
-
-    @staticmethod
-    def _directional_guidance(
-        candidates: list[CandidateAction],
-        *,
-        current_room_context: dict | None = None,
-    ) -> dict:
-        candidate_diffs: list[tuple[CandidateAction, float]] = []
-        for candidate in candidates:
-            diff = candidate.metadata.get("target_relative_diff_deg")
-            if isinstance(diff, (int, float)):
-                candidate_diffs.append((candidate, float(diff)))
-        if not candidate_diffs:
-            return {"strategy": "no_directional_guidance", "directionally_competitive_target_pano_ids": []}
-        subgoal_theme_labels: list[str] = []
-        if isinstance(current_room_context, dict):
-            raw_labels = current_room_context.get("subgoal_theme_labels")
-            if isinstance(raw_labels, list):
-                subgoal_theme_labels = [
-                    label.strip() for label in raw_labels if isinstance(label, str) and label.strip()
-                ]
-        best_diff = min(diff for _, diff in candidate_diffs)
-        competitive_cutoff = min(best_diff + 45.0, 90.0)
-        theme_supported_cutoff = min(best_diff + 90.0, 135.0)
-        competitive_ids = [
-            candidate.target_pano_id
-            for candidate, diff in candidate_diffs
-            if diff <= competitive_cutoff
-        ]
-        theme_supported_ids = [
-            candidate.target_pano_id
-            for candidate, diff in candidate_diffs
-            if diff <= theme_supported_cutoff
-            and LLMActionPolicy._candidate_matches_subgoal_theme(candidate, subgoal_theme_labels)
-        ]
-        priority_ids: list[str] = []
-        for pano_id in competitive_ids + theme_supported_ids:
-            if pano_id not in priority_ids:
-                priority_ids.append(pano_id)
-        return {
-            "strategy": "prefer_semantics_within_directionally_competitive_or_theme_supported_set",
-            "best_target_relative_diff_deg": best_diff,
-            "competitive_diff_cutoff_deg": competitive_cutoff,
-            "theme_supported_diff_cutoff_deg": theme_supported_cutoff,
-            "directionally_competitive_target_pano_ids": competitive_ids,
-            "theme_supported_target_pano_ids": theme_supported_ids,
-            "priority_consideration_target_pano_ids": priority_ids,
-        }
-
-    @staticmethod
-    def _candidate_matches_subgoal_theme(candidate: CandidateAction, subgoal_theme_labels: list[str]) -> bool:
-        if not subgoal_theme_labels:
-            return False
-        spatial_context = candidate.metadata.get("spatial_context")
-        if not isinstance(spatial_context, dict):
-            return False
-        raw_theme_hints = spatial_context.get("theme_hints")
-        if not isinstance(raw_theme_hints, list):
-            return False
-        normalized_goal_labels = [label.lower() for label in subgoal_theme_labels]
-        for theme in raw_theme_hints:
-            if not isinstance(theme, dict):
-                continue
-            label = theme.get("label")
-            if not isinstance(label, str) or not label.strip():
-                continue
-            normalized_label = label.strip().lower()
-            for goal_label in normalized_goal_labels:
-                if goal_label in normalized_label or normalized_label in goal_label:
-                    return True
-        return False
 
     @staticmethod
     def _resolve_action(parsed: dict, candidates: list[CandidateAction]) -> CandidateAction | None:

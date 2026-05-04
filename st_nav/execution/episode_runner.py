@@ -40,7 +40,7 @@ class EpisodeRunner:
         manifest_paths: dict[str, str | Path] | None = None,
         start_room_id: str | None = None,
         start_heading: float = 330.0,
-        step_budget: int = 10,
+        step_budget: int = 15,
         render_api_key: str | None = None,
         render_output_dir: str | Path | None = None,
         render_heading_mode: str = "museum",
@@ -77,8 +77,6 @@ class EpisodeRunner:
                     "event": "step_start",
                     "step_index": step_index,
                     "current_pano_id": state.current_pano_id,
-                    "current_room_id": state.current_room_id,
-                    "grounded_room_id": state.grounded_room_id,
                 },
             )
             manifest_path = self._ensure_manifest(
@@ -129,6 +127,63 @@ class EpisodeRunner:
                 },
             )
             state = self.spatial_engine.update(state, observation)
+            self._emit_progress(
+                progress_callback,
+                {
+                    "event": "localization_done",
+                    "step_index": step_index,
+                    "current_pano_id": state.current_pano_id,
+                    "current_room_id": state.current_room_id,
+                    "grounded_room_id": state.grounded_room_id,
+                    "room_belief": dict(state.room_belief),
+                },
+            )
+            route = self.spatial_engine.route_to_goal(task, state)
+            subgoal_room_id = self.spatial_engine.next_subgoal_room_id(state, route)
+            current_room_context = self.spatial_engine.build_current_room_context(state, route)
+            visible_passages = self.spatial_engine.extract_visible_passages(state, observation)
+            if self.spatial_engine.goal_reached(task, state):
+                policy_output = PolicyOutput(
+                    action=None,
+                    rationale="Goal already reached after localization; no further action required.",
+                )
+                traces.append(
+                    EpisodeTrace(
+                        step_index=step_index,
+                        pano_id=state.current_pano_id,
+                        room_id=state.current_room_id,
+                        route=route,
+                        subgoal_room_id=subgoal_room_id,
+                        candidates=[],
+                        current_room_context=dict(current_room_context),
+                        visible_passages=list(visible_passages),
+                        view_contexts=[],
+                        observation=observation,
+                        policy_output=policy_output,
+                        policy_request=None,
+                        policy_response=None,
+                    )
+                )
+                self._emit_progress(
+                    progress_callback,
+                    {
+                        "event": "trace_recorded",
+                        "step_index": step_index,
+                        "trace": self._serialize_trace_payload(traces[-1]),
+                    },
+                )
+                self._emit_progress(
+                    progress_callback,
+                    {
+                        "event": "goal_reached",
+                        "step_index": step_index,
+                        "current_pano_id": state.current_pano_id,
+                        "current_room_id": state.current_room_id,
+                        "grounded_room_id": state.grounded_room_id,
+                    },
+                )
+                break
+
             reasoning_observation = self._build_reasoning_observation(
                 state=state,
                 base_observation=observation,
@@ -145,21 +200,6 @@ class EpisodeRunner:
                 render_graph_path=render_graph_path,
                 progress_callback=progress_callback,
             )
-            self._emit_progress(
-                progress_callback,
-                {
-                    "event": "localization_done",
-                    "step_index": step_index,
-                    "current_pano_id": state.current_pano_id,
-                    "current_room_id": state.current_room_id,
-                    "grounded_room_id": state.grounded_room_id,
-                    "room_belief": dict(state.room_belief),
-                },
-            )
-            route = self.spatial_engine.route_to_goal(task, state)
-            subgoal_room_id = self.spatial_engine.next_subgoal_room_id(state, route)
-            current_room_context = self.spatial_engine.build_current_room_context(state, route)
-            visible_passages = self.spatial_engine.extract_visible_passages(state, observation)
             view_contexts = self.spatial_engine.describe_view_contexts(reasoning_observation)
             candidates = self.spatial_engine.generate_candidates(
                 state,
@@ -229,19 +269,6 @@ class EpisodeRunner:
                 },
             )
 
-            if self.spatial_engine.goal_reached(task, state):
-                self._emit_progress(
-                    progress_callback,
-                    {
-                        "event": "goal_reached",
-                        "step_index": step_index,
-                        "current_pano_id": state.current_pano_id,
-                        "current_room_id": state.current_room_id,
-                        "grounded_room_id": state.grounded_room_id,
-                    },
-                )
-                break
-
             if policy_output.action is None:
                 self._emit_progress(
                     progress_callback,
@@ -255,6 +282,7 @@ class EpisodeRunner:
                 )
                 break
 
+            state.previous_pano_id = state.current_pano_id
             state.current_pano_id = policy_output.action.target_pano_id
             state.current_heading = policy_output.action.absolute_heading
             self._emit_progress(
@@ -602,11 +630,12 @@ class EpisodeRunner:
 
     @staticmethod
     def _serialize_trace_payload(trace: EpisodeTrace) -> JsonDict:
+        observation_metadata = trace.observation.metadata
         return {
             "step_index": trace.step_index,
             "pano_id": trace.pano_id,
             "room_id": trace.room_id,
-            "grounded_room_id": trace.observation.metadata.get("grounded_room_id"),
+            "grounded_room_id": observation_metadata.get("grounded_room_id"),
             "route": list(trace.route),
             "subgoal_room_id": trace.subgoal_room_id,
             "current_room_context": EpisodeRunner._clone_json(trace.current_room_context),
@@ -618,10 +647,29 @@ class EpisodeRunner:
             "observation": {
                 "pano_id": trace.observation.pano_id,
                 "heading_estimate": trace.observation.heading_estimate,
-                "localized_room_id": trace.observation.metadata.get("localized_room_id"),
-                "grounded_room_id": trace.observation.metadata.get("grounded_room_id"),
+                "localized_room_id": observation_metadata.get("localized_room_id"),
+                "grounded_room_id": observation_metadata.get("grounded_room_id"),
+                "transition_support": EpisodeRunner._clone_json(
+                    observation_metadata.get("transition_support")
+                    or observation_metadata.get("transition_room_support")
+                ),
+                "entity_observation_distribution": EpisodeRunner._clone_json(
+                    observation_metadata.get("entity_observation_distribution")
+                ),
+                "alignment_observation_distribution": EpisodeRunner._clone_json(
+                    observation_metadata.get("alignment_observation_distribution")
+                ),
+                "entity_transition_room_belief": EpisodeRunner._clone_json(
+                    observation_metadata.get("entity_transition_room_belief")
+                ),
+                "alignment_fusion_applied": observation_metadata.get("alignment_fusion_applied"),
+                "observation_likelihood": EpisodeRunner._clone_json(
+                    observation_metadata.get("observation_likelihood")
+                    or observation_metadata.get("observation_distribution")
+                ),
+                "room_belief": EpisodeRunner._clone_json(observation_metadata.get("room_belief")),
                 "spatial_alignment": EpisodeRunner._clone_json(
-                    trace.observation.metadata.get("spatial_alignment")
+                    observation_metadata.get("spatial_alignment")
                 ),
                 "entities": [
                     {

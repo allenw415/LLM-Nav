@@ -220,10 +220,16 @@ class ModelResponseClient:
                 with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
                     return self._normalize_payload(json.loads(response.read().decode("utf-8")))
             except TimeoutError as exc:
+                if attempt < MAX_HTTP_RETRIES:
+                    time.sleep(float(attempt))
+                    continue
                 raise TimeoutError(
                     f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
                 ) from exc
             except socket.timeout as exc:
+                if attempt < MAX_HTTP_RETRIES:
+                    time.sleep(float(attempt))
+                    continue
                 raise TimeoutError(
                     f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
                 ) from exc

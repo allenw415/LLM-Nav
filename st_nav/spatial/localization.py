@@ -595,6 +595,7 @@ class LLMRoomLocalizer(RoomLocalizer):
 
 class LLMSpatialAlignmentLocalizer(RoomLocalizer):
     ALIGNMENT_MODES = {"text_from_images", "direct_images"}
+    ENTITY_DISTRIBUTION_MODES = {"heuristic", "llm"}
 
     def __init__(
         self,
@@ -608,10 +609,12 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         api_kind: str | None = None,
         request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
+        entity_distribution_mode: str = "heuristic",
         same_floor_only: bool = True,
         self_transition_weight: float = 1.0,
         neighbor_transition_weight: float = 1.0,
         min_entity_likelihood: float = 0.05,
+        alignment_apply_gap_threshold: float = 0.10,
     ):
         super().__init__(
             room_graph=room_graph,
@@ -623,12 +626,16 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         )
         if alignment_mode not in self.ALIGNMENT_MODES:
             raise ValueError(f"Unsupported alignment_mode: {alignment_mode}")
+        if entity_distribution_mode not in self.ENTITY_DISTRIBUTION_MODES:
+            raise ValueError(f"Unsupported entity_distribution_mode: {entity_distribution_mode}")
         settings = resolve_model_environment(
             default_model="gpt-5-mini",
             default_api_base=DEFAULT_OPENAI_API_BASE,
             default_api_kind="responses",
         )
         self.alignment_mode = alignment_mode
+        self.entity_distribution_mode = entity_distribution_mode
+        self.alignment_apply_gap_threshold = float(alignment_apply_gap_threshold)
         self.model = model or settings.model_name or "gpt-5-mini"
         self.api_key = api_key or settings.api_key
         self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
@@ -637,6 +644,8 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         self.response_client = response_client
         self.last_extraction_request_body: dict | None = None
         self.last_extraction_response_payload: dict | None = None
+        self.last_entity_request_body: dict | None = None
+        self.last_entity_response_payload: dict | None = None
         self.last_alignment_request_body: dict | None = None
         self.last_alignment_response_payload: dict | None = None
         self.last_ego_spatial_context: dict | None = None
@@ -679,11 +688,21 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
             candidate_room_ids=candidate_room_ids,
             fallback_room_id=fallback_room_id,
         )
-        candidate_context_text = self._build_candidate_context_text(candidate_room_ids)
+        entity_observation_likelihood, entity_scores_by_room = self._compute_entity_observation_likelihood(
+            observation,
+            candidate_room_ids,
+            transition_support=transition_support,
+        )
+        entity_transition_room_belief = self._entity_transition_room_belief(
+            transition_support=transition_support,
+            entity_observation_likelihood=entity_observation_likelihood,
+        )
+        alignment_candidate_room_ids = self._alignment_candidate_room_ids(entity_transition_room_belief)
+        candidate_context_text = self._build_candidate_context_text(alignment_candidate_room_ids)
         manifest_path = self._manifest_path_from_observation(observation)
         cached = self._load_alignment_cache(
             manifest_path=manifest_path,
-            candidate_room_ids=candidate_room_ids,
+            candidate_room_ids=alignment_candidate_room_ids,
             ordered_views=ordered_views,
         )
         if cached is not None:
@@ -693,17 +712,22 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
                 ego_spatial_context = None
             self.last_extraction_request_body = None
             self.last_extraction_response_payload = None
+            self.last_entity_request_body = None
+            self.last_entity_response_payload = None
             self.last_alignment_request_body = None
             self.last_alignment_response_payload = self._clone_json(cached.get("alignment_payload"))
             self.last_ego_spatial_context = self._clone_json(ego_spatial_context)
-            entity_observation_likelihood, entity_scores_by_room = self._observation_scores_from_entities(
-                observation,
+            alignment_observation_likelihood = self._observation_scores_from_distribution(
+                parsed,
                 candidate_room_ids,
+                fallback_room_ids=alignment_candidate_room_ids,
             )
-            alignment_observation_likelihood = self._observation_scores_from_distribution(parsed, candidate_room_ids)
-            observation_likelihood = self._fuse_observation_likelihoods(
-                entity_observation_likelihood,
-                alignment_observation_likelihood,
+            observation_likelihood, entity_transition_room_belief, alignment_fusion_applied = (
+                self._fuse_observation_likelihoods(
+                    transition_support=transition_support,
+                    entity_observation_likelihood=entity_observation_likelihood,
+                    alignment_observation_likelihood=alignment_observation_likelihood,
+                )
             )
             return self._build_localization_result(
                 candidate_room_ids=candidate_room_ids,
@@ -711,6 +735,8 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
                 observation_likelihood=observation_likelihood,
                 entity_observation_likelihood=entity_observation_likelihood,
                 alignment_observation_likelihood=alignment_observation_likelihood,
+                entity_transition_room_belief=entity_transition_room_belief,
+                alignment_fusion_applied=alignment_fusion_applied,
                 entity_scores_by_room=entity_scores_by_room,
                 parsed=parsed,
                 candidate_context_text=candidate_context_text,
@@ -730,7 +756,7 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
             ego_spatial_context = self._format_ego_spatial_context(extracted, ordered_views)
             self.last_ego_spatial_context = self._clone_json(ego_spatial_context)
             alignment_request = self._build_alignment_text_request_body(
-                candidate_room_ids=candidate_room_ids,
+                candidate_room_ids=alignment_candidate_room_ids,
                 candidate_context_text=candidate_context_text,
                 ego_context_text=str(ego_spatial_context.get("text", "")),
                 ordered_views=ordered_views,
@@ -740,7 +766,7 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
             self.last_extraction_response_payload = None
             self.last_ego_spatial_context = None
             alignment_request = self._build_alignment_image_request_body(
-                candidate_room_ids=candidate_room_ids,
+                candidate_room_ids=alignment_candidate_room_ids,
                 candidate_context_text=candidate_context_text,
                 ordered_views=ordered_views,
             )
@@ -751,20 +777,23 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         parsed = self._parse_output_payload(alignment_payload)
         self._write_alignment_cache(
             manifest_path=manifest_path,
-            candidate_room_ids=candidate_room_ids,
+            candidate_room_ids=alignment_candidate_room_ids,
             ordered_views=ordered_views,
             ego_spatial_context=ego_spatial_context,
             alignment_payload=alignment_payload,
             parsed_alignment=parsed,
         )
-        entity_observation_likelihood, entity_scores_by_room = self._observation_scores_from_entities(
-            observation,
+        alignment_observation_likelihood = self._observation_scores_from_distribution(
+            parsed,
             candidate_room_ids,
+            fallback_room_ids=alignment_candidate_room_ids,
         )
-        alignment_observation_likelihood = self._observation_scores_from_distribution(parsed, candidate_room_ids)
-        observation_likelihood = self._fuse_observation_likelihoods(
-            entity_observation_likelihood,
-            alignment_observation_likelihood,
+        observation_likelihood, entity_transition_room_belief, alignment_fusion_applied = (
+            self._fuse_observation_likelihoods(
+                transition_support=transition_support,
+                entity_observation_likelihood=entity_observation_likelihood,
+                alignment_observation_likelihood=alignment_observation_likelihood,
+            )
         )
         return self._build_localization_result(
             candidate_room_ids=candidate_room_ids,
@@ -772,6 +801,8 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
             observation_likelihood=observation_likelihood,
             entity_observation_likelihood=entity_observation_likelihood,
             alignment_observation_likelihood=alignment_observation_likelihood,
+            entity_transition_room_belief=entity_transition_room_belief,
+            alignment_fusion_applied=alignment_fusion_applied,
             entity_scores_by_room=entity_scores_by_room,
             parsed=parsed,
             candidate_context_text=candidate_context_text,
@@ -786,6 +817,8 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         observation_likelihood: dict[str, float],
         entity_observation_likelihood: dict[str, float],
         alignment_observation_likelihood: dict[str, float],
+        entity_transition_room_belief: dict[str, float],
+        alignment_fusion_applied: bool,
         entity_scores_by_room: dict[str, list[tuple[str, float]]],
         parsed: dict,
         candidate_context_text: str,
@@ -838,17 +871,115 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
             "observation_likelihood": observation_likelihood,
             "entity_observation_distribution": entity_observation_likelihood,
             "alignment_observation_distribution": alignment_observation_likelihood,
+            "entity_transition_room_belief": entity_transition_room_belief,
+            "alignment_fusion_applied": alignment_fusion_applied,
+            "entity_distribution_mode": self.entity_distribution_mode,
             "evidence": evidence[:3],
             "summary": summary,
             "spatial_alignment": spatial_alignment,
             "ego_spatial_context": ego_spatial_context,
         }
 
+    def _compute_entity_observation_likelihood(
+        self,
+        observation: Observation,
+        candidate_room_ids: list[str],
+        *,
+        transition_support: dict[str, float],
+    ) -> tuple[dict[str, float], dict[str, list[tuple[str, float]]]]:
+        entity_scores_by_room = self._entity_scores_by_room(observation, candidate_room_ids)
+        if self.entity_distribution_mode != "llm" or not observation.entities:
+            return self._observation_scores_from_entities(observation, candidate_room_ids)[0], entity_scores_by_room
+
+        entity_request = self._build_entity_localization_request_body(
+            observation=observation,
+            candidate_room_ids=candidate_room_ids,
+            transition_support=transition_support,
+        )
+        self.last_entity_request_body = self._clone_json(entity_request)
+        entity_payload = self._create_response(entity_request)
+        self.last_entity_response_payload = self._clone_json(entity_payload)
+        parsed = self._parse_output_payload(entity_payload)
+        return self._observation_scores_from_llm_distribution(parsed, candidate_room_ids), entity_scores_by_room
+
+    def _entity_scores_by_room(
+        self,
+        observation: Observation,
+        candidate_room_ids: list[str],
+    ) -> dict[str, list[tuple[str, float]]]:
+        if not observation.entities:
+            return {room_id: [] for room_id in candidate_room_ids}
+        scores: dict[str, list[tuple[str, float]]] = {}
+        for room_id in candidate_room_ids:
+            entity_scores = []
+            for entity in observation.entities:
+                _, match_score = self._entity_likelihood(room_id, entity)
+                entity_scores.append((entity.name, match_score))
+            scores[room_id] = sorted(entity_scores, key=lambda item: (-item[1], item[0].lower()))
+        return scores
+
+    def _build_entity_localization_request_body(
+        self,
+        *,
+        observation: Observation,
+        candidate_room_ids: list[str],
+        transition_support: dict[str, float],
+    ) -> dict:
+        candidates = []
+        for room_id in candidate_room_ids:
+            node = self.room_graph.get(room_id, {})
+            entry = self.grounding_index.room_entry(room_id) or {}
+            candidates.append(
+                {
+                    "room_id": room_id,
+                    "transition_support": float(transition_support.get(room_id, 0.0)),
+                    "title": node.get("title"),
+                    "category": node.get("category"),
+                    "aliases": list(node.get("aliases") or []) + list(entry.get("aliases") or []),
+                    "anchor_entities": list(entry.get("anchor_entities") or []),
+                }
+            )
+        observation_entities = [
+            {
+                "name": entity.name,
+                "kind": entity.kind,
+                "confidence": float(entity.confidence),
+                "source_views": list(entity.metadata.get("source_views", [])) or [entity.source_view],
+            }
+            for entity in observation.entities
+        ]
+        return {
+            "model": self.model,
+            "instructions": build_localization_instructions(),
+            "input": build_localization_input(
+                observation_entities=observation_entities,
+                candidates=candidates,
+            ),
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "museum_localization",
+                    "strict": True,
+                    "schema": build_localization_schema(candidate_room_ids),
+                }
+            },
+        }
+
     def _fuse_observation_likelihoods(
         self,
+        *,
+        transition_support: dict[str, float],
         entity_observation_likelihood: dict[str, float],
         alignment_observation_likelihood: dict[str, float],
-    ) -> dict[str, float]:
+    ) -> tuple[dict[str, float], dict[str, float], bool]:
+        entity_transition_room_belief = self._entity_transition_room_belief(
+            transition_support=transition_support,
+            entity_observation_likelihood=entity_observation_likelihood,
+        )
+        if not self._should_apply_alignment(entity_transition_room_belief):
+            return dict(entity_observation_likelihood), entity_transition_room_belief, False
+
         room_ids = list(entity_observation_likelihood.keys())
         fused_scores = {
             room_id: float(entity_observation_likelihood.get(room_id, 0.0))
@@ -857,8 +988,64 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         }
         normalized = self._normalize_scores(fused_scores)
         if any(value > 0.0 for value in normalized.values()):
-            return normalized
-        return dict(entity_observation_likelihood)
+            return normalized, entity_transition_room_belief, True
+        return dict(entity_observation_likelihood), entity_transition_room_belief, False
+
+    @staticmethod
+    def _ranked_room_ids(room_belief: dict[str, float]) -> list[str]:
+        return [
+            room_id
+            for room_id, _ in sorted(
+                (
+                    (room_id, float(probability))
+                    for room_id, probability in room_belief.items()
+                    if isinstance(probability, (int, float))
+                ),
+                key=lambda item: (-item[1], item[0]),
+            )
+        ]
+
+    def _entity_transition_room_belief(
+        self,
+        *,
+        transition_support: dict[str, float],
+        entity_observation_likelihood: dict[str, float],
+    ) -> dict[str, float]:
+        entity_transition_scores = {
+            room_id: float(transition_support.get(room_id, 0.0))
+            * float(entity_observation_likelihood.get(room_id, 0.0))
+            for room_id in entity_observation_likelihood.keys()
+        }
+        return self._normalize_scores(entity_transition_scores)
+
+    def _alignment_candidate_room_ids(self, entity_transition_room_belief: dict[str, float]) -> list[str]:
+        ranked_room_ids = self._ranked_room_ids(entity_transition_room_belief)
+        if not ranked_room_ids:
+            return []
+        return ranked_room_ids[:3]
+
+    def _should_apply_alignment(self, entity_transition_room_belief: dict[str, float]) -> bool:
+        ranked_room_ids = self._ranked_room_ids(entity_transition_room_belief)
+        if len(ranked_room_ids) < 2:
+            return False
+        top_1_room_id, top_2_room_id = ranked_room_ids[:2]
+        top_1 = float(entity_transition_room_belief.get(top_1_room_id, 0.0))
+        top_2 = float(entity_transition_room_belief.get(top_2_room_id, 0.0))
+        if top_1 <= 0.0:
+            return False
+        if self._room_pair_has_high_semantic_overlap(top_1_room_id, top_2_room_id):
+            return True
+        return (top_1 - top_2) <= self.alignment_apply_gap_threshold
+
+    def _room_pair_has_high_semantic_overlap(self, room_a_id: str, room_b_id: str) -> bool:
+        if not room_a_id or not room_b_id:
+            return False
+        signature_a = set(_tokenize(" ".join(self._build_room_signature(room_a_id))))
+        signature_b = set(_tokenize(" ".join(self._build_room_signature(room_b_id))))
+        if not signature_a or not signature_b:
+            return False
+        overlap = len(signature_a & signature_b) / max(1, len(signature_a | signature_b))
+        return overlap >= 0.5
 
     def _load_alignment_cache(
         self,
@@ -1150,9 +1337,39 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         }
 
     @staticmethod
-    def _observation_scores_from_distribution(parsed: dict, candidate_room_ids: list[str]) -> dict[str, float]:
+    def _observation_scores_from_distribution(
+        parsed: dict,
+        candidate_room_ids: list[str],
+        *,
+        fallback_room_ids: list[str] | None = None,
+    ) -> dict[str, float]:
         scores = {room_id: 0.0 for room_id in candidate_room_ids}
         raw_scores = parsed.get("room_distribution")
+        if isinstance(raw_scores, list):
+            for record in raw_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, float(score))
+        normalized_scores = RoomLocalizer._normalize_scores(scores)
+        if any(value > 0.0 for value in normalized_scores.values()):
+            return normalized_scores
+        if fallback_room_ids:
+            fallback_set = {room_id for room_id in fallback_room_ids if room_id in scores}
+            if fallback_set:
+                uniform = 1.0 / len(fallback_set)
+                return {room_id: (uniform if room_id in fallback_set else 0.0) for room_id in candidate_room_ids}
+        uniform = 1.0 / len(candidate_room_ids)
+        return {room_id: uniform for room_id in candidate_room_ids}
+
+    @staticmethod
+    def _observation_scores_from_llm_distribution(parsed: dict, candidate_room_ids: list[str]) -> dict[str, float]:
+        scores = {room_id: 0.0 for room_id in candidate_room_ids}
+        raw_scores = parsed.get("room_distribution")
+        if not isinstance(raw_scores, list):
+            raw_scores = parsed.get("room_scores")
         if isinstance(raw_scores, list):
             for record in raw_scores:
                 if not isinstance(record, dict):

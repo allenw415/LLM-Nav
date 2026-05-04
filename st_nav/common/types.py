@@ -104,6 +104,7 @@ class Observation:
 @dataclass
 class BeliefState:
     current_pano_id: str
+    previous_pano_id: str | None = None
     current_room_id: str | None = None
     grounded_room_id: str | None = None
     current_heading: float = 0.0

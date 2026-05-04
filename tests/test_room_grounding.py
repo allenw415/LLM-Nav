@@ -573,6 +573,34 @@ class RoomGroundingTests(unittest.TestCase):
         self.assertEqual(compact["mappings"], {"pano-1": "Room 4", "pano-2": "Room 8"})
         self.assertEqual(compact["sources"], {"pano-1": "gemini", "pano-2": "manual:accepted"})
 
+    def test_build_compact_pano_room_mapping_preserves_manual_null_labels(self) -> None:
+        compact = build_compact_pano_room_mapping(
+            [
+                {"pano_id": "pano-1", "predicted_room_id": "Room 4"},
+                {"pano_id": "pano-2", "predicted_room_id": "Room 7"},
+            ],
+            manual_records=[
+                {"pano_id": "pano-1", "manual_status": "accepted", "manual_room_id": None},
+                {"pano_id": "pano-2", "manual_status": "accepted", "manual_room_id": "null"},
+            ],
+        )
+
+        self.assertEqual(compact["mappings"], {"pano-1": "null", "pano-2": "null"})
+        self.assertEqual(compact["sources"], {"pano-1": "manual:accepted", "pano-2": "manual:accepted"})
+
+    def test_build_compact_pano_room_mapping_strips_room_id_whitespace(self) -> None:
+        compact = build_compact_pano_room_mapping(
+            [
+                {"pano_id": "pano-1", "predicted_room_id": " Room 4 "},
+                {"pano_id": "pano-2", "predicted_room_id": "Room 7"},
+            ],
+            manual_records=[
+                {"pano_id": "pano-2", "manual_status": "accepted", "manual_room_id": " Room 8 "},
+            ],
+        )
+
+        self.assertEqual(compact["mappings"], {"pano-1": "Room 4", "pano-2": "Room 8"})
+
     def test_aggregate_gemini_usage_from_traces_sums_usage_metadata(self) -> None:
         usage = aggregate_gemini_usage_from_traces(
             [

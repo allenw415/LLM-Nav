@@ -362,6 +362,7 @@ def main() -> None:
 
     output = crawl_with_config(crawl_config)
     output_path = Path(run_config.output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
         json.dumps(output, ensure_ascii=False, indent=2),
         encoding="utf-8",

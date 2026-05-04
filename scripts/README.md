@@ -16,6 +16,10 @@ scripts/
 Data and artifact preparation scripts. These are not runtime navigation entrypoints.
 
 - `build_british_museum_artifacts.py`: build normalized room graph, pano graph, and grounding template artifacts
+- `diagnose_pano_seed_coverage.py`: inspect nearest existing pano nodes around a candidate room seed coordinate
+- `export_pano_visualization.py`: export pano graph viewer data, GeoJSON, Gephi/GraphML, Graphviz DOT, and publication SVGs
+- `merge_pano_seed_crawl.py`: merge supplemental room-seed Street View crawls into an existing raw floor crawl
+- `rebuild_pano_room_grounding.py`: rebuild compact pano-to-room mapping from reviewed batch files
 - `batch_floor_room_grounding.py`: ground arbitrary floor panos in fixed-size batches
 - `batch_room_grounding.py`: batch-generate pano-to-room grounding candidates and review files
 - `pano2room_grounding.py`: run one-off pano-to-room grounding while operating on grounding artifacts
@@ -33,6 +37,43 @@ Args:
 - `--explicit-map-path`
 - `--pano-graph-path`
 - `--output-dir`
+
+`diagnose_pano_seed_coverage.py`
+
+```bash
+python3 scripts/data/diagnose_pano_seed_coverage.py --lat 51.5189169422846 --lng -0.12809724778801693 --floor 0
+```
+
+Use this before a supplemental crawl to distinguish missing Street View coverage
+from missing room grounding. It prints the nearest current pano nodes, distance,
+room label, and grounding source.
+
+Args:
+- `--lat`
+- `--lng`
+- `--floor`
+- `--limit`
+- `--pano-graph-path`
+- `--grounding-path`
+
+`merge_pano_seed_crawl.py`
+
+```bash
+python3 scripts/data/merge_pano_seed_crawl.py \
+  --incoming-raw-path artifacts/pano_seed_crawls/streetview_panos_0_room18_seed.json
+```
+
+The default base is `dataset/sites/british_museum/pano_graph/raw/streetview_panos_0_1.json`
+and the default preview output is `artifacts/pano_seed_crawls/streetview_panos_0_merged.preview.json`.
+Inspect the summary first; if the added pano count looks correct, re-run with
+`--overwrite-base`, then rebuild grouped, processed, normalized, grounding, and
+visualization artifacts.
+
+Args:
+- `--base-raw-path`
+- `--incoming-raw-path` (repeatable)
+- `--output-path`
+- `--overwrite-base`
 
 `pano2room_grounding.py`
 
@@ -66,6 +107,38 @@ Args:
 - `--candidate-scope` (`same-floor | all`)
 - `--debug-trace`
 - `--full-output`
+
+`export_pano_visualization.py`
+
+```bash
+python3 scripts/data/export_pano_visualization.py
+python3 -m http.server 8000 --directory artifacts/pano_visualization/british_museum
+```
+
+Open `http://127.0.0.1:8000/` after export. The viewer reads `viewer_data.json`
+and can optionally load Google Street View when `.env.js` defines
+`window.GMAPS_API_KEY = "..."`.
+
+Default outputs go under `artifacts/pano_visualization/british_museum/`:
+- `viewer_data.json`
+- `pano_nodes.geojson`
+- `pano_edges.geojson`
+- `pano_graph.gexf`
+- `pano_graph.graphml`
+- `pano_graph_floor0.dot`
+- `publication/floor_*_overview.svg`
+
+Args:
+- `--artifacts-dir`
+- `--pano-graph-path`
+- `--room-graph-path`
+- `--grounding-path`
+- `--output-dir`
+- `--dot-floor`
+- `--dot-room-id` (repeatable)
+- `--route-source-pano-id`
+- `--route-target-pano-id`
+- `--copy-viewer` / `--no-copy-viewer`
 
 `batch_floor_room_grounding.py`
 
@@ -146,6 +219,21 @@ Args:
 - `--candidate-scope`
 - `--dry-run`
 - `--debug-trace`
+
+`rebuild_pano_room_grounding.py`
+
+```bash
+python3 scripts/data/rebuild_pano_room_grounding.py
+```
+
+Use this after editing `room_grounding_batches/*.manual.json`. It rebuilds
+`dataset/sites/british_museum/normalized/pano_room_grounding.json` without
+rerunning model grounding.
+
+Args:
+- `--artifacts-dir`
+- `--batch-dir`
+- `--output-path`
 
 `summarize_room_grounding.py`
 
