@@ -66,8 +66,28 @@
         "name": "Room 6"
       },
       {
+        "direction": "left",
+        "name": "Room 11"
+      },
+      {
         "direction": "right",
         "name": ["Shop", "Vistor and Member cloakroom"]
+      }
+    ]
+  },
+  "Room 11": {
+    "name": "Room 11",
+    "Level": 0,
+    "category": "Ancient Greece and Rome",
+    "title": "Greece: Cycladic Islands",
+    "links": [
+      {
+        "direction": "right",
+        "name": "Room 6 bottom"
+      },
+      {
+        "direction": "left",
+        "name": "Room 12"
       }
     ]
   },
@@ -83,7 +103,7 @@
       },
       {
         "direction": "right",
-        "name": "Room 6 bottom"
+        "name": "Room 11"
       },
       {
         "direction": "left",
@@ -316,6 +336,34 @@
       {
         "direction": "left",
         "name": "Room 17"
+      }
+    ]
+  },
+  "Room 29a": {
+    "name": "Room 29a",
+    "Level": 0,
+    "category": "Asia",
+    "title": "India",
+    "links": [
+      {
+        "direction": "right",
+        "name": "Room 29b"
+      }
+    ]
+  },
+  "Room 29b": {
+    "name": "Room 29b",
+    "Level": 0,
+    "category": "Asia",
+    "title": "India",
+    "links": [
+      {
+        "direction": "left",
+        "name": "Room 29a"
+      },
+      {
+        "direction": "right",
+        "name": "Room 24"
       }
     ]
   },
@@ -565,6 +613,10 @@
     "category": "Themes",
     "title": ["Living and Dying", "The Wellcome Trust Gallery"],
     "links": [
+      {
+        "direction": "left",
+        "name": "Room 29b"
+      },
       {
         "direction": "right",
         "name": "Room 26"

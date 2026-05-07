@@ -26,6 +26,7 @@ from st_nav import (
     RenderedView,
     RoomLocalizer,
     SpatialEngine,
+    VisualObservationLocalizer,
     build_grounding_template,
     load_dotenv,
     resolve_model_environment,
@@ -54,7 +55,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--current-heading", type=float, default=330.0)
     parser.add_argument(
         "--localizer",
-        choices=["bayesian-filter", "heuristic", "llm", "spatial-alignment-a", "spatial-alignment-b", "split-independent"],
+        choices=[
+            "bayesian-filter",
+            "heuristic",
+            "llm",
+            "visual-vlm",
+            "spatial-alignment-a",
+            "spatial-alignment-b",
+            "split-independent",
+        ],
         default="bayesian-filter",
     )
     parser.add_argument("--bayesian-localizer", choices=["heuristic", "llm"], default="llm")
@@ -241,7 +250,11 @@ def build_manifest_demo_inputs(
         raise RuntimeError(f"Missing grounding template: {grounding_path}")
     grounding = load_json(grounding_path)
 
-    pipeline = PerceptionPipeline(pano_graph=pano_graph)
+    pipeline = PerceptionPipeline(
+        pano_graph=pano_graph,
+        room_graph=room_graph,
+        grounding_index=GroundingIndex(grounding),
+    )
     observation = pipeline.observe_from_manifest(manifest_path, current_heading=current_heading)
     description = f"Manifest-based demo from cached detections: {manifest_path}"
     return room_graph, pano_graph, grounding, observation, description
@@ -300,9 +313,19 @@ def build_perception_json_demo_inputs(
                     confidence=float(confidence),
                     kind=kind,
                     source_view=normalized_source_views[0] if len(normalized_source_views) == 1 else "multiview",
+                    location_scope=(
+                        record.get("location_scope")
+                        if record.get("location_scope") in {"inside", "outside", "unknown"}
+                        else "inside"
+                    ),
                     metadata={
                         "source_views": normalized_source_views,
                         "view_count": len(normalized_source_views),
+                        "location_scope": (
+                            record.get("location_scope")
+                            if record.get("location_scope") in {"inside", "outside", "unknown"}
+                            else "inside"
+                        ),
                     },
                 )
             )
@@ -314,6 +337,36 @@ def build_perception_json_demo_inputs(
         "lng": payload.get("lng", manifest_metadata.get("lng")),
         "source": "perception-json",
     }
+    visual_localization = payload.get("visual_localization")
+    if isinstance(visual_localization, dict):
+        metadata["visual_localization"] = dict(visual_localization)
+    candidate_room_ids = payload.get("candidate_room_ids")
+    if isinstance(candidate_room_ids, list):
+        metadata["candidate_room_ids"] = [value for value in candidate_room_ids if isinstance(value, str)]
+    metadata["inside_entities"] = [
+        {
+            "name": entity.name,
+            "kind": entity.kind,
+            "confidence": entity.confidence,
+            "source_view": entity.source_view,
+            "source_views": entity.metadata.get("source_views"),
+            "location_scope": entity.location_scope,
+        }
+        for entity in entities
+        if entity.location_scope == "inside"
+    ]
+    metadata["outside_entities"] = [
+        {
+            "name": entity.name,
+            "kind": entity.kind,
+            "confidence": entity.confidence,
+            "source_view": entity.source_view,
+            "source_views": entity.metadata.get("source_views"),
+            "location_scope": entity.location_scope,
+        }
+        for entity in entities
+        if entity.location_scope == "outside"
+    ]
     views = [
         RenderedView(
             label=f"view_{index}",
@@ -355,7 +408,7 @@ def format_entity_lines(observation: Observation) -> list[str]:
         return lines
     for entity in observation.entities:
         lines.append(
-            f"  {entity.name} | kind={entity.kind} | confidence={entity.confidence:.2f} | source={entity.source_view}"
+            f"  {entity.name} | kind={entity.kind} | confidence={entity.confidence:.2f} | scope={entity.location_scope} | source={entity.source_view}"
         )
     return lines
 
@@ -586,6 +639,12 @@ def main() -> int:
             grounding_index=grounding_index,
         )
 
+    def build_visual_localizer():
+        return VisualObservationLocalizer(
+            room_graph=room_graph,
+            grounding_index=grounding_index,
+        )
+
     def build_spatial_alignment_localizer(mode: str):
         return LLMSpatialAlignmentLocalizer(
             room_graph=room_graph,
@@ -605,6 +664,8 @@ def main() -> int:
         localizer = build_bayesian_localizer("heuristic")
     elif args.localizer == "llm":
         localizer = build_bayesian_localizer("llm")
+    elif args.localizer == "visual-vlm":
+        localizer = build_visual_localizer()
     elif args.localizer == "spatial-alignment-a":
         localizer = build_spatial_alignment_localizer("a")
         observation_only = True
@@ -659,9 +720,13 @@ def main() -> int:
                     "kind": entity.kind,
                     "confidence": entity.confidence,
                     "source_view": entity.source_view,
+                    "location_scope": entity.location_scope,
                 }
                 for entity in observation.entities
             ],
+            "inside_entities": list(observation.metadata.get("inside_entities", [])),
+            "outside_entities": list(observation.metadata.get("outside_entities", [])),
+            "visual_localization": observation.metadata.get("visual_localization"),
         },
         "localizer": summary,
     }

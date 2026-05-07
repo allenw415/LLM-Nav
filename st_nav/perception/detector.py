@@ -9,9 +9,13 @@ from typing import Callable
 from ..common.env import resolve_model_environment
 from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
+    ENTITY_LOCATION_SCOPES,
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
+    build_visual_detection_localization_input,
+    build_visual_detection_localization_instructions,
+    build_visual_detection_localization_schema,
 )
 from ..common.types import EntityDetection, Observation, RenderedView, ViewDetection
 from .renderer import PanoramaRenderer, normalize_heading
@@ -36,6 +40,8 @@ class ViewDetector:
         request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
         use_detection_files: bool = True,
+        room_graph: dict[str, dict] | None = None,
+        grounding_index=None,
     ):
         settings = resolve_model_environment(
             default_model="gpt-5-mini",
@@ -49,7 +55,11 @@ class ViewDetector:
         self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 180.0))
         self.response_client = response_client
         self.use_detection_files = use_detection_files
+        self.room_graph = room_graph
+        self.grounding_index = grounding_index
         self.last_traces: list[dict] = []
+        self.last_visual_localization: dict | None = None
+        self.last_candidate_room_ids: list[str] = []
         self.model_client = ModelResponseClient(
             provider=settings.provider,
             api_key=self.api_key,
@@ -64,11 +74,18 @@ class ViewDetector:
     def detect(self, manifest_path: str | Path) -> list[ViewDetection]:
         manifest_path = Path(manifest_path)
         self.last_traces = []
+        self.last_visual_localization = None
+        self.last_candidate_room_ids = []
         detection_path = manifest_path.with_name(f"{manifest_path.stem}_detections.json")
         trace_path = manifest_path.with_name(f"{manifest_path.stem}_detections_trace.json")
         if self.use_detection_files and detection_path.exists():
-            self.last_traces = self._load_trace_file(trace_path)
-            return self._load_detection_file(detection_path)
+            manifest = self._load_manifest_for_cache_check(manifest_path)
+            if (
+                self._detection_cache_matches_current_candidates(detection_path, manifest)
+                or not self.model_client.is_configured()
+            ):
+                self.last_traces = self._load_trace_file(trace_path)
+                return self._load_detection_file(detection_path)
 
         if not self.model_client.is_configured():
             return []
@@ -81,32 +98,60 @@ class ViewDetector:
 
     def _load_detection_file(self, detection_path: Path) -> list[ViewDetection]:
         payload = json.loads(detection_path.read_text(encoding="utf-8"))
+        metadata = self._metadata_from_detection_payload(payload)
+        self.last_visual_localization = metadata.get("visual_localization")
+        self.last_candidate_room_ids = list(metadata.get("candidate_room_ids", []))
         grouped: dict[str, ViewDetection] = {}
         for record in payload.get("entities", []):
             if not isinstance(record, dict):
                 continue
             capture_label = record.get("capture_label")
             if isinstance(capture_label, str) and capture_label:
-                detection = grouped.setdefault(capture_label, ViewDetection(capture_label=capture_label))
+                detection = grouped.setdefault(capture_label, ViewDetection(capture_label=capture_label, metadata=dict(metadata)))
                 entity = self._entity_from_record(record, default_source_view=capture_label)
                 if entity is not None:
                     detection.entities.append(entity)
                 continue
 
-            detection = grouped.setdefault("multiview", ViewDetection(capture_label="multiview"))
+            detection = grouped.setdefault("multiview", ViewDetection(capture_label="multiview", metadata=dict(metadata)))
             entity = self._entity_from_record(record, default_source_view="multiview")
             if entity is not None:
                 detection.entities.append(entity)
+        if not grouped and metadata:
+            grouped["multiview"] = ViewDetection(capture_label="multiview", metadata=dict(metadata))
         return list(grouped.values())
+
+    def _detection_cache_matches_current_candidates(self, detection_path: Path, manifest: dict | None) -> bool:
+        if manifest is None:
+            return True
+        expected_candidate_room_ids = self._candidate_room_ids(manifest)
+        if not expected_candidate_room_ids:
+            return True
+        try:
+            payload = json.loads(detection_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        cached_candidate_room_ids = payload.get("candidate_room_ids")
+        return cached_candidate_room_ids == expected_candidate_room_ids
+
+    @staticmethod
+    def _load_manifest_for_cache_check(manifest_path: Path) -> dict | None:
+        try:
+            payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return None
+        return payload if isinstance(payload, dict) else None
 
     def _write_detection_file(self, detection_path: Path, view_detections: list[ViewDetection]) -> None:
         records: list[dict] = []
+        metadata = self._merged_detection_metadata(view_detections)
         for view_detection in view_detections:
             for entity in view_detection.entities:
                 record = {
                     "name": entity.name,
                     "confidence": entity.confidence,
                     "kind": entity.kind,
+                    "location_scope": entity.location_scope,
                 }
                 source_views = entity.metadata.get("source_views")
                 if isinstance(source_views, list) and source_views:
@@ -119,10 +164,12 @@ class ViewDetector:
                         record[key] = value
                 records.append(record)
 
-        detection_path.write_text(
-            json.dumps({"entities": records}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        payload = {"cache_version": 2, "entities": records}
+        if metadata.get("candidate_room_ids"):
+            payload["candidate_room_ids"] = list(metadata["candidate_room_ids"])
+        if isinstance(metadata.get("visual_localization"), dict):
+            payload["visual_localization"] = dict(metadata["visual_localization"])
+        detection_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _write_trace_file(self, trace_path: Path) -> None:
         trace_path.write_text(
@@ -152,7 +199,13 @@ class ViewDetector:
         if not captures:
             return []
 
-        request_body = self._build_request_body(captures)
+        candidate_room_ids = self._candidate_room_ids(manifest)
+        candidates = self._candidate_records(candidate_room_ids)
+        request_body = (
+            self._build_visual_request_body(captures, candidates=candidates)
+            if candidates
+            else self._build_request_body(captures)
+        )
         payload = self._create_response(request_body)
         self.last_traces.append(
             {
@@ -170,7 +223,18 @@ class ViewDetector:
             entity = self._entity_from_record(record, default_source_view="multiview")
             if entity is not None:
                 entities.append(entity)
-        return [ViewDetection(capture_label="multiview", entities=entities)] if entities else []
+        metadata: dict = {}
+        visual_localization = parsed.get("visual_localization")
+        if isinstance(visual_localization, dict):
+            metadata["visual_localization"] = self._normalize_visual_localization(
+                visual_localization,
+                candidate_room_ids=candidate_room_ids,
+            )
+            self.last_visual_localization = dict(metadata["visual_localization"])
+        if candidate_room_ids:
+            metadata["candidate_room_ids"] = list(candidate_room_ids)
+            self.last_candidate_room_ids = list(candidate_room_ids)
+        return [ViewDetection(capture_label="multiview", entities=entities, metadata=metadata)] if entities or metadata else []
 
     def _build_request_body(self, captures: list[dict]) -> dict:
         content = [{"type": "input_text", "text": build_view_detection_input(captures)}]
@@ -210,12 +274,58 @@ class ViewDetector:
             },
         }
 
+    def _build_visual_request_body(self, captures: list[dict], *, candidates: list[dict]) -> dict:
+        content = [
+            {
+                "type": "input_text",
+                "text": build_visual_detection_localization_input(captures=captures, candidates=candidates),
+            }
+        ]
+        for capture in captures:
+            label = str(capture.get("label", "unknown"))
+            heading = capture.get("heading")
+            heading_text = f"{float(heading):.1f} deg" if isinstance(heading, (int, float)) else "unknown heading"
+            content.extend(
+                [
+                    {
+                        "type": "input_text",
+                        "text": f"View label: {label}. Heading: {heading_text}.",
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": self._image_to_data_url(Path(str(capture["path"]))),
+                        "detail": "high",
+                    },
+                ]
+            )
+        room_ids = [str(candidate["room_id"]) for candidate in candidates]
+        return {
+            "model": self.model,
+            "instructions": build_visual_detection_localization_instructions(),
+            "input": [
+                {
+                    "role": "user",
+                    "content": content,
+                }
+            ],
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "visual_detection_localization",
+                    "strict": True,
+                    "schema": build_visual_detection_localization_schema(room_ids),
+                }
+            },
+        }
+
     @staticmethod
     def _entity_from_record(record: dict, *, default_source_view: str) -> EntityDetection | None:
         name = record.get("name")
         kind = record.get("kind")
         confidence = record.get("confidence")
         source_views = record.get("source_views")
+        location_scope = record.get("location_scope")
 
         if not isinstance(name, str) or not name:
             return None
@@ -223,6 +333,8 @@ class ViewDetector:
             kind = "other"
         if not isinstance(confidence, (int, float)):
             confidence = 0.0
+        if location_scope not in ENTITY_LOCATION_SCOPES:
+            location_scope = "inside"
 
         normalized_source_views: list[str] = []
         if isinstance(source_views, list):
@@ -243,13 +355,101 @@ class ViewDetector:
         }
         metadata["source_views"] = normalized_source_views
         metadata["view_count"] = len(normalized_source_views)
+        metadata["location_scope"] = location_scope
         return EntityDetection(
             name=name,
             confidence=float(confidence),
             kind=kind,
             source_view=normalized_source_views[0] if len(normalized_source_views) == 1 else "multiview",
+            location_scope=location_scope,
             metadata=metadata,
         )
+
+    def _candidate_room_ids(self, manifest: dict) -> list[str]:
+        if not isinstance(self.room_graph, dict) or not self.room_graph:
+            return []
+        floor = manifest.get("floor")
+        if floor is None:
+            return sorted(self.room_graph.keys())
+        floor_text = str(floor)
+        return [
+            room_id
+            for room_id in sorted(self.room_graph.keys())
+            if str(self.room_graph.get(room_id, {}).get("floor")) == floor_text
+        ]
+
+    def _candidate_records(self, candidate_room_ids: list[str]) -> list[dict]:
+        if not candidate_room_ids or not isinstance(self.room_graph, dict):
+            return []
+        candidates = []
+        for room_id in candidate_room_ids:
+            node = self.room_graph.get(room_id, {})
+            entry = self.grounding_index.room_entry(room_id) if self.grounding_index is not None else None
+            entry = entry or {}
+            candidates.append(
+                {
+                    "room_id": room_id,
+                    "title": node.get("title"),
+                    "category": node.get("category"),
+                    "aliases": list(node.get("aliases") or []) + list(entry.get("aliases") or []),
+                    "anchor_entities": list(entry.get("anchor_entities") or []),
+                }
+            )
+        return candidates
+
+    @staticmethod
+    def _metadata_from_detection_payload(payload: dict) -> dict:
+        metadata: dict = {}
+        candidate_room_ids = payload.get("candidate_room_ids")
+        if isinstance(candidate_room_ids, list):
+            metadata["candidate_room_ids"] = [
+                value for value in candidate_room_ids if isinstance(value, str) and value
+            ]
+        visual_localization = payload.get("visual_localization")
+        if isinstance(visual_localization, dict):
+            metadata["visual_localization"] = dict(visual_localization)
+        return metadata
+
+    @staticmethod
+    def _merged_detection_metadata(view_detections: list[ViewDetection]) -> dict:
+        merged: dict = {}
+        for view_detection in view_detections:
+            if not isinstance(view_detection.metadata, dict):
+                continue
+            if "visual_localization" not in merged and isinstance(view_detection.metadata.get("visual_localization"), dict):
+                merged["visual_localization"] = dict(view_detection.metadata["visual_localization"])
+            if "candidate_room_ids" not in merged and isinstance(view_detection.metadata.get("candidate_room_ids"), list):
+                merged["candidate_room_ids"] = list(view_detection.metadata["candidate_room_ids"])
+        return merged
+
+    @staticmethod
+    def _normalize_visual_localization(visual_localization: dict, *, candidate_room_ids: list[str]) -> dict:
+        candidate_set = set(candidate_room_ids)
+        room_distribution = []
+        raw_distribution = visual_localization.get("room_distribution")
+        if isinstance(raw_distribution, list):
+            for record in raw_distribution:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in candidate_set and isinstance(score, (int, float)):
+                    room_distribution.append({"room_id": room_id, "score": max(0.0, float(score))})
+        evidence_entities = visual_localization.get("evidence_entities")
+        if not isinstance(evidence_entities, list):
+            evidence_entities = []
+        predicted_room_id = visual_localization.get("predicted_room_id")
+        if predicted_room_id not in candidate_set:
+            predicted_room_id = None
+        confidence = visual_localization.get("confidence")
+        summary = visual_localization.get("summary")
+        return {
+            "predicted_room_id": predicted_room_id,
+            "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.0,
+            "room_distribution": room_distribution,
+            "evidence_entities": [value for value in evidence_entities if isinstance(value, str) and value],
+            "summary": summary if isinstance(summary, str) else "",
+        }
 
     def _create_response(self, request_body: dict) -> dict:
         try:
@@ -323,6 +523,7 @@ class MultiViewAggregator:
         ]
 
         entities = self._flatten_entities(view_detections or [])
+        detection_metadata = self._observation_detection_metadata(view_detections or [], entities)
         heading_estimate = normalize_heading(current_heading)
         return Observation(
             pano_id=pano_id,
@@ -335,6 +536,7 @@ class MultiViewAggregator:
                 "floor": manifest.get("floor"),
                 "lat": manifest.get("lat"),
                 "lng": manifest.get("lng"),
+                **detection_metadata,
             },
         )
 
@@ -355,10 +557,16 @@ class MultiViewAggregator:
                         confidence=entity.confidence,
                         kind=entity.kind,
                         source_view=source_views[0] if len(source_views) == 1 else "multiview",
+                        location_scope=MultiViewAggregator._normalized_location_scope(entity.location_scope),
                         metadata=metadata,
                     )
                     continue
                 existing.confidence = max(existing.confidence, entity.confidence)
+                existing.location_scope = MultiViewAggregator._merge_location_scopes(
+                    existing.location_scope,
+                    entity.location_scope,
+                )
+                existing.metadata["location_scope"] = existing.location_scope
                 existing_source_views = existing.metadata.setdefault("source_views", [])
                 for source_view in source_views:
                     if source_view not in existing_source_views:
@@ -366,6 +574,57 @@ class MultiViewAggregator:
                 existing.metadata["view_count"] = len(existing_source_views)
                 existing.source_view = existing_source_views[0] if len(existing_source_views) == 1 else "multiview"
         return sorted(grouped.values(), key=lambda item: (-item.confidence, item.name.lower()))
+
+    @staticmethod
+    def _observation_detection_metadata(view_detections: list[ViewDetection], entities: list[EntityDetection]) -> dict:
+        metadata: dict = {}
+        for view_detection in view_detections:
+            if not isinstance(view_detection.metadata, dict):
+                continue
+            if "visual_localization" not in metadata and isinstance(view_detection.metadata.get("visual_localization"), dict):
+                metadata["visual_localization"] = dict(view_detection.metadata["visual_localization"])
+            if "candidate_room_ids" not in metadata and isinstance(view_detection.metadata.get("candidate_room_ids"), list):
+                metadata["candidate_room_ids"] = list(view_detection.metadata["candidate_room_ids"])
+        metadata["inside_entities"] = [
+            MultiViewAggregator._entity_to_dict(entity)
+            for entity in entities
+            if MultiViewAggregator._normalized_location_scope(entity.location_scope) == "inside"
+        ]
+        metadata["outside_entities"] = [
+            MultiViewAggregator._entity_to_dict(entity)
+            for entity in entities
+            if MultiViewAggregator._normalized_location_scope(entity.location_scope) == "outside"
+        ]
+        return metadata
+
+    @staticmethod
+    def _entity_to_dict(entity: EntityDetection) -> dict:
+        return {
+            "name": entity.name,
+            "kind": entity.kind,
+            "confidence": float(entity.confidence),
+            "source_view": entity.source_view,
+            "source_views": list(entity.metadata.get("source_views", [])) or [entity.source_view],
+            "location_scope": MultiViewAggregator._normalized_location_scope(entity.location_scope),
+        }
+
+    @staticmethod
+    def _normalized_location_scope(scope: str) -> str:
+        if scope in ENTITY_LOCATION_SCOPES:
+            return scope
+        return "inside"
+
+    @staticmethod
+    def _merge_location_scopes(existing_scope: str, next_scope: str) -> str:
+        scopes = {
+            MultiViewAggregator._normalized_location_scope(existing_scope),
+            MultiViewAggregator._normalized_location_scope(next_scope),
+        }
+        if "inside" in scopes:
+            return "inside"
+        if "unknown" in scopes:
+            return "unknown"
+        return "outside"
 
     @staticmethod
     def _source_views_for_entity(entity: EntityDetection) -> list[str]:
@@ -391,13 +650,15 @@ class PerceptionPipeline:
         self,
         *,
         pano_graph: dict[str, dict],
+        room_graph: dict[str, dict] | None = None,
+        grounding_index=None,
         renderer: PanoramaRenderer | None = None,
         detector: ViewDetector | None = None,
         aggregator: MultiViewAggregator | None = None,
     ):
         self.pano_graph = pano_graph
         self.renderer = renderer or PanoramaRenderer(pano_graph)
-        self.detector = detector or ViewDetector()
+        self.detector = detector or ViewDetector(room_graph=room_graph, grounding_index=grounding_index)
         self.aggregator = aggregator or MultiViewAggregator(pano_graph)
 
     def render_views(self, **kwargs) -> dict:

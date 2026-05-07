@@ -29,6 +29,7 @@ from st_nav import (
     SourcePanoResolver,
     SourceResolutionWorkflow,
     SpatialEngine,
+    VisualObservationLocalizer,
     load_dotenv,
     resolve_model_environment,
 )
@@ -47,8 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument(
         "--localizer",
-        choices=["heuristic", "llm", "spatial-alignment-a", "spatial-alignment-b"],
-        default="spatial-alignment-a",
+        choices=["heuristic", "llm", "visual-vlm", "spatial-alignment-a", "spatial-alignment-b"],
+        default="visual-vlm",
     )
     parser.add_argument("--manifest-map-json")
     parser.add_argument("--step-budget", type=int, default=15)
@@ -67,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--render-output-dir", default="renders/navigation_episode")
     parser.add_argument("--render-heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
     parser.add_argument("--render-pitch", type=float, default=0.0)
-    parser.add_argument("--render-fov", type=int, default=45)
+    parser.add_argument("--render-fov", type=int, default=90)
     parser.add_argument(
         "--candidate-theme-fov",
         type=int,
@@ -98,6 +99,11 @@ def build_localizer(args, *, room_graph: dict[str, dict], grounding_index: Groun
             api_base=args.llm_api_base,
             api_kind=args.llm_api_kind,
             request_timeout=args.llm_timeout,
+        )
+    if args.localizer == "visual-vlm":
+        return VisualObservationLocalizer(
+            room_graph=room_graph,
+            grounding_index=grounding_index,
         )
     return LLMSpatialAlignmentLocalizer(
         room_graph=room_graph,
@@ -153,7 +159,10 @@ def serialize_trace(trace) -> dict:
             "observation_likelihood": observation_metadata.get("observation_likelihood")
             or observation_metadata.get("observation_distribution"),
             "room_belief": observation_metadata.get("room_belief"),
+            "visual_localization": observation_metadata.get("visual_localization"),
             "spatial_alignment": observation_metadata.get("spatial_alignment"),
+            "inside_entities": observation_metadata.get("inside_entities"),
+            "outside_entities": observation_metadata.get("outside_entities"),
             "entities": [
                 {
                     "name": entity.name,
@@ -161,6 +170,7 @@ def serialize_trace(trace) -> dict:
                     "confidence": entity.confidence,
                     "source_view": entity.source_view,
                     "source_views": entity.metadata.get("source_views"),
+                    "location_scope": entity.location_scope,
                 }
                 for entity in trace.observation.entities
             ],
@@ -400,7 +410,11 @@ def main() -> int:
         localizer=build_localizer(args, room_graph=room_graph, grounding_index=grounding_index),
     )
     runner = EpisodeRunner(
-        perception_provider=ManifestPerceptionProvider(pano_graph=pano_graph),
+        perception_provider=ManifestPerceptionProvider(
+            pano_graph=pano_graph,
+            room_graph=room_graph,
+            grounding_index=grounding_index,
+        ),
         spatial_engine=spatial_engine,
         policy=LLMActionPolicy(
             model=args.llm_model,

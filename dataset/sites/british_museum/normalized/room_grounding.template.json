@@ -1,4 +1,18 @@
 {
+  "Room 1": {
+    "room_id": "Room 1",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Enlightenment",
+      "Room 1"
+    ],
+    "anchor_entities": [
+      "Enlightenment",
+      "Themes"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
   "Room 10": {
     "room_id": "Room 10",
     "floor": "0",
@@ -13,14 +27,31 @@
     ],
     "notes": "Fill pano_ids after manual alignment."
   },
+  "Room 11": {
+    "room_id": "Room 11",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Greece: Cycladic Islands",
+      "Room 11"
+    ],
+    "anchor_entities": [
+      "Greece: Cycladic Islands",
+      "Ancient Greece and Rome"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
   "Room 12": {
     "room_id": "Room 12",
     "floor": "0",
     "pano_ids": [],
     "aliases": [
-      "Room 12"
+      "Greece: Minoans and Mycenaeans",
+      "Room 12",
+      "The Arthur | Fleischman Gallery"
     ],
     "anchor_entities": [
+      "Greece: Minoans and Mycenaeans; The Arthur | Fleischman Gallery",
       "Ancient Greece and Rome"
     ],
     "notes": "Fill pano_ids after manual alignment."
@@ -153,6 +184,20 @@
     ],
     "notes": "Fill pano_ids after manual alignment."
   },
+  "Room 2": {
+    "room_id": "Room 2",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Collecting the world",
+      "Room 2"
+    ],
+    "anchor_entities": [
+      "Collecting the world",
+      "Themes"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
   "Room 20": {
     "room_id": "Room 20",
     "floor": "0",
@@ -206,6 +251,77 @@
     "anchor_entities": [
       "Greek and Roman sculpture",
       "Ancient Greece and Rome"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
+  "Room 24": {
+    "room_id": "Room 24",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Living and Dying",
+      "Room 24",
+      "The Wellcome Trust Gallery"
+    ],
+    "anchor_entities": [
+      "Living and Dying; The Wellcome Trust Gallery",
+      "Themes"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
+  "Room 26": {
+    "room_id": "Room 26",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "North America",
+      "Room 26"
+    ],
+    "anchor_entities": [
+      "North America",
+      "Americas"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
+  "Room 27": {
+    "room_id": "Room 27",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "Mexico",
+      "Room 27"
+    ],
+    "anchor_entities": [
+      "Mexico",
+      "Americas"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
+  "Room 29a": {
+    "room_id": "Room 29a",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "India",
+      "Room 29a"
+    ],
+    "anchor_entities": [
+      "India",
+      "Asia"
+    ],
+    "notes": "Fill pano_ids after manual alignment."
+  },
+  "Room 29b": {
+    "room_id": "Room 29b",
+    "floor": "0",
+    "pano_ids": [],
+    "aliases": [
+      "India",
+      "Room 29b"
+    ],
+    "anchor_entities": [
+      "India",
+      "Asia"
     ],
     "notes": "Fill pano_ids after manual alignment."
   },

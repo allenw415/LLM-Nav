@@ -7,12 +7,15 @@ from pathlib import Path
 from st_nav.common.types import PanoNode, RoomNode
 
 BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS = {
+    "Room 1",
+    "Room 2",
     "Room 4",
     "Room 6",
     "Room 7",
     "Room 8",
     "Room 9",
     "Room 10",
+    "Room 11",
     "Room 12",
     "Room 13",
     "Room 14",
@@ -27,6 +30,11 @@ BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS = {
     "Room 21",
     "Room 22",
     "Room 23",
+    "Room 24",
+    "Room 26",
+    "Room 27",
+    "Room 29a",
+    "Room 29b",
 }
 
 BRITISH_MUSEUM_ROOM_CANONICAL_IDS = {
@@ -114,7 +122,19 @@ def _alias_index(explicit_map: dict[str, dict]) -> dict[str, list[str]]:
         title = record.get("title")
         if isinstance(title, str) and title:
             aliases[title].append(room_id)
+        elif isinstance(title, list):
+            for value in title:
+                if isinstance(value, str) and value:
+                    aliases[value].append(room_id)
     return aliases
+
+
+def _title_values(value: object) -> list[str]:
+    if isinstance(value, str) and value:
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str) and item]
+    return []
 
 
 def _resolve_target_room_id(
@@ -159,9 +179,9 @@ def normalize_room_graph(
         alias_list = [room_id, canonical_room_id]
         if display_name != room_id:
             alias_list.append(display_name)
-        title = record.get("title")
-        if isinstance(title, str) and title:
-            alias_list.append(title)
+        title_values = _title_values(record.get("title"))
+        alias_list.extend(title_values)
+        title = "; ".join(title_values) if title_values else None
 
         if canonical_room_id in nodes:
             nodes[canonical_room_id].aliases = sorted(set(nodes[canonical_room_id].aliases) | set(alias_list))
@@ -172,7 +192,7 @@ def normalize_room_graph(
             display_name=display_name,
             floor=_normalize_floor(record.get("Level")),
             category=record.get("category"),
-            title=title if isinstance(title, str) else None,
+            title=title,
             aliases=sorted(set(alias_list)),
         )
         nodes[canonical_room_id] = node

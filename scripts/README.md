@@ -101,7 +101,7 @@ Args:
 - `--heading-mode` (`museum | cardinal | grounding | graph`)
 - `--max-captures`
 - `--pitch`
-- `--fov`
+- `--fov` (default `90`)
 - `--width`
 - `--height`
 - `--candidate-scope` (`same-floor | all`)
@@ -307,6 +307,7 @@ ST_NAV_ACTIVE_PROFILE=gemini
 - `resolve_source_pano.py`: inspect source-room to source-pano resolution
 - `plan_room_route.py`: inspect shortest-room-route planning from explicit room ids
 - `run_pano_perception.py`: run perception directly on one pano id
+- `eval_pano_perception_grounding.py`: sample grounded panos per room, run perception, and compute visual-localization accuracy
 - `run_localization.py`: run localization on synthetic, manifest-based, or cached perception inputs
 - `run_navigation.py`: run the end-to-end navigation loop with subgoals, candidate paths, and reasoning traces
 
@@ -355,6 +356,13 @@ Args:
 python3 scripts/demo/run_pano_perception.py --pano-id "7grGsbOXqpEMDLgTG6VfmQ"
 ```
 
+The perception step now uses one multi-view VLM call for entity recognition,
+inside/outside entity classification, and observation-only visual localization
+when room graph context is available. The sibling `*_detections.json` cache
+stores `cache_version`, `candidate_room_ids`, all entities with
+`location_scope`, and `visual_localization`; older entity-only caches still load
+with entities treated as `inside`.
+
 Args:
 - `--artifacts-dir`
 - `--pano-id`
@@ -374,6 +382,38 @@ Args:
 - `--demo-trace`
 - `--output-path`
 
+`eval_pano_perception_grounding.py`
+
+```bash
+python3 scripts/demo/eval_pano_perception_grounding.py --samples-per-room 5 --seed 0
+```
+
+This samples up to five grounded panoramas per room from
+`pano_room_grounding.json`, runs `run_pano_perception.py` for each sample, and
+scores `visual_localization.predicted_room_id` against the grounding label.
+
+Args:
+- `--artifacts-dir`
+- `--grounding-path`
+- `--samples-per-room` (default `5`)
+- `--seed`
+- `--room-id` (repeatable)
+- `--max-total`
+- `--output-dir`
+- `--summary-output-path`
+- `--reuse-existing-output`
+- `--force`
+- `--render-output-dir`
+- `--render-api-key`
+- `--llm-api-key`
+- `--detector-model`
+- `--detector-api-kind` (`responses | chat_completions`)
+- `--detector-api-base`
+- `--vlm-timeout`
+- `--heading-mode` (`museum | cardinal | graph`)
+- `--fov` (default `90`)
+- `--print-failures`
+
 `run_localization.py`
 
 ```bash
@@ -389,7 +429,7 @@ Args:
 - `--start-pano-id`
 - `--start-room-id`
 - `--current-heading`
-- `--localizer` (`heuristic | llm`)
+- `--localizer` (`bayesian-filter | heuristic | llm | visual-vlm | spatial-alignment-a | spatial-alignment-b`)
 - `--llm-model`
 - `--llm-api-key`
 - `--llm-api-kind` (`responses | chat_completions`)
@@ -410,7 +450,7 @@ python3 scripts/demo/run_navigation.py --instruction "Find the way from Room 8 t
 Args:
 - `--instruction`
 - `--artifacts-dir`
-- `--localizer` (`heuristic | llm | spatial-alignment-a | spatial-alignment-b`)
+- `--localizer` (`heuristic | llm | visual-vlm | spatial-alignment-a | spatial-alignment-b`; default `visual-vlm`)
 - `--manifest-map-json`
 - `--step-budget`
 - `--start-heading`
@@ -423,7 +463,7 @@ Args:
 - `--render-output-dir`
 - `--render-heading-mode` (`museum | cardinal | graph`)
 - `--render-pitch`
-- `--render-fov`
+- `--render-fov` (default `90`)
 - `--render-width`
 - `--render-height`
 - `--output-path`

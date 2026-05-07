@@ -2,6 +2,7 @@ from __future__ import annotations
 
 
 VIEW_DETECTION_KINDS = ("artwork", "landmark", "signage", "passage", "other")
+ENTITY_LOCATION_SCOPES = ("inside", "outside", "unknown")
 NAVIGATION_TASK_TYPES = (
     "artwork_goal_navigation",
     "artwork_instruction_following_navigation",
@@ -95,6 +96,128 @@ def build_view_detection_schema() -> dict:
             }
         },
         "required": ["entities"],
+        "additionalProperties": False,
+    }
+
+
+def build_visual_detection_localization_instructions() -> str:
+    return " ".join(
+        [
+            "You are a museum panorama vision localizer for British Museum indoor navigation.",
+            "You are given multiple overlapping views from the same panorama and a closed list of candidate rooms.",
+            "Reason internally before answering, but return only the requested JSON.",
+            "First identify visible museum-relevant entities across all views.",
+            "Classify each entity as inside when it belongs to the current gallery, outside when it is only visible through a doorway, corridor, or adjacent-gallery opening, and unknown when the scope is visually ambiguous.",
+            "Keep outside entities in the entity list, but use inside entities as the primary evidence for localization.",
+            "Use candidate room titles, aliases, categories, and anchor entities as gallery theme descriptions.",
+            "Treat passages, doorway views, and signs for adjacent rooms as useful context but weak evidence for the current room.",
+            "Return a normalized observation-only room distribution over the candidate rooms.",
+            "These probabilities must not include motion priors or room-connectivity priors.",
+            "Do not invent room ids outside the candidate list.",
+            "Return JSON only.",
+        ]
+    )
+
+
+def build_visual_detection_localization_input(
+    *,
+    captures: list[dict[str, object]],
+    candidates: list[dict],
+) -> str:
+    view_labels = []
+    for capture in captures:
+        label = capture.get("label")
+        heading = capture.get("heading")
+        if not isinstance(label, str) or not label:
+            continue
+        if isinstance(heading, (int, float)):
+            view_labels.append(f"{label} ({float(heading):.1f} deg)")
+        else:
+            view_labels.append(label)
+
+    candidate_lines = []
+    for candidate in candidates:
+        parts = [
+            f"room_id={candidate['room_id']}",
+            f"title={candidate.get('title') or 'unknown'}",
+            f"category={candidate.get('category') or 'unknown'}",
+        ]
+        aliases = candidate.get("aliases")
+        if isinstance(aliases, list) and aliases:
+            parts.append("aliases=" + ", ".join(str(value) for value in aliases))
+        anchor_entities = candidate.get("anchor_entities")
+        if isinstance(anchor_entities, list) and anchor_entities:
+            parts.append("anchors=" + ", ".join(str(value) for value in anchor_entities))
+        candidate_lines.append("- " + " | ".join(parts))
+
+    lines = [
+        f"These are {len(captures)} overlapping views from the same panorama.",
+        "Aggregate all visible evidence across the full panorama before answering.",
+    ]
+    if view_labels:
+        lines.append("Available views: " + ", ".join(view_labels) + ".")
+    lines.extend(
+        [
+            "",
+            f"Candidate room count: {len(candidates)}.",
+            "Candidate rooms:",
+            *candidate_lines,
+            "",
+            "Task:",
+            "1. Identify directly visible museum-relevant entities across all views.",
+            "2. Assign location_scope=inside for entities in the current gallery, outside for entities visible only through adjacent openings, and unknown when uncertain.",
+            "3. Use inside entities and current-gallery visual themes to estimate observation-only compatibility for every candidate room.",
+            "4. Output exactly one room probability for each candidate room, normalized to sum to 1.",
+            "5. Preserve passages and outside entities in the entity list even when they are not used as primary localization evidence.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
+    entity_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "kind": {"type": "string", "enum": list(VIEW_DETECTION_KINDS)},
+            "confidence": {"type": "number"},
+            "source_views": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "location_scope": {"type": "string", "enum": list(ENTITY_LOCATION_SCOPES)},
+        },
+        "required": ["name", "kind", "confidence", "source_views", "location_scope"],
+        "additionalProperties": False,
+    }
+    room_score_schema = {
+        "type": "object",
+        "properties": {
+            "room_id": {"type": "string", "enum": room_ids},
+            "score": {"type": "number"},
+        },
+        "required": ["room_id", "score"],
+        "additionalProperties": False,
+    }
+    visual_localization_schema = {
+        "type": "object",
+        "properties": {
+            "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+            "confidence": {"type": "number"},
+            "room_distribution": {"type": "array", "items": room_score_schema},
+            "evidence_entities": {"type": "array", "items": {"type": "string"}},
+            "summary": {"type": "string"},
+        },
+        "required": ["predicted_room_id", "confidence", "room_distribution", "evidence_entities", "summary"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "entities": {"type": "array", "items": entity_schema},
+            "visual_localization": visual_localization_schema,
+        },
+        "required": ["entities", "visual_localization"],
         "additionalProperties": False,
     }
 

@@ -79,6 +79,9 @@ class SpatialEngine:
                 localization.get("alignment_fusion_applied", False)
             )
             observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
+        visual_localization = localization.get("visual_localization")
+        if isinstance(visual_localization, dict):
+            observation.metadata["visual_localization"] = dict(visual_localization)
         spatial_alignment = localization.get("spatial_alignment")
         if isinstance(spatial_alignment, dict):
             observation.metadata["spatial_alignment"] = dict(spatial_alignment)

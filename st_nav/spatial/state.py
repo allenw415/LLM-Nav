@@ -46,6 +46,8 @@ class StateEstimator:
         )
 
     def update(self, state: BeliefState, observation: Observation) -> BeliefState:
+        previous_pano_id = state.current_pano_id
+        previous_room_id = state.current_room_id
         state.current_pano_id = observation.pano_id
         state.grounded_room_id = self.grounding_index.room_for_pano(observation.pano_id)
         observation.metadata["grounded_room_id"] = state.grounded_room_id
@@ -81,12 +83,20 @@ class StateEstimator:
             )
             localized_room_id = localization.get("predicted_room_id")
             if isinstance(localized_room_id, str) and localized_room_id in self.room_graph:
+                if (
+                    observation.pano_id == previous_pano_id
+                    and isinstance(previous_room_id, str)
+                    and localized_room_id != previous_room_id
+                ):
+                    room_belief = {localized_room_id: 1.0}
+                else:
+                    room_belief = dict(localization.get("room_belief", {}))
                 state.current_room_id = localized_room_id
-                state.room_belief = dict(localization.get("room_belief", {}))
+                state.room_belief = room_belief
                 state.visited_rooms.add(localized_room_id)
                 observation.metadata["localized_room_id"] = localized_room_id
                 observation.metadata["localization_confidence"] = float(localization.get("confidence", 0.0))
-                observation.metadata["room_belief"] = dict(localization.get("room_belief", {}))
+                observation.metadata["room_belief"] = dict(room_belief)
                 observation.metadata["transition_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["observation_likelihood"] = dict(localization.get("observation_likelihood", {}))
@@ -103,6 +113,9 @@ class StateEstimator:
                     localization.get("alignment_fusion_applied", False)
                 )
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
+                visual_localization = localization.get("visual_localization")
+                if isinstance(visual_localization, dict):
+                    observation.metadata["visual_localization"] = dict(visual_localization)
                 spatial_alignment = localization.get("spatial_alignment")
                 if isinstance(spatial_alignment, dict):
                     observation.metadata["spatial_alignment"] = dict(spatial_alignment)

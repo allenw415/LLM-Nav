@@ -83,6 +83,7 @@ class EntityDetection:
     confidence: float
     kind: str
     source_view: str
+    location_scope: str = "inside"
     metadata: JsonDict = field(default_factory=dict)
 
 
@@ -90,6 +91,7 @@ class EntityDetection:
 class ViewDetection:
     capture_label: str
     entities: list[EntityDetection] = field(default_factory=list)
+    metadata: JsonDict = field(default_factory=dict)
 
 
 @dataclass

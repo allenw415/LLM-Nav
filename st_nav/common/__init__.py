@@ -2,6 +2,7 @@ from .env import ModelEnvironment, load_dotenv, resolve_model_environment
 from .model_client import ModelResponseClient, extract_output_text, parse_json_output, parse_json_text, resolve_api_kind
 from .prompts import (
     ALLOCENTRIC_DIRECTIONS,
+    ENTITY_LOCATION_SCOPES,
     NAVIGATION_TASK_TYPES,
     VIEW_DETECTION_KINDS,
     build_localization_input,
@@ -19,6 +20,9 @@ from .prompts import (
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
+    build_visual_detection_localization_input,
+    build_visual_detection_localization_instructions,
+    build_visual_detection_localization_schema,
 )
 from .types import (
     BeliefState,
@@ -44,6 +48,7 @@ __all__ = [
     "EntityDetection",
     "JsonDict",
     "ALLOCENTRIC_DIRECTIONS",
+    "ENTITY_LOCATION_SCOPES",
     "ModelEnvironment",
     "ModelResponseClient",
     "NAVIGATION_TASK_TYPES",
@@ -77,6 +82,9 @@ __all__ = [
     "build_view_detection_input",
     "build_view_detection_instructions",
     "build_view_detection_schema",
+    "build_visual_detection_localization_input",
+    "build_visual_detection_localization_instructions",
+    "build_visual_detection_localization_schema",
     "load_dotenv",
     "resolve_model_environment",
     "resolve_api_kind",

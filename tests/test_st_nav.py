@@ -23,6 +23,7 @@ from st_nav import (
     ManifestPerceptionProvider,
     ModelEnvironment,
     ModelResponseClient,
+    MultiViewAggregator,
     NavigationPipeline,
     Observation,
     PerceptionPipeline,
@@ -36,11 +37,15 @@ from st_nav import (
     SpatialEngine,
     TaskSpec,
     ViewDetector,
+    VisualObservationLocalizer,
     build_grounding_template,
     build_spatial_context_extraction_instructions,
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
+    build_visual_detection_localization_input,
+    build_visual_detection_localization_instructions,
+    build_visual_detection_localization_schema,
     extract_output_text,
     load_dotenv,
     resolve_model_environment,
@@ -48,6 +53,7 @@ from st_nav import (
 from st_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
     BRITISH_MUSEUM_EXCLUDED_EDGES,
+    BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS,
     BRITISH_MUSEUM_ROOM_CANONICAL_IDS,
     BRITISH_MUSEUM_TRANSITION_OVERRIDES,
     normalize_pano_graph,
@@ -625,6 +631,120 @@ class STNavTests(unittest.TestCase):
         right_edge = next(edge for edge in room_graph["Room 12"]["neighbors"] if edge["target_room_id"] == "Room 6")
         self.assertEqual(right_edge["allocentric_direction"], "east")
 
+    def test_british_museum_experiment_rooms_include_grounded_floor_zero_theme_rooms(self) -> None:
+        required_room_ids = {
+            "Room 1",
+            "Room 2",
+            "Room 11",
+            "Room 24",
+            "Room 26",
+            "Room 27",
+            "Room 29a",
+            "Room 29b",
+        }
+        self.assertTrue(required_room_ids.issubset(BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS))
+
+    def test_normalize_room_graph_includes_room_11_between_room_6_and_room_12(self) -> None:
+        explicit_map = {
+            "Room 6 bottom": {
+                "name": "Room 6",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Early Greece",
+                "links": [{"direction": "left", "name": "Room 11"}],
+            },
+            "Room 11": {
+                "name": "Room 11",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greece: Cycladic Islands",
+                "links": [
+                    {"direction": "right", "name": "Room 6 bottom"},
+                    {"direction": "left", "name": "Room 12"},
+                ],
+            },
+            "Room 12": {
+                "name": "Room 12",
+                "Level": 0,
+                "category": "Ancient Greece and Rome",
+                "title": "Greece: Minoans and Mycenaeans",
+                "links": [{"direction": "right", "name": "Room 11"}],
+            },
+        }
+
+        room_graph = normalize_room_graph(
+            explicit_map,
+            allowed_room_ids={"Room 6", "Room 11", "Room 12"},
+            canonical_room_ids=BRITISH_MUSEUM_ROOM_CANONICAL_IDS,
+        )
+        self.assertEqual(room_graph["Room 11"]["category"], "Ancient Greece and Rome")
+        self.assertEqual(room_graph["Room 11"]["title"], "Greece: Cycladic Islands")
+        east_edge = next(edge for edge in room_graph["Room 11"]["neighbors"] if edge["target_room_id"] == "Room 6")
+        west_edge = next(edge for edge in room_graph["Room 11"]["neighbors"] if edge["target_room_id"] == "Room 12")
+        self.assertEqual(east_edge["allocentric_direction"], "east")
+        self.assertEqual(west_edge["allocentric_direction"], "west")
+
+    def test_normalize_room_graph_preserves_list_titles_as_theme_aliases(self) -> None:
+        room_graph = normalize_room_graph(
+            {
+                "Room 24": {
+                    "name": "Room 24",
+                    "Level": 0,
+                    "category": "Themes",
+                    "title": ["Living and Dying", "The Wellcome Trust Gallery"],
+                    "links": [],
+                }
+            }
+        )
+
+        self.assertEqual(room_graph["Room 24"]["title"], "Living and Dying; The Wellcome Trust Gallery")
+        self.assertIn("Living and Dying", room_graph["Room 24"]["aliases"])
+        self.assertIn("The Wellcome Trust Gallery", room_graph["Room 24"]["aliases"])
+
+    def test_normalize_room_graph_includes_room_29_india_candidates(self) -> None:
+        room_graph = normalize_room_graph(
+            {
+                "Room 29a": {
+                    "name": "Room 29a",
+                    "Level": 0,
+                    "category": "Asia",
+                    "title": "India",
+                    "links": [{"direction": "right", "name": "Room 29b"}],
+                },
+                "Room 29b": {
+                    "name": "Room 29b",
+                    "Level": 0,
+                    "category": "Asia",
+                    "title": "India",
+                    "links": [
+                        {"direction": "left", "name": "Room 29a"},
+                        {"direction": "right", "name": "Room 24"},
+                    ],
+                },
+                "Room 24": {
+                    "name": "Room 24",
+                    "Level": 0,
+                    "category": "Themes",
+                    "title": "Living and Dying",
+                    "links": [{"direction": "left", "name": "Room 29b"}],
+                },
+            },
+            allowed_room_ids={"Room 24", "Room 29a", "Room 29b"},
+        )
+
+        self.assertEqual(room_graph["Room 29a"]["category"], "Asia")
+        self.assertEqual(room_graph["Room 29a"]["title"], "India")
+        self.assertEqual(room_graph["Room 29b"]["category"], "Asia")
+        self.assertEqual(room_graph["Room 29b"]["title"], "India")
+        edge_29a_to_29b = next(edge for edge in room_graph["Room 29a"]["neighbors"] if edge["target_room_id"] == "Room 29b")
+        edge_29b_to_29a = next(edge for edge in room_graph["Room 29b"]["neighbors"] if edge["target_room_id"] == "Room 29a")
+        edge_29b_to_24 = next(edge for edge in room_graph["Room 29b"]["neighbors"] if edge["target_room_id"] == "Room 24")
+        edge_24_to_29b = next(edge for edge in room_graph["Room 24"]["neighbors"] if edge["target_room_id"] == "Room 29b")
+        self.assertEqual(edge_29a_to_29b["allocentric_direction"], "east")
+        self.assertEqual(edge_29b_to_29a["allocentric_direction"], "west")
+        self.assertEqual(edge_29b_to_24["allocentric_direction"], "east")
+        self.assertEqual(edge_24_to_29b["allocentric_direction"], "west")
+
     def test_normalize_room_graph_can_fill_missing_reverse_edges(self) -> None:
         explicit_map = {
             "Room 17": {
@@ -1105,6 +1225,172 @@ class STNavTests(unittest.TestCase):
         self.assertIn("neighboring and show the same opening continuously", view_input)
         self.assertIn("Aggregate all visible evidence across the full panorama", view_input)
         self.assertIn("source_views", schema["properties"]["entities"]["items"]["properties"])
+
+    def test_visual_detection_localization_prompt_and_schema_include_scope_and_distribution(self) -> None:
+        schema = build_visual_detection_localization_schema(["Room 8", "Room 23"])
+        instructions = build_visual_detection_localization_instructions()
+        visual_input = build_visual_detection_localization_input(
+            captures=[{"label": "north", "heading": 330.0}],
+            candidates=[
+                {
+                    "room_id": "Room 8",
+                    "title": "Assyria: Nimrud",
+                    "category": "Middle East",
+                    "aliases": ["Room 8"],
+                    "anchor_entities": ["Assyria: Nimrud"],
+                }
+            ],
+        )
+
+        entity_schema = schema["properties"]["entities"]["items"]
+        self.assertIn("location_scope", entity_schema["properties"])
+        self.assertEqual(entity_schema["properties"]["location_scope"]["enum"], ["inside", "outside", "unknown"])
+        self.assertIn("visual_localization", schema["properties"])
+        self.assertIn("room_distribution", schema["properties"]["visual_localization"]["properties"])
+        self.assertIn("Reason internally before answering", instructions)
+        self.assertIn("use inside entities as the primary evidence", instructions)
+        self.assertIn("Candidate rooms:", visual_input)
+        self.assertIn("location_scope=inside", visual_input)
+
+    def test_view_detector_can_parse_integrated_visual_localization(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        captured_bodies = []
+        detector = ViewDetector(
+            api_key="test-key",
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=lambda body: captured_bodies.append(body) or {
+                "output_text": json.dumps(
+                    {
+                        "entities": [
+                            {
+                                "name": "Lamassu",
+                                "kind": "artwork",
+                                "confidence": 0.95,
+                                "source_views": ["north"],
+                                "location_scope": "inside",
+                            },
+                            {
+                                "name": "Greek sculpture glimpsed through doorway",
+                                "kind": "artwork",
+                                "confidence": 0.75,
+                                "source_views": ["west"],
+                                "location_scope": "outside",
+                            },
+                        ],
+                        "visual_localization": {
+                            "predicted_room_id": "Room 8",
+                            "confidence": 0.9,
+                            "room_distribution": [
+                                {"room_id": "Room 8", "score": 0.9},
+                                {"room_id": "Room 9", "score": 0.05},
+                                {"room_id": "Room 23", "score": 0.05},
+                            ],
+                            "evidence_entities": ["Lamassu"],
+                            "summary": "Inside evidence matches Assyria: Nimrud.",
+                        },
+                    }
+                )
+            },
+            use_detection_files=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "north.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            detections = detector.detect(manifest_path)
+            observation = MultiViewAggregator({}).aggregate(
+                manifest_path,
+                current_heading=330.0,
+                view_detections=detections,
+            )
+
+        self.assertEqual(len(captured_bodies), 1)
+        self.assertIn("visual_detection_localization", json.dumps(captured_bodies[0]))
+        self.assertEqual(observation.entities[0].location_scope, "inside")
+        self.assertEqual(observation.entities[1].location_scope, "outside")
+        self.assertEqual(len(observation.metadata["inside_entities"]), 1)
+        self.assertEqual(len(observation.metadata["outside_entities"]), 1)
+        self.assertEqual(observation.metadata["visual_localization"]["predicted_room_id"], "Room 8")
+
+    def test_view_detector_writes_and_reuses_integrated_detection_cache(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        calls = []
+        detector = ViewDetector(
+            api_key="test-key",
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=lambda body: calls.append(body) or {
+                "output_text": json.dumps(
+                    {
+                        "entities": [
+                            {
+                                "name": "Lamassu",
+                                "kind": "artwork",
+                                "confidence": 0.95,
+                                "source_views": ["north"],
+                                "location_scope": "inside",
+                            }
+                        ],
+                        "visual_localization": {
+                            "predicted_room_id": "Room 8",
+                            "confidence": 0.9,
+                            "room_distribution": [
+                                {"room_id": "Room 8", "score": 0.9},
+                                {"room_id": "Room 9", "score": 0.05},
+                                {"room_id": "Room 23", "score": 0.05},
+                            ],
+                            "evidence_entities": ["Lamassu"],
+                            "summary": "Inside evidence matches Assyria: Nimrud.",
+                        },
+                    }
+                )
+            },
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "north.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            first = detector.detect(manifest_path)
+            second = detector.detect(manifest_path)
+            cache_payload = json.loads(
+                manifest_path.with_name("pano-8_manifest_detections.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(first[0].entities[0].location_scope, "inside")
+        self.assertEqual(second[0].entities[0].location_scope, "inside")
+        self.assertEqual(cache_payload["cache_version"], 2)
+        self.assertEqual(cache_payload["entities"][0]["location_scope"], "inside")
+        self.assertEqual(cache_payload["visual_localization"]["predicted_room_id"], "Room 8")
 
     def test_view_detector_can_preserve_passage_kind(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
@@ -2496,6 +2782,80 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(localization["predicted_room_id"], "Room 23")
         self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
         self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 8"])
+
+    def test_visual_observation_localizer_combines_visual_distribution_with_transition_prior(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = VisualObservationLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+
+        localization = localizer.localize(
+            observation=Observation(
+                pano_id="pano-23",
+                entities=[
+                    EntityDetection(
+                        name="Greek marble statue",
+                        confidence=0.95,
+                        kind="artwork",
+                        source_view="north",
+                        location_scope="inside",
+                    )
+                ],
+                metadata={
+                    "floor": "0",
+                    "visual_localization": {
+                        "predicted_room_id": "Room 23",
+                        "confidence": 0.9,
+                        "room_distribution": [
+                            {"room_id": "Room 8", "score": 0.1},
+                            {"room_id": "Room 9", "score": 0.0},
+                            {"room_id": "Room 23", "score": 0.9},
+                        ],
+                        "evidence_entities": ["Greek marble statue"],
+                        "summary": "Inside evidence matches Room 23.",
+                    },
+                },
+            ),
+            prior_room_belief={"Room 8": 1.0},
+            fallback_room_id="Room 8",
+        )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 23")
+        self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
+        self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 8"])
+        self.assertEqual(localization["evidence"], ["Greek marble statue"])
+
+    def test_room_localizer_ignores_outside_entities_for_observation_likelihood(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        localizer = RoomLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+
+        localization = localizer.localize(
+            observation=Observation(
+                pano_id="pano-8",
+                entities=[
+                    EntityDetection(
+                        name="Greek and Roman sculpture",
+                        confidence=0.99,
+                        kind="artwork",
+                        source_view="west",
+                        location_scope="outside",
+                    )
+                ],
+                metadata={"floor": "0"},
+            ),
+            prior_room_belief={"Room 8": 1.0},
+            fallback_room_id="Room 8",
+        )
+
+        self.assertEqual(localization["predicted_room_id"], "Room 8")
+        self.assertEqual(localization["evidence"], [])
+        self.assertEqual(localization["room_belief"]["Room 8"], 1.0)
 
     def test_llm_spatial_alignment_localizer_a_uses_rotation_aware_view_ids(self) -> None:
         explicit_map = {

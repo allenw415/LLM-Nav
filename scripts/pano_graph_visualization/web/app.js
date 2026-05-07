@@ -14,6 +14,7 @@ const state = {
   positions: new Map(),
   streetView: null,
   streetViewLoaded: false,
+  syncingStreetView: false,
 };
 
 const canvas = document.getElementById("graphCanvas");
@@ -480,10 +481,15 @@ async function loadSelectedStreetView() {
   }
   if (!state.streetView) {
     state.streetView = new google.maps.StreetViewPanorama(els.streetViewPane, {
-      disableDefaultUI: true,
-      clickToGo: false,
+      disableDefaultUI: false,
+      clickToGo: true,
+      linksControl: true,
+      panControl: true,
+      zoomControl: true,
+      addressControl: false,
       showRoadLabels: false,
     });
+    state.streetView.addListener("pano_changed", syncSelectedNodeFromStreetView);
   }
   updateStreetView();
 }
@@ -491,10 +497,34 @@ async function loadSelectedStreetView() {
 function updateStreetView() {
   const node = nodeById(state.selectedNodeId);
   if (!node || !state.streetView || !window.google?.maps) return;
+  state.syncingStreetView = true;
   state.streetView.setPano(node.id);
   state.streetView.setPov({ heading: 330, pitch: 0 });
   state.streetView.setZoom(1);
+  state.syncingStreetView = false;
   els.streetViewStatus.textContent = node.id;
+}
+
+function syncSelectedNodeFromStreetView() {
+  if (state.syncingStreetView || !state.streetView) return;
+  const panoId = state.streetView.getPano();
+  if (!panoId || panoId === state.selectedNodeId) return;
+  const node = nodeById(panoId);
+  if (!node) {
+    els.streetViewStatus.textContent = `${panoId} (not in current pano graph)`;
+    return;
+  }
+  state.selectedNodeId = panoId;
+  if (!state.filteredNodeIds.has(panoId)) {
+    clearChecklistWithoutRedraw(els.floorOptions);
+    clearChecklistWithoutRedraw(els.roomOptions);
+    els.statusSelect.value = "all";
+    els.searchInput.value = "";
+    applyFilters();
+  }
+  updateDetails();
+  els.streetViewStatus.textContent = panoId;
+  draw();
 }
 
 function loadGoogleMaps(apiKey) {

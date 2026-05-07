@@ -119,6 +119,7 @@ class RoomLocalizer:
         fallback_room_id: str | None = None,
     ) -> dict:
         candidate_room_ids = self._candidate_room_ids(observation)
+        entity_observation = self._observation_with_inside_entities(observation)
         if not candidate_room_ids:
             return {
                 "predicted_room_id": None,
@@ -128,7 +129,7 @@ class RoomLocalizer:
                 "evidence": [],
             }
 
-        if not observation.entities:
+        if not entity_observation.entities:
             stable_belief = self._stable_room_belief(
                 prior_room_belief or {},
                 candidate_room_ids=candidate_room_ids,
@@ -160,7 +161,7 @@ class RoomLocalizer:
 
             log_score = math.log(transition_probability)
             entity_scores = []
-            for entity in observation.entities:
+            for entity in entity_observation.entities:
                 likelihood, match_score = self._entity_likelihood(room_id, entity)
                 log_score += math.log(likelihood)
                 entity_scores.append((entity.name, match_score))
@@ -179,11 +180,36 @@ class RoomLocalizer:
             "evidence": evidence,
         }
 
+    @staticmethod
+    def _inside_entities(observation: Observation) -> list[EntityDetection]:
+        inside_entities = []
+        for entity in observation.entities:
+            scope = getattr(entity, "location_scope", None)
+            if not isinstance(scope, str) or not scope:
+                scope = entity.metadata.get("location_scope", "inside")
+            if scope == "inside":
+                inside_entities.append(entity)
+        return inside_entities
+
+    @staticmethod
+    def _observation_with_inside_entities(observation: Observation) -> Observation:
+        inside_entities = RoomLocalizer._inside_entities(observation)
+        if len(inside_entities) == len(observation.entities):
+            return observation
+        return Observation(
+            pano_id=observation.pano_id,
+            views=list(observation.views),
+            entities=inside_entities,
+            heading_estimate=observation.heading_estimate,
+            metadata=dict(observation.metadata),
+        )
+
     def _observation_scores_from_entities(
         self,
         observation: Observation,
         candidate_room_ids: list[str],
     ) -> tuple[dict[str, float], dict[str, list[tuple[str, float]]]]:
+        observation = self._observation_with_inside_entities(observation)
         if not observation.entities:
             uniform = 1.0 / len(candidate_room_ids) if candidate_room_ids else 0.0
             return (
@@ -400,6 +426,110 @@ class RoomLocalizer:
         return RoomLocalizer._normalize_scores(weights)
 
 
+class VisualObservationLocalizer(RoomLocalizer):
+    def localize(
+        self,
+        *,
+        observation: Observation,
+        prior_room_belief: dict[str, float] | None,
+        fallback_room_id: str | None = None,
+    ) -> dict:
+        candidate_room_ids = self._candidate_room_ids(observation)
+        entity_observation = self._observation_with_inside_entities(observation)
+        if not candidate_room_ids:
+            return {
+                "predicted_room_id": None,
+                "confidence": 0.0,
+                "room_belief": {},
+                "transition_support": {},
+                "observation_distribution": {},
+                "observation_likelihood": {},
+                "evidence": [],
+            }
+
+        visual_localization = observation.metadata.get("visual_localization")
+        visual_observation_likelihood = self._visual_observation_likelihood(
+            visual_localization,
+            candidate_room_ids=candidate_room_ids,
+        )
+        if not any(value > 0.0 for value in visual_observation_likelihood.values()):
+            entity_observation = self._observation_with_inside_entities(observation)
+            fallback = super().localize(
+                observation=entity_observation,
+                prior_room_belief=prior_room_belief,
+                fallback_room_id=fallback_room_id,
+            )
+            entity_distribution, _ = self._observation_scores_from_entities(entity_observation, candidate_room_ids)
+            fallback.setdefault("observation_distribution", entity_distribution)
+            fallback.setdefault("observation_likelihood", entity_distribution)
+            fallback.setdefault("entity_observation_distribution", entity_distribution)
+            return fallback
+
+        transition_support = self._build_transition_support(
+            prior_room_belief or {},
+            candidate_room_ids=candidate_room_ids,
+            fallback_room_id=fallback_room_id,
+        )
+        posterior_scores = {
+            room_id: float(transition_support.get(room_id, 0.0))
+            * float(visual_observation_likelihood.get(room_id, 0.0))
+            for room_id in candidate_room_ids
+        }
+        posterior = self._normalize_scores(posterior_scores)
+        predicted_room_id = max(posterior, key=posterior.get) if posterior else None
+        if predicted_room_id and posterior.get(predicted_room_id, 0.0) <= 0.0:
+            predicted_room_id = None
+
+        evidence = []
+        summary = ""
+        if isinstance(visual_localization, dict):
+            raw_evidence = visual_localization.get("evidence_entities")
+            if isinstance(raw_evidence, list):
+                evidence = [value for value in raw_evidence if isinstance(value, str) and value]
+            raw_summary = visual_localization.get("summary")
+            summary = raw_summary if isinstance(raw_summary, str) else ""
+
+        return {
+            "predicted_room_id": predicted_room_id,
+            "confidence": posterior.get(predicted_room_id, 0.0) if predicted_room_id else 0.0,
+            "room_belief": posterior,
+            "transition_support": transition_support,
+            "observation_distribution": visual_observation_likelihood,
+            "observation_likelihood": visual_observation_likelihood,
+            "entity_observation_distribution": visual_observation_likelihood,
+            "evidence": evidence[:3],
+            "summary": summary,
+            "visual_localization": dict(visual_localization) if isinstance(visual_localization, dict) else {},
+        }
+
+    @staticmethod
+    def _visual_observation_likelihood(
+        visual_localization: object,
+        *,
+        candidate_room_ids: list[str],
+    ) -> dict[str, float]:
+        scores = {room_id: 0.0 for room_id in candidate_room_ids}
+        if not isinstance(visual_localization, dict):
+            return scores
+        raw_distribution = visual_localization.get("room_distribution")
+        if isinstance(raw_distribution, dict):
+            for room_id, score in raw_distribution.items():
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, float(score))
+        elif isinstance(raw_distribution, list):
+            for record in raw_distribution:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, float(score))
+        normalized_scores = RoomLocalizer._normalize_scores(scores)
+        if any(value > 0.0 for value in normalized_scores.values()):
+            return normalized_scores
+        return scores
+
+
 class LLMRoomLocalizer(RoomLocalizer):
     def __init__(
         self,
@@ -457,6 +587,7 @@ class LLMRoomLocalizer(RoomLocalizer):
         fallback_room_id: str | None = None,
     ) -> dict:
         candidate_room_ids = self._candidate_room_ids(observation)
+        entity_observation = self._observation_with_inside_entities(observation)
         if not candidate_room_ids:
             return {
                 "predicted_room_id": None,
@@ -466,9 +597,9 @@ class LLMRoomLocalizer(RoomLocalizer):
                 "evidence": [],
             }
 
-        if not observation.entities:
+        if not entity_observation.entities:
             return super().localize(
-                observation=observation,
+                observation=entity_observation,
                 prior_room_belief=prior_room_belief,
                 fallback_room_id=fallback_room_id,
             )
@@ -481,7 +612,7 @@ class LLMRoomLocalizer(RoomLocalizer):
             fallback_room_id=fallback_room_id,
         )
         request_body = self._build_request_body(
-            observation=observation,
+            observation=entity_observation,
             candidate_room_ids=candidate_room_ids,
             transition_support=transition_support,
         )
@@ -887,12 +1018,13 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         *,
         transition_support: dict[str, float],
     ) -> tuple[dict[str, float], dict[str, list[tuple[str, float]]]]:
-        entity_scores_by_room = self._entity_scores_by_room(observation, candidate_room_ids)
-        if self.entity_distribution_mode != "llm" or not observation.entities:
-            return self._observation_scores_from_entities(observation, candidate_room_ids)[0], entity_scores_by_room
+        entity_observation = self._observation_with_inside_entities(observation)
+        entity_scores_by_room = self._entity_scores_by_room(entity_observation, candidate_room_ids)
+        if self.entity_distribution_mode != "llm" or not entity_observation.entities:
+            return self._observation_scores_from_entities(entity_observation, candidate_room_ids)[0], entity_scores_by_room
 
         entity_request = self._build_entity_localization_request_body(
-            observation=observation,
+            observation=entity_observation,
             candidate_room_ids=candidate_room_ids,
             transition_support=transition_support,
         )
@@ -907,6 +1039,7 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         observation: Observation,
         candidate_room_ids: list[str],
     ) -> dict[str, list[tuple[str, float]]]:
+        observation = self._observation_with_inside_entities(observation)
         if not observation.entities:
             return {room_id: [] for room_id in candidate_room_ids}
         scores: dict[str, list[tuple[str, float]]] = {}
@@ -1022,7 +1155,7 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
         ranked_room_ids = self._ranked_room_ids(entity_transition_room_belief)
         if not ranked_room_ids:
             return []
-        return ranked_room_ids[:3]
+        return ranked_room_ids[:2]
 
     def _should_apply_alignment(self, entity_transition_room_belief: dict[str, float]) -> bool:
         ranked_room_ids = self._ranked_room_ids(entity_transition_room_belief)
