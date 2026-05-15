@@ -20,6 +20,204 @@
     ],
     "synthetic": false
   },
+  "Room 2": {
+    "room_id": "Room 2",
+    "display_name": "Room 2",
+    "floor": "0",
+    "category": "Themes",
+    "title": "Collecting the world",
+    "aliases": [
+      "Collecting the world",
+      "Room 2"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 1",
+        "target_display_name": "Room 1",
+        "allocentric_direction": "north",
+        "allocentric_heading_deg": 360.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
+  "Room 4": {
+    "room_id": "Room 4",
+    "display_name": "Room 4",
+    "floor": "0",
+    "category": "Ancient Egypt",
+    "title": "Egyptian sculpture",
+    "aliases": [
+      "Egyptian sculpture",
+      "Room 4"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 6",
+        "target_display_name": "Room 6",
+        "allocentric_direction": "south",
+        "allocentric_heading_deg": 180.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 8",
+        "target_display_name": "Room 8",
+        "allocentric_direction": "west",
+        "allocentric_heading_deg": 270.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 9",
+        "target_display_name": "Room 9",
+        "allocentric_direction": "east",
+        "allocentric_heading_deg": 90.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
+  "Room 6": {
+    "room_id": "Room 6",
+    "display_name": "Room 6",
+    "floor": "0",
+    "category": "Middle East",
+    "title": "Assyrian sculpture and Balawat Gates",
+    "aliases": [
+      "Assyrian sculpture and Balawat Gates",
+      "Early Greece",
+      "Room 6",
+      "Room 6 bottom"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 11",
+        "target_display_name": "Room 11",
+        "allocentric_direction": "west",
+        "allocentric_heading_deg": 270.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 4",
+        "target_display_name": "Room 4",
+        "allocentric_direction": "north",
+        "allocentric_heading_deg": 360.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 7",
+        "target_display_name": "Room 7",
+        "allocentric_direction": "north",
+        "allocentric_heading_deg": 360.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
+  "Room 7": {
+    "room_id": "Room 7",
+    "display_name": "Room 7",
+    "floor": "0",
+    "category": "Middle East",
+    "title": "Assyria: Nimrud",
+    "aliases": [
+      "Assyria: Nimrud",
+      "Room 7"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 8",
+        "target_display_name": "Room 8",
+        "allocentric_direction": "north",
+        "allocentric_heading_deg": 360.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 6",
+        "target_display_name": "Room 6",
+        "allocentric_direction": "south",
+        "allocentric_heading_deg": 180.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 10",
+        "target_display_name": "Room 10",
+        "allocentric_direction": "west",
+        "allocentric_heading_deg": 270.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
+  "Room 8": {
+    "room_id": "Room 8",
+    "display_name": "Room 8",
+    "floor": "0",
+    "category": "Middle East",
+    "title": "Assyria: Nimrud",
+    "aliases": [
+      "Assyria: Nimrud",
+      "Room 8"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 9",
+        "target_display_name": "Room 9",
+        "allocentric_direction": "north",
+        "allocentric_heading_deg": 360.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 4",
+        "target_display_name": "Room 4",
+        "allocentric_direction": "east",
+        "allocentric_heading_deg": 90.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 7",
+        "target_display_name": "Room 7",
+        "allocentric_direction": "south",
+        "allocentric_heading_deg": 180.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 23",
+        "target_display_name": "Room 23",
+        "allocentric_direction": "west",
+        "allocentric_heading_deg": 270.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
+  "Room 9": {
+    "room_id": "Room 9",
+    "display_name": "Room 9",
+    "floor": "0",
+    "category": "Middle East",
+    "title": "Assyria: Nineveh",
+    "aliases": [
+      "Assyria: Nineveh",
+      "Room 9"
+    ],
+    "neighbors": [
+      {
+        "target_room_id": "Room 4",
+        "target_display_name": "Room 4",
+        "allocentric_direction": "west",
+        "allocentric_heading_deg": 270.0,
+        "transition_type": "passage"
+      },
+      {
+        "target_room_id": "Room 8",
+        "target_display_name": "Room 8",
+        "allocentric_direction": "south",
+        "allocentric_heading_deg": 180.0,
+        "transition_type": "passage"
+      }
+    ],
+    "synthetic": false
+  },
   "Room 10": {
     "room_id": "Room 10",
     "display_name": "Room 10",
@@ -394,27 +592,6 @@
     ],
     "synthetic": false
   },
-  "Room 2": {
-    "room_id": "Room 2",
-    "display_name": "Room 2",
-    "floor": "0",
-    "category": "Themes",
-    "title": "Collecting the world",
-    "aliases": [
-      "Collecting the world",
-      "Room 2"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 1",
-        "target_display_name": "Room 1",
-        "allocentric_direction": "north",
-        "allocentric_heading_deg": 360.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
   "Room 20": {
     "room_id": "Room 20",
     "display_name": "Room 20",
@@ -663,183 +840,6 @@
         "target_display_name": "Room 24",
         "allocentric_direction": "east",
         "allocentric_heading_deg": 90.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
-  "Room 4": {
-    "room_id": "Room 4",
-    "display_name": "Room 4",
-    "floor": "0",
-    "category": "Ancient Egypt",
-    "title": "Egyptian sculpture",
-    "aliases": [
-      "Egyptian sculpture",
-      "Room 4"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 6",
-        "target_display_name": "Room 6",
-        "allocentric_direction": "south",
-        "allocentric_heading_deg": 180.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 8",
-        "target_display_name": "Room 8",
-        "allocentric_direction": "west",
-        "allocentric_heading_deg": 270.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 9",
-        "target_display_name": "Room 9",
-        "allocentric_direction": "east",
-        "allocentric_heading_deg": 90.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
-  "Room 6": {
-    "room_id": "Room 6",
-    "display_name": "Room 6",
-    "floor": "0",
-    "category": "Ancient Greece and Rome",
-    "title": "Early Greece",
-    "aliases": [
-      "Assyrian sculpture and Balawat Gates",
-      "Early Greece",
-      "Room 6",
-      "Room 6 bottom"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 11",
-        "target_display_name": "Room 11",
-        "allocentric_direction": "west",
-        "allocentric_heading_deg": 270.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 4",
-        "target_display_name": "Room 4",
-        "allocentric_direction": "north",
-        "allocentric_heading_deg": 360.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 7",
-        "target_display_name": "Room 7",
-        "allocentric_direction": "north",
-        "allocentric_heading_deg": 360.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
-  "Room 7": {
-    "room_id": "Room 7",
-    "display_name": "Room 7",
-    "floor": "0",
-    "category": "Middle East",
-    "title": "Assyria: Nimrud",
-    "aliases": [
-      "Assyria: Nimrud",
-      "Room 7"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 8",
-        "target_display_name": "Room 8",
-        "allocentric_direction": "north",
-        "allocentric_heading_deg": 360.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 6",
-        "target_display_name": "Room 6",
-        "allocentric_direction": "south",
-        "allocentric_heading_deg": 180.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 10",
-        "target_display_name": "Room 10",
-        "allocentric_direction": "west",
-        "allocentric_heading_deg": 270.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
-  "Room 8": {
-    "room_id": "Room 8",
-    "display_name": "Room 8",
-    "floor": "0",
-    "category": "Middle East",
-    "title": "Assyria: Nimrud",
-    "aliases": [
-      "Assyria: Nimrud",
-      "Room 8"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 9",
-        "target_display_name": "Room 9",
-        "allocentric_direction": "north",
-        "allocentric_heading_deg": 360.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 4",
-        "target_display_name": "Room 4",
-        "allocentric_direction": "east",
-        "allocentric_heading_deg": 90.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 7",
-        "target_display_name": "Room 7",
-        "allocentric_direction": "south",
-        "allocentric_heading_deg": 180.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 23",
-        "target_display_name": "Room 23",
-        "allocentric_direction": "west",
-        "allocentric_heading_deg": 270.0,
-        "transition_type": "passage"
-      }
-    ],
-    "synthetic": false
-  },
-  "Room 9": {
-    "room_id": "Room 9",
-    "display_name": "Room 9",
-    "floor": "0",
-    "category": "Middle East",
-    "title": "Assyria: Nineveh",
-    "aliases": [
-      "Assyria: Nineveh",
-      "Room 9"
-    ],
-    "neighbors": [
-      {
-        "target_room_id": "Room 4",
-        "target_display_name": "Room 4",
-        "allocentric_direction": "west",
-        "allocentric_heading_deg": 270.0,
-        "transition_type": "passage"
-      },
-      {
-        "target_room_id": "Room 8",
-        "target_display_name": "Room 8",
-        "allocentric_direction": "south",
-        "allocentric_heading_deg": 180.0,
         "transition_type": "passage"
       }
     ],

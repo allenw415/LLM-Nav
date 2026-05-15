@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import io
+import importlib.util
 import json
 import os
 import random
+import subprocess
+import sys
 import tempfile
 import unittest
 import urllib.error
@@ -72,6 +75,18 @@ MUSEUM_CAPTURE_LABELS = [
 
 
 class STNavTests(unittest.TestCase):
+    @staticmethod
+    def _load_pano_perception_eval_module():
+        module_path = Path(__file__).resolve().parents[1] / "scripts/demo/eval_pano_perception_grounding.py"
+        script_dir = str(module_path.parent)
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        spec = importlib.util.spec_from_file_location("eval_pano_perception_grounding_test", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
     def setUp(self) -> None:
         self.explicit_map = {
             "Room 8": {
@@ -479,7 +494,7 @@ class STNavTests(unittest.TestCase):
             },
         )
 
-    def test_model_response_client_retries_transient_http_errors(self) -> None:
+    def test_model_response_client_retries_http_500_errors(self) -> None:
         client = ModelResponseClient(
             api_key="test-key",
             api_base="https://example.test/v1",
@@ -489,8 +504,8 @@ class STNavTests(unittest.TestCase):
 
         transient_error = urllib.error.HTTPError(
             url="https://example.test/v1/responses",
-            code=503,
-            msg="Service Unavailable",
+            code=500,
+            msg="Internal Server Error",
             hdrs=None,
             fp=io.BytesIO(b'{"error":"backend busy"}'),
         )
@@ -1246,11 +1261,97 @@ class STNavTests(unittest.TestCase):
         self.assertIn("location_scope", entity_schema["properties"])
         self.assertEqual(entity_schema["properties"]["location_scope"]["enum"], ["inside", "outside", "unknown"])
         self.assertIn("visual_localization", schema["properties"])
-        self.assertIn("room_distribution", schema["properties"]["visual_localization"]["properties"])
+        room_score_schema = schema["properties"]["visual_localization"]["properties"]["room_scores"]["items"]
+        self.assertIn("evidence_type", room_score_schema["properties"])
+        self.assertIn("reason", room_score_schema["properties"])
         self.assertIn("Reason internally before answering", instructions)
         self.assertIn("use inside entities as the primary evidence", instructions)
+        self.assertIn("direct_room_label", instructions)
+        self.assertIn("shared_theme", instructions)
+        self.assertIn("not probabilities", instructions)
         self.assertIn("Candidate rooms:", visual_input)
         self.assertIn("location_scope=inside", visual_input)
+        self.assertIn("room_scores", visual_input)
+
+    def test_view_detector_extracts_view_themes_without_heading_labels(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        calls = []
+
+        def fake_response(body):
+            calls.append(body)
+            if body["text"]["format"]["name"] == "view_theme_extraction":
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "view_theme_observations": [
+                                {
+                                    "view_id": "view_0",
+                                    "observed_theme": "Assyria: Nimrud",
+                                    "confidence": 0.82,
+                                    "visible_room_label": None,
+                                    "evidence": ["relief panels"],
+                                    "current_or_adjacent": "ambiguous",
+                                    "reason": "Assyrian reliefs are visible.",
+                                }
+                            ],
+                            "summary": "Assyrian themes visible.",
+                        }
+                    )
+                }
+            return {
+                "output_text": json.dumps(
+                    {
+                        "entities": [],
+                        "visual_localization": {
+                            "predicted_room_id": "Room 8",
+                            "room_scores": [{"room_id": "Room 8", "evidence_type": "room_specific", "score": 8.0, "reason": "Nimrud theme."}],
+                            "evidence_entities": [],
+                            "summary": "Room 8 likely.",
+                        },
+                    }
+                )
+            }
+
+        detector = ViewDetector(
+            api_key="test-key",
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=fake_response,
+            enable_view_themes=True,
+            use_detection_files=False,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "view.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "east_to_south", "heading": 78.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            detections = detector.detect(manifest_path)
+            observation = MultiViewAggregator({}).aggregate(
+                manifest_path,
+                current_heading=330.0,
+                view_detections=detections,
+            )
+
+        self.assertEqual(len(calls), 2)
+        theme_request = next(body for body in calls if body["text"]["format"]["name"] == "view_theme_extraction")
+        theme_text = json.dumps(theme_request)
+        self.assertNotIn("east_to_south", theme_text)
+        self.assertNotIn("78.0", theme_text)
+        self.assertEqual(observation.metadata["view_theme_observations"][0]["view_id"], "view_0")
+        self.assertEqual(observation.metadata["view_theme_observations"][0]["observed_theme"], "Assyria: Nimrud")
 
     def test_view_detector_can_parse_integrated_visual_localization(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -1281,11 +1382,31 @@ class STNavTests(unittest.TestCase):
                         ],
                         "visual_localization": {
                             "predicted_room_id": "Room 8",
-                            "confidence": 0.9,
-                            "room_distribution": [
-                                {"room_id": "Room 8", "score": 0.9},
-                                {"room_id": "Room 9", "score": 0.05},
-                                {"room_id": "Room 23", "score": 0.05},
+                            "room_scores": [
+                                {
+                                    "room_id": "Room 7",
+                                    "evidence_type": "shared_theme",
+                                    "score": 5.0,
+                                    "reason": "Assyrian theme is plausible but weaker here.",
+                                },
+                                {
+                                    "room_id": "Room 8",
+                                    "evidence_type": "room_specific",
+                                    "score": 8.0,
+                                    "reason": "Lamassu is strong support for this candidate.",
+                                },
+                                {
+                                    "room_id": "Room 9",
+                                    "evidence_type": "shared_theme",
+                                    "score": 5.0,
+                                    "reason": "Assyrian theme is plausible but weaker here.",
+                                },
+                                {
+                                    "room_id": "Room 23",
+                                    "evidence_type": "weak_generic",
+                                    "score": 5.0,
+                                    "reason": "Generic sculpture overlap only.",
+                                },
                             ],
                             "evidence_entities": ["Lamassu"],
                             "summary": "Inside evidence matches Assyria: Nimrud.",
@@ -1326,6 +1447,781 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(len(observation.metadata["inside_entities"]), 1)
         self.assertEqual(len(observation.metadata["outside_entities"]), 1)
         self.assertEqual(observation.metadata["visual_localization"]["predicted_room_id"], "Room 8")
+        self.assertIn("room_scores", observation.metadata["visual_localization"])
+        room_score = next(
+            record
+            for record in observation.metadata["visual_localization"]["room_scores"]
+            if record["room_id"] == "Room 8"
+        )
+        self.assertEqual(room_score["evidence_type"], "room_specific")
+        self.assertEqual(room_score["reason"], "Lamassu is strong support for this candidate.")
+        self.assertIn("room_distribution", observation.metadata["visual_localization"])
+        distribution = {
+            record["room_id"]: record["score"]
+            for record in observation.metadata["visual_localization"]["room_distribution"]
+        }
+        self.assertGreater(distribution["Room 8"], distribution["Room 9"])
+        self.assertLess(distribution["Room 8"], 0.9)
+
+    def test_pano_perception_eval_samples_up_to_limit_per_room(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        grounding_payload = {
+            "mappings": {
+                "r8-a": "Room 8",
+                "r8-b": "Room 8",
+                "r8-c": "Room 8",
+                "r9-a": "Room 9",
+                "r9-b": "Room 9",
+                "r10-a": "Room 10",
+                "missing": "null",
+            }
+        }
+
+        samples = eval_module.room_samples_from_grounding(
+            grounding_payload,
+            room_ids=None,
+            samples_per_room=2,
+            seed=0,
+        )
+
+        counts = {}
+        for sample in samples:
+            counts[sample["room_id"]] = counts.get(sample["room_id"], 0) + 1
+        self.assertEqual(counts, {"Room 10": 1, "Room 8": 2, "Room 9": 2})
+
+    def test_pano_perception_eval_ranking_and_summary_metrics(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+
+        ranking = eval_module.ranking_payload(
+            {"Room 10": 0.4, "Room 7": 0.3, "Room 8": 0.2, "Room 9": 0.1},
+            "Room 8",
+        )
+        self.assertEqual(ranking["rank"], 3)
+        self.assertEqual(ranking["top1"], "Room 10")
+        self.assertEqual(ranking["top3"], ["Room 10", "Room 7", "Room 8"])
+        self.assertEqual(ranking["top5"], ["Room 10", "Room 7", "Room 8", "Room 9"])
+
+        records = [
+            {
+                "status": "scored",
+                "expected_room_id": "Room 8",
+                "observation_only": {"rank": 1, "top1": "Room 8", "top3": ["Room 8"], "top5": ["Room 8"]},
+            },
+            {
+                "status": "scored",
+                "expected_room_id": "Room 9",
+                "observation_only": {
+                    "rank": 3,
+                    "top1": "Room 10",
+                    "top3": ["Room 10", "Room 8", "Room 9"],
+                    "top5": ["Room 10", "Room 8", "Room 9"],
+                },
+            },
+            {
+                "status": "scored",
+                "expected_room_id": "Room 7",
+                "observation_only": {
+                    "rank": None,
+                    "top1": "Room 10",
+                    "top3": ["Room 10", "Room 8", "Room 9"],
+                    "top5": ["Room 10", "Room 8", "Room 9"],
+                },
+            },
+        ]
+
+        metrics = eval_module.rank_metrics(records, "observation_only")
+        self.assertEqual(metrics["sample_count"], 3)
+        self.assertEqual(metrics["scored_count"], 3)
+        self.assertEqual(metrics["ranked_count"], 2)
+        self.assertAlmostEqual(metrics["top1_accuracy"], 1 / 3)
+        self.assertAlmostEqual(metrics["top3_accuracy"], 2 / 3)
+        self.assertAlmostEqual(metrics["top5_accuracy"], 2 / 3)
+        self.assertAlmostEqual(metrics["mrr"], (1.0 + 1 / 3) / 2)
+        self.assertAlmostEqual(metrics["mean_rank"], 2.0)
+
+        summary = eval_module.score_results(
+            [
+                {
+                    **record,
+                    "prior_fused": record["observation_only"],
+                }
+                for record in records
+            ]
+        )
+        self.assertIn("observation_only", summary)
+        self.assertIn("prior_fused", summary)
+        self.assertIn("per_room", summary)
+        self.assertAlmostEqual(summary["observation_only"]["top3_accuracy"], 2 / 3)
+        self.assertIn("Room 8", summary["per_room"]["observation_only"])
+
+        spatial_summary = eval_module.score_results(
+            [
+                {
+                    **record,
+                    "prior_fused": record["observation_only"],
+                    "spatial_aligned": record["observation_only"],
+                }
+                for record in records
+            ]
+        )
+        self.assertIn("spatial_aligned", spatial_summary)
+        self.assertIn("spatial_aligned", spatial_summary["per_room"])
+
+    def test_integrated_visual_eval_uses_existing_localizer_with_gt_prior(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        captured = {}
+
+        class FakeVisualObservationLocalizer:
+            def __init__(self, *, room_graph, grounding_index):
+                captured["room_graph"] = room_graph
+                captured["grounding_index"] = grounding_index
+
+            def localize(self, *, observation, prior_room_belief, fallback_room_id):
+                captured["visual_localization"] = observation.metadata.get("visual_localization")
+                captured["prior_room_belief"] = dict(prior_room_belief)
+                captured["fallback_room_id"] = fallback_room_id
+                return {
+                    "observation_distribution": {"Room 10": 0.5, "Room 8": 0.4, "Room 9": 0.1},
+                    "transition_support": {"Room 8": 0.5, "Room 9": 0.5},
+                    "room_belief": {"Room 8": 0.7, "Room 9": 0.2, "Room 10": 0.1},
+                }
+
+        payload = {
+            "pano_id": "pano-8",
+            "floor": "0",
+            "current_heading": 330.0,
+            "entities": [
+                {
+                    "name": "Lamassu",
+                    "kind": "artwork",
+                    "confidence": 0.95,
+                    "source_views": ["north"],
+                    "location_scope": "inside",
+                }
+            ],
+            "visual_localization": {
+                "room_scores": [
+                    {
+                        "room_id": "Room 8",
+                        "evidence_type": "direct_room_label",
+                        "score": 10.0,
+                        "reason": "Legible Room 8 sign.",
+                    }
+                ],
+                "room_distribution": [{"room_id": "Room 8", "score": 1.0}],
+            },
+        }
+
+        with mock.patch.object(eval_module, "VisualObservationLocalizer", FakeVisualObservationLocalizer):
+            localization = eval_module.localize_integrated_visual(
+                payload=payload,
+                expected_room_id="Room 8",
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+            )
+
+        self.assertEqual(captured["prior_room_belief"], {"Room 8": 1.0})
+        self.assertEqual(captured["fallback_room_id"], "Room 8")
+        self.assertEqual(captured["visual_localization"], payload["visual_localization"])
+        self.assertEqual(localization["room_belief"]["Room 8"], 0.7)
+
+    def test_integrated_visual_eval_record_contains_observation_and_prior_rankings(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+
+        class FakeVisualObservationLocalizer:
+            def __init__(self, *, room_graph, grounding_index):
+                pass
+
+            def localize(self, *, observation, prior_room_belief, fallback_room_id):
+                return {
+                    "observation_distribution": {"Room 10": 0.5, "Room 8": 0.4, "Room 9": 0.1},
+                    "transition_support": {"Room 8": 0.5, "Room 9": 0.5},
+                    "room_belief": {"Room 8": 0.7, "Room 9": 0.2, "Room 10": 0.1},
+                }
+
+        args = eval_module.argparse.Namespace(
+            pipeline="integrated-visual",
+            reuse_existing_output=True,
+            force=False,
+        )
+        sample = {"room_id": "Room 8", "pano_id": "pano-8"}
+        payload = {
+            "pano_id": "pano-8",
+            "floor": "0",
+            "current_heading": 330.0,
+            "manifest_path": "/tmp/pano-8_manifest.json",
+            "entities": [],
+            "visual_localization": {
+                "room_scores": [
+                    {
+                        "room_id": "Room 8",
+                        "evidence_type": "direct_room_label",
+                        "score": 10.0,
+                        "reason": "Legible Room 8 sign.",
+                    }
+                ],
+                "room_distribution": [{"room_id": "Room 8", "score": 1.0}],
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = eval_module.output_path_for_sample(output_dir, sample)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload), encoding="utf-8")
+            with mock.patch.object(eval_module, "VisualObservationLocalizer", FakeVisualObservationLocalizer):
+                record = eval_module.evaluate_sample(
+                    args,
+                    sample=sample,
+                    output_dir=output_dir,
+                    room_graph=room_graph,
+                    grounding_index=GroundingIndex(grounding),
+                )
+
+        self.assertEqual(record["status"], "scored")
+        self.assertEqual(record["observation_only"]["rank"], 2)
+        self.assertEqual(record["observation_only"]["top1"], "Room 10")
+        self.assertEqual(record["prior_fused"]["rank"], 1)
+        self.assertEqual(record["prior_fused"]["top1"], "Room 8")
+        self.assertEqual(record["observation_distribution"], {"Room 10": 0.5, "Room 8": 0.4, "Room 9": 0.1})
+        self.assertEqual(record["transition_support"], {"Room 8": 0.5, "Room 9": 0.5})
+        self.assertEqual(record["posterior_room_belief"], {"Room 8": 0.7, "Room 9": 0.2, "Room 10": 0.1})
+        self.assertEqual(record["room_scores"][0]["evidence_type"], "direct_room_label")
+
+    def test_pano_perception_eval_passes_detector_model_fov_and_no_detection_cache(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        args = eval_module.argparse.Namespace(
+            artifacts_dir="dataset/sites/british_museum/normalized",
+            render_output_dir="renders/test_eval",
+            heading_mode="museum",
+            pitch=0.0,
+            fov=45,
+            width=512,
+            height=512,
+            current_heading=330.0,
+            render_api_key=None,
+            llm_api_key=None,
+            detector_model="gemma-4-31b-it",
+            detector_api_kind=None,
+            detector_api_base=None,
+            vlm_timeout=None,
+            no_detection_cache=True,
+            pipeline="integrated-visual",
+        )
+        completed = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "sample.json"
+            with mock.patch.object(eval_module.subprocess, "run", return_value=completed) as run_mock:
+                result = eval_module.run_perception(
+                    args,
+                    sample={"room_id": "Room 8", "pano_id": "pano-8"},
+                    output_path=output_path,
+                )
+
+        command = run_mock.call_args.args[0]
+        self.assertEqual(result["returncode"], 0)
+        self.assertIn("--fov", command)
+        self.assertEqual(command[command.index("--fov") + 1], "45")
+        self.assertIn("--detector-model", command)
+        self.assertEqual(command[command.index("--detector-model") + 1], "gemma-4-31b-it")
+        self.assertIn("--no-detection-cache", command)
+
+    def test_map_spatial_alignment_candidate_selector_uses_posterior_ratio(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+
+        candidates = eval_module.select_alignment_candidate_rooms(
+            {"Room 8": 0.34, "Room 7": 0.30, "Room 9": 0.16, "Room 10": 0.04},
+            ratio_threshold=0.5,
+            max_candidates=5,
+        )
+        self.assertEqual(candidates, ["Room 8", "Room 7"])
+
+        capped = eval_module.select_alignment_candidate_rooms(
+            {"Room 8": 0.34, "Room 7": 0.30, "Room 9": 0.24, "Room 4": 0.22},
+            ratio_threshold=0.5,
+            max_candidates=2,
+        )
+        self.assertEqual(capped, ["Room 8", "Room 7"])
+
+    def test_map_spatial_alignment_context_rooms_are_one_hop_without_candidates(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(
+            {
+                "Room 7": {"name": "Room 7", "Level": 0, "links": [{"direction": "up", "name": "Room 8"}, {"direction": "left", "name": "Room 10"}]},
+                "Room 8": {"name": "Room 8", "Level": 0, "links": [{"direction": "down", "name": "Room 7"}, {"direction": "up", "name": "Room 9"}, {"direction": "right", "name": "Room 23"}]},
+                "Room 9": {"name": "Room 9", "Level": 0, "links": [{"direction": "down", "name": "Room 8"}]},
+                "Room 10": {"name": "Room 10", "Level": 0, "links": []},
+                "Room 23": {"name": "Room 23", "Level": 0, "links": []},
+            }
+        )
+
+        context = eval_module.alignment_context_rooms(
+            ["Room 7", "Room 8"],
+            room_graph,
+            max_context_rooms=8,
+        )
+
+        self.assertEqual(context, ["Room 10", "Room 9", "Room 23"])
+        self.assertNotIn("Room 7", context)
+        self.assertNotIn("Room 8", context)
+
+    def test_map_spatial_alignment_cache_path_uses_separate_cache_root(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        output_root = Path("/tmp/eval_outputs")
+        output_path = output_root / "Room_10" / "pano-10.json"
+        cache_root = output_root / "_map_spatial_alignment_cache"
+
+        cache_path = eval_module.spatial_alignment_cache_path(
+            output_path,
+            output_root=output_root,
+            cache_root=cache_root,
+        )
+
+        self.assertEqual(cache_path, cache_root / "Room_10" / "pano-10.json")
+
+    def test_textual_map_spatial_alignment_request_uses_room_relations_without_map_image(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(
+            {
+                "Room 7": {"name": "Room 7", "Level": 0, "title": "Assyria: Nimrud", "links": [{"direction": "up", "name": "Room 8"}]},
+                "Room 8": {
+                    "name": "Room 8",
+                    "Level": 0,
+                    "title": "Assyria: Nimrud",
+                    "links": [{"direction": "down", "name": "Room 7"}, {"direction": "right", "name": "Room 23"}],
+                },
+                "Room 23": {"name": "Room 23", "Level": 0, "title": "Greek and Roman sculpture", "links": []},
+            }
+        )
+        grounding = build_grounding_template(room_graph)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            captures = []
+            for index in range(8):
+                view_path = tmp_path / f"view_{index}.png"
+                view_path.write_bytes(b"fake-view")
+                captures.append({"label": MUSEUM_CAPTURE_LABELS[index], "path": str(view_path)})
+            request = eval_module.build_textual_map_spatial_alignment_request_body(
+                model="gemma-4-31b-it",
+                captures=captures,
+                candidate_room_ids=["Room 7", "Room 8"],
+                context_room_ids=["Room 23"],
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+            )
+
+        input_content = request["input"][0]["content"]
+        request_text = "\n".join(
+            block.get("text", "")
+            for block in input_content
+            if isinstance(block, dict) and block.get("type") == "input_text"
+        )
+        self.assertIn("Textual museum map relations", request_text)
+        self.assertIn("south: Room 7", request_text)
+        self.assertIn("east: Room 23", request_text)
+        self.assertIn("Try rotations from view_0", request_text)
+        self.assertIn("view_0 is not north", request["instructions"])
+        self.assertNotIn("Original capture label", request_text)
+        self.assertNotIn("east_to_south", request_text)
+        self.assertEqual(sum(1 for block in input_content if block.get("type") == "input_image"), 8)
+
+    def test_two_stage_textual_map_uses_view_theme_observations_for_alignment(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(
+            {
+                "Room 7": {"name": "Room 7", "Level": 0, "title": "Assyria: Nimrud", "links": [{"direction": "up", "name": "Room 8"}]},
+                "Room 8": {
+                    "name": "Room 8",
+                    "Level": 0,
+                    "title": "Assyria: Nimrud",
+                    "links": [{"direction": "down", "name": "Room 7"}, {"direction": "right", "name": "Room 23"}],
+                },
+                "Room 23": {"name": "Room 23", "Level": 0, "title": "Greek and Roman sculpture", "links": []},
+            }
+        )
+        grounding = build_grounding_template(room_graph)
+        observations = [
+            {
+                "view_id": f"view_{index}",
+                "observed_theme": "Assyria: Nimrud" if index != 6 else "Greek and Roman sculpture",
+                "confidence": 0.8,
+                "visible_room_label": None,
+                "evidence": ["reliefs"],
+                "current_or_adjacent": "ambiguous",
+                "reason": "theme cue",
+            }
+            for index in range(8)
+        ]
+        request = eval_module.build_two_stage_textual_map_alignment_request_body(
+            model="gemma-4-31b-it",
+            view_theme_payload={"view_theme_observations": observations, "summary": "view themes"},
+            candidate_room_ids=["Room 7", "Room 8"],
+            context_room_ids=["Room 23"],
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+
+        content = request["input"][0]["content"]
+        request_text = content[0]["text"]
+        self.assertEqual(len(content), 1)
+        self.assertEqual(sum(1 for block in content if block.get("type") == "input_image"), 0)
+        self.assertIn("Fixed view theme observations", request_text)
+        self.assertIn("Greek and Roman sculpture", request_text)
+        self.assertIn("Do not reinterpret visual evidence", request["instructions"])
+        self.assertEqual(
+            request["text"]["format"]["schema"]["properties"]["sector_alignment"]["items"]["properties"]["view_id"]["enum"],
+            [f"view_{index}" for index in range(8)],
+        )
+
+    def test_view_theme_extraction_request_hides_room_candidates_and_heading_labels(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            captures = []
+            for index in range(8):
+                view_path = tmp_path / f"view_{index}.png"
+                view_path.write_bytes(b"fake-view")
+                captures.append({"label": MUSEUM_CAPTURE_LABELS[index], "path": str(view_path)})
+            request = eval_module.build_view_theme_extraction_request_body(
+                model="gemma-4-31b-it",
+                captures=captures,
+            )
+
+        content = request["input"][0]["content"]
+        request_text = "\n".join(
+            block.get("text", "")
+            for block in content
+            if isinstance(block, dict) and block.get("type") == "input_text"
+        )
+        self.assertIn("Do not localize the camera", request["instructions"])
+        self.assertNotIn("Candidate rooms", request_text)
+        self.assertNotIn("east_to_south", request_text)
+        self.assertEqual(sum(1 for block in content if block.get("type") == "input_image"), 8)
+
+    def test_two_stage_alignment_prefers_perception_view_themes(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        created_requests = []
+
+        class FakeModelResponseClient:
+            def __init__(self, **kwargs):
+                pass
+
+            def create(self, request_body):
+                created_requests.append(request_body)
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "aligned_room_id": "Room 8",
+                            "support": "strong",
+                            "view_0_allocentric_direction": "north",
+                            "sector_alignment": [
+                                {
+                                    "view_id": "view_0",
+                                    "allocentric_direction": "north",
+                                    "evidence_type": "current_room_interior",
+                                    "matched_room_or_theme": "Assyria: Nimrud",
+                                    "reason": "Theme matches fixed observation.",
+                                }
+                            ],
+                            "candidate_assessments": [
+                                {
+                                    "candidate_room_id": "Room 8",
+                                    "spatial_consistency": "strong",
+                                    "current_room_evidence": ["Assyria: Nimrud"],
+                                    "adjacent_or_visible_only_evidence": [],
+                                    "contradictions": [],
+                                    "summary": "Best match.",
+                                }
+                            ],
+                            "supporting_evidence": ["Fixed view theme supports Room 8."],
+                            "conflicting_evidence": [],
+                            "summary": "Room 8 aligns best.",
+                        }
+                    )
+                }
+
+        args = eval_module.argparse.Namespace(
+            alignment_mode="textual-map-two-stage",
+            alignment_candidate_ratio_threshold=0.5,
+            alignment_candidate_max=5,
+            alignment_context_max=8,
+            alignment_map_path="/tmp/not-used.png",
+            alignment_model=None,
+            detector_model="gemma-4-31b-it",
+            detector_api_kind=None,
+            detector_api_base=None,
+            alignment_timeout=None,
+            vlm_timeout=None,
+            llm_api_key=None,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            image_path = tmp_path / "view.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp_path / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            payload = {
+                "pano_id": "pano-8",
+                "manifest_path": str(manifest_path),
+                "view_theme_observations": [
+                    {
+                        "view_id": "view_0",
+                        "observed_theme": "Assyria: Nimrud",
+                        "confidence": 0.9,
+                        "visible_room_label": None,
+                        "evidence": ["reliefs"],
+                        "current_or_adjacent": "current",
+                        "reason": "Clear theme.",
+                    }
+                ],
+            }
+            with mock.patch.object(eval_module, "ModelResponseClient", FakeModelResponseClient):
+                result = eval_module.run_map_spatial_alignment(
+                    args,
+                    payload=payload,
+                    output_path=tmp_path / "Room_8" / "pano-8.json",
+                    output_root=tmp_path,
+                    cache_root=tmp_path / "alignment_cache",
+                    view_theme_cache_root=tmp_path / "theme_cache",
+                    posterior_room_belief={"Room 8": 0.5, "Room 7": 0.5},
+                    room_graph=room_graph,
+                    grounding_index=GroundingIndex(grounding),
+                )
+
+        self.assertEqual(len(created_requests), 1)
+        self.assertEqual(created_requests[0]["text"]["format"]["name"], "two_stage_textual_map_spatial_alignment")
+        self.assertEqual(sum(1 for block in created_requests[0]["input"][0]["content"] if block.get("type") == "input_image"), 0)
+        self.assertIsNone(result.get("view_theme_cache_path"))
+        self.assertEqual(result["view_theme_payload"]["view_theme_observations"][0]["observed_theme"], "Assyria: Nimrud")
+
+    def test_map_spatial_alignment_prompt_uses_themes_without_direction_relations(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(
+            {
+                "Room 7": {"name": "Room 7", "Level": 0, "title": "Assyria: Nimrud", "links": [{"direction": "up", "name": "Room 8"}]},
+                "Room 8": {"name": "Room 8", "Level": 0, "title": "Assyria: Nimrud", "links": [{"direction": "down", "name": "Room 7"}, {"direction": "right", "name": "Room 23"}]},
+                "Room 23": {"name": "Room 23", "Level": 0, "title": "Greek and Roman sculpture", "links": []},
+            }
+        )
+        grounding = build_grounding_template(room_graph)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            map_path = tmp_path / "map.png"
+            map_path.write_bytes(b"fake-map")
+            captures = []
+            for index in range(8):
+                view_path = tmp_path / f"view_{index}.png"
+                view_path.write_bytes(b"fake-view")
+                captures.append({"label": f"sector-{index}", "path": str(view_path)})
+            request = eval_module.build_map_spatial_alignment_request_body(
+                model="gemma-4-31b-it",
+                map_path=map_path,
+                captures=captures,
+                candidate_room_ids=["Room 7", "Room 8"],
+                context_room_ids=["Room 23"],
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+            )
+
+        text = request["input"][0]["content"][0]["text"]
+        request_text = "\n".join(
+            block.get("text", "")
+            for block in request["input"][0]["content"]
+            if isinstance(block, dict) and block.get("type") == "input_text"
+        )
+        schema = request["text"]["format"]["schema"]
+        self.assertIn("Candidate rooms", text)
+        self.assertIn("Context rooms", text)
+        self.assertIn("Assyria: Nimrud", text)
+        self.assertIn("Greek and Roman sculpture", text)
+        self.assertIn("Evaluate all 8 panorama sectors", text)
+        self.assertIn("Compare every candidate room", text)
+        self.assertIn("theme similarity alone", request["instructions"])
+        self.assertNotIn("north of", text)
+        self.assertNotIn("south of", text)
+        self.assertNotIn("east of", text)
+        self.assertNotIn("west of", text)
+        self.assertNotIn("Original capture label", request_text)
+        self.assertNotIn("sector-0", request_text)
+        self.assertIn("candidate_assessments", schema["required"])
+        self.assertIn(
+            "current_room_interior",
+            schema["properties"]["sector_alignment"]["items"]["properties"]["evidence_type"]["enum"],
+        )
+
+    def test_map_spatial_alignment_ranking_uses_support_and_candidate_guard(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        posterior = {"Room 7": 0.45, "Room 8": 0.35, "Room 9": 0.20}
+
+        ranking, reason = eval_module.apply_spatial_alignment_ranking(
+            posterior,
+            {
+                "aligned_room_id": "Room 8",
+                "support": "strong",
+                "candidate_assessments": [
+                    {"candidate_room_id": "Room 8", "spatial_consistency": "strong"}
+                ],
+            },
+            ["Room 7", "Room 8"],
+        )
+        self.assertIsNone(reason)
+        self.assertEqual(ranking[:3], ["Room 8", "Room 7", "Room 9"])
+
+        moderate_ranking, moderate_reason = eval_module.apply_spatial_alignment_ranking(
+            posterior,
+            {"aligned_room_id": "Room 8", "support": "moderate"},
+            ["Room 7", "Room 8"],
+        )
+        self.assertEqual(moderate_ranking[:3], ["Room 7", "Room 8", "Room 9"])
+        self.assertEqual(moderate_reason, "moderate_support_not_close_to_top")
+
+        close_moderate_ranking, close_moderate_reason = eval_module.apply_spatial_alignment_ranking(
+            {"Room 7": 0.45, "Room 8": 0.38, "Room 9": 0.17},
+            {"aligned_room_id": "Room 8", "support": "moderate"},
+            ["Room 7", "Room 8"],
+        )
+        self.assertIsNone(close_moderate_reason)
+        self.assertEqual(close_moderate_ranking[:3], ["Room 8", "Room 7", "Room 9"])
+
+        weak_ranking, weak_reason = eval_module.apply_spatial_alignment_ranking(
+            posterior,
+            {"aligned_room_id": "Room 8", "support": "weak"},
+            ["Room 7", "Room 8"],
+        )
+        self.assertEqual(weak_ranking[:3], ["Room 7", "Room 8", "Room 9"])
+        self.assertEqual(weak_reason, "support_weak")
+
+        invalid_ranking, invalid_reason = eval_module.apply_spatial_alignment_ranking(
+            posterior,
+            {"aligned_room_id": "Room 23", "support": "strong"},
+            ["Room 7", "Room 8"],
+        )
+        self.assertEqual(invalid_ranking[:3], ["Room 7", "Room 8", "Room 9"])
+        self.assertEqual(invalid_reason, "aligned_room_not_candidate")
+
+        contradicted_ranking, contradicted_reason = eval_module.apply_spatial_alignment_ranking(
+            posterior,
+            {
+                "aligned_room_id": "Room 8",
+                "support": "strong",
+                "candidate_assessments": [
+                    {"candidate_room_id": "Room 8", "spatial_consistency": "contradicted"}
+                ],
+            },
+            ["Room 7", "Room 8"],
+        )
+        self.assertEqual(contradicted_ranking[:3], ["Room 7", "Room 8", "Room 9"])
+        self.assertEqual(contradicted_reason, "aligned_room_contradicted")
+
+    def test_map_spatial_alignment_missing_map_path_raises_clear_error(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        args = eval_module.argparse.Namespace(
+            alignment_candidate_ratio_threshold=0.5,
+            alignment_candidate_max=5,
+            alignment_context_max=8,
+            alignment_map_path="/tmp/definitely-missing-level-0-map.png",
+            alignment_model=None,
+            detector_model="gemma-4-31b-it",
+            detector_api_kind=None,
+            detector_api_base=None,
+            alignment_timeout=None,
+            vlm_timeout=None,
+            llm_api_key=None,
+        )
+
+        with self.assertRaises(FileNotFoundError) as context:
+            eval_module.run_map_spatial_alignment(
+                args,
+                payload={"pano_id": "pano-8"},
+                output_path=Path("/tmp/pano-8.json"),
+                posterior_room_belief={"Room 7": 0.45, "Room 8": 0.35},
+                room_graph={},
+                grounding_index=GroundingIndex({}),
+            )
+
+        self.assertIn("Spatial alignment map not found", str(context.exception))
+
+    def test_integrated_visual_eval_record_contains_spatial_alignment_ranking(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+
+        class FakeVisualObservationLocalizer:
+            def __init__(self, *, room_graph, grounding_index):
+                pass
+
+            def localize(self, *, observation, prior_room_belief, fallback_room_id):
+                return {
+                    "observation_distribution": {"Room 10": 0.5, "Room 8": 0.4, "Room 9": 0.1},
+                    "transition_support": {"Room 8": 0.5, "Room 9": 0.5},
+                    "room_belief": {"Room 7": 0.45, "Room 8": 0.35, "Room 9": 0.2},
+                }
+
+        args = eval_module.argparse.Namespace(
+            pipeline="integrated-visual",
+            reuse_existing_output=True,
+            force=False,
+            enable_spatial_alignment=True,
+        )
+        sample = {"room_id": "Room 8", "pano_id": "pano-8"}
+        payload = {
+            "pano_id": "pano-8",
+            "floor": "0",
+            "current_heading": 330.0,
+            "manifest_path": "/tmp/pano-8_manifest.json",
+            "entities": [],
+            "visual_localization": {"room_scores": [{"room_id": "Room 8", "score": 8.0}]},
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            output_path = eval_module.output_path_for_sample(output_dir, sample)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(json.dumps(payload), encoding="utf-8")
+            with mock.patch.object(eval_module, "VisualObservationLocalizer", FakeVisualObservationLocalizer):
+                with mock.patch.object(
+                    eval_module,
+                    "run_map_spatial_alignment",
+                    return_value={
+                        "status": "scored",
+                        "candidate_room_ids": ["Room 7", "Room 8"],
+                        "context_room_ids": ["Room 9"],
+                        "alignment": {"aligned_room_id": "Room 8", "support": "strong"},
+                        "cache_path": str(output_path.with_name("cache.json")),
+                    },
+                ):
+                    record = eval_module.evaluate_sample(
+                        args,
+                        sample=sample,
+                        output_dir=output_dir,
+                        room_graph=room_graph,
+                        grounding_index=GroundingIndex(grounding),
+                    )
+
+        self.assertEqual(record["status"], "scored")
+        self.assertEqual(record["spatial_aligned"]["rank"], 1)
+        self.assertEqual(record["spatial_aligned"]["top1"], "Room 8")
+        self.assertEqual(record["spatial_alignment_candidates"], ["Room 7", "Room 8"])
+        self.assertEqual(record["spatial_alignment_context_rooms"], ["Room 9"])
 
     def test_view_detector_writes_and_reuses_integrated_detection_cache(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -1388,9 +2284,168 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(first[0].entities[0].location_scope, "inside")
         self.assertEqual(second[0].entities[0].location_scope, "inside")
-        self.assertEqual(cache_payload["cache_version"], 2)
+        self.assertEqual(cache_payload["cache_version"], 3)
         self.assertEqual(cache_payload["entities"][0]["location_scope"], "inside")
         self.assertEqual(cache_payload["visual_localization"]["predicted_room_id"], "Room 8")
+
+    def test_view_detector_writes_and_reuses_view_theme_cache(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        calls = []
+
+        def fake_response(body):
+            calls.append(body)
+            if body["text"]["format"]["name"] == "view_theme_extraction":
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "view_theme_observations": [
+                                {
+                                    "view_id": "view_0",
+                                    "observed_theme": "Assyria: Nimrud",
+                                    "confidence": 0.9,
+                                    "visible_room_label": None,
+                                    "evidence": ["reliefs"],
+                                    "current_or_adjacent": "current",
+                                    "reason": "Clear Assyrian reliefs.",
+                                }
+                            ],
+                            "summary": "Nimrud theme.",
+                        }
+                    )
+                }
+            return {
+                "output_text": json.dumps(
+                    {
+                        "entities": [],
+                        "visual_localization": {
+                            "predicted_room_id": "Room 8",
+                            "room_scores": [{"room_id": "Room 8", "evidence_type": "room_specific", "score": 8.0, "reason": "Nimrud."}],
+                            "evidence_entities": [],
+                            "summary": "Room 8.",
+                        },
+                    }
+                )
+            }
+
+        detector = ViewDetector(
+            api_key="test-key",
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=fake_response,
+            enable_view_themes=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "north.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            first = detector.detect(manifest_path)
+            second = detector.detect(manifest_path)
+            cache_payload = json.loads(
+                manifest_path.with_name("pano-8_manifest_detections.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(first[0].metadata["view_theme_observations"][0]["observed_theme"], "Assyria: Nimrud")
+        self.assertEqual(second[0].metadata["view_theme_observations"][0]["observed_theme"], "Assyria: Nimrud")
+        self.assertEqual(cache_payload["view_theme_observations"][0]["view_id"], "view_0")
+
+    def test_view_detector_refreshes_old_cache_when_view_themes_are_enabled(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_grounding_template(room_graph)
+        calls = []
+
+        def fake_response(body):
+            calls.append(body)
+            if body["text"]["format"]["name"] == "view_theme_extraction":
+                return {
+                    "output_text": json.dumps(
+                        {
+                            "view_theme_observations": [
+                                {
+                                    "view_id": "view_0",
+                                    "observed_theme": "Assyria: Nimrud",
+                                    "confidence": 0.9,
+                                    "visible_room_label": None,
+                                    "evidence": ["reliefs"],
+                                    "current_or_adjacent": "current",
+                                    "reason": "Clear Assyrian reliefs.",
+                                }
+                            ],
+                            "summary": "Nimrud theme.",
+                        }
+                    )
+                }
+            return {
+                "output_text": json.dumps(
+                    {
+                        "entities": [],
+                        "visual_localization": {
+                            "predicted_room_id": "Room 8",
+                            "room_scores": [{"room_id": "Room 8", "evidence_type": "room_specific", "score": 8.0, "reason": "Nimrud."}],
+                            "evidence_entities": [],
+                            "summary": "Room 8.",
+                        },
+                    }
+                )
+            }
+
+        detector = ViewDetector(
+            api_key="test-key",
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            response_client=fake_response,
+            enable_view_themes=True,
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp = Path(tmpdir)
+            image_path = tmp / "north.png"
+            image_path.write_bytes(b"fake-image")
+            manifest_path = tmp / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "floor": "0",
+                        "captures": [{"label": "north", "heading": 330.0, "path": str(image_path)}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            manifest_path.with_name("pano-8_manifest_detections.json").write_text(
+                json.dumps(
+                    {
+                        "cache_version": 2,
+                        "entities": [],
+                        "candidate_room_ids": ["Room 8", "Room 9", "Room 23"],
+                        "visual_localization": {"predicted_room_id": "Room 8"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            detections = detector.detect(manifest_path)
+            cache_payload = json.loads(
+                manifest_path.with_name("pano-8_manifest_detections.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(detections[0].metadata["view_theme_observations"][0]["view_id"], "view_0")
+        self.assertIn("view_theme_observations", cache_payload)
 
     def test_view_detector_can_preserve_passage_kind(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)

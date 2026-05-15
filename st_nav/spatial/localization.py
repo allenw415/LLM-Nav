@@ -22,6 +22,7 @@ from ..common.prompts import (
     build_spatial_context_extraction_instructions,
     build_spatial_context_extraction_schema,
 )
+from ..common.scoring import evidence_scores_to_distribution
 from ..common.types import EntityDetection, Observation
 from .grounding import GroundingIndex
 
@@ -511,6 +512,19 @@ class VisualObservationLocalizer(RoomLocalizer):
         scores = {room_id: 0.0 for room_id in candidate_room_ids}
         if not isinstance(visual_localization, dict):
             return scores
+        raw_room_scores = visual_localization.get("room_scores")
+        if isinstance(raw_room_scores, list) and raw_room_scores:
+            for record in raw_room_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, min(10.0, float(score)))
+            normalized_scores = evidence_scores_to_distribution(scores)
+            if any(value > 0.0 for value in normalized_scores.values()):
+                return normalized_scores
+            return scores
         raw_distribution = visual_localization.get("room_distribution")
         if isinstance(raw_distribution, dict):
             for room_id, score in raw_distribution.items():
@@ -696,9 +710,20 @@ class LLMRoomLocalizer(RoomLocalizer):
 
     def _observation_scores_from_llm(self, parsed: dict, candidate_room_ids: list[str]) -> dict[str, float]:
         scores = {room_id: 0.0 for room_id in candidate_room_ids}
+        raw_room_scores = parsed.get("room_scores")
+        if isinstance(raw_room_scores, list) and raw_room_scores:
+            for record in raw_room_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, min(10.0, float(score)))
+            normalized_scores = evidence_scores_to_distribution(scores)
+            if any(value > 0.0 for value in normalized_scores.values()):
+                return normalized_scores
+
         raw_scores = parsed.get("room_distribution")
-        if not isinstance(raw_scores, list):
-            raw_scores = parsed.get("room_scores")
         if isinstance(raw_scores, list):
             for record in raw_scores:
                 if not isinstance(record, dict):
@@ -1500,9 +1525,20 @@ class LLMSpatialAlignmentLocalizer(RoomLocalizer):
     @staticmethod
     def _observation_scores_from_llm_distribution(parsed: dict, candidate_room_ids: list[str]) -> dict[str, float]:
         scores = {room_id: 0.0 for room_id in candidate_room_ids}
+        raw_room_scores = parsed.get("room_scores")
+        if isinstance(raw_room_scores, list) and raw_room_scores:
+            for record in raw_room_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in scores and isinstance(score, (int, float)):
+                    scores[room_id] = max(0.0, min(10.0, float(score)))
+            normalized_scores = evidence_scores_to_distribution(scores)
+            if any(value > 0.0 for value in normalized_scores.values()):
+                return normalized_scores
+
         raw_scores = parsed.get("room_distribution")
-        if not isinstance(raw_scores, list):
-            raw_scores = parsed.get("room_scores")
         if isinstance(raw_scores, list):
             for record in raw_scores:
                 if not isinstance(record, dict):

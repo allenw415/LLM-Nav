@@ -13,10 +13,14 @@ from ..common.prompts import (
     build_view_detection_input,
     build_view_detection_instructions,
     build_view_detection_schema,
+    build_view_theme_extraction_input,
+    build_view_theme_extraction_instructions,
+    build_view_theme_extraction_schema,
     build_visual_detection_localization_input,
     build_visual_detection_localization_instructions,
     build_visual_detection_localization_schema,
 )
+from ..common.scoring import evidence_scores_to_distribution, normalize_positive_scores
 from ..common.types import EntityDetection, Observation, RenderedView, ViewDetection
 from .renderer import PanoramaRenderer, normalize_heading
 
@@ -40,6 +44,7 @@ class ViewDetector:
         request_timeout: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
         use_detection_files: bool = True,
+        enable_view_themes: bool = False,
         room_graph: dict[str, dict] | None = None,
         grounding_index=None,
     ):
@@ -55,11 +60,13 @@ class ViewDetector:
         self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 180.0))
         self.response_client = response_client
         self.use_detection_files = use_detection_files
+        self.enable_view_themes = enable_view_themes
         self.room_graph = room_graph
         self.grounding_index = grounding_index
         self.last_traces: list[dict] = []
         self.last_visual_localization: dict | None = None
         self.last_candidate_room_ids: list[str] = []
+        self.last_view_theme_observations: list[dict] = []
         self.model_client = ModelResponseClient(
             provider=settings.provider,
             api_key=self.api_key,
@@ -76,13 +83,14 @@ class ViewDetector:
         self.last_traces = []
         self.last_visual_localization = None
         self.last_candidate_room_ids = []
+        self.last_view_theme_observations = []
         detection_path = manifest_path.with_name(f"{manifest_path.stem}_detections.json")
         trace_path = manifest_path.with_name(f"{manifest_path.stem}_detections_trace.json")
         if self.use_detection_files and detection_path.exists():
             manifest = self._load_manifest_for_cache_check(manifest_path)
             if (
-                self._detection_cache_matches_current_candidates(detection_path, manifest)
-                or not self.model_client.is_configured()
+                self._detection_cache_matches_current_settings(detection_path, manifest)
+                or (not self.model_client.is_configured() and not self.enable_view_themes)
             ):
                 self.last_traces = self._load_trace_file(trace_path)
                 return self._load_detection_file(detection_path)
@@ -101,6 +109,7 @@ class ViewDetector:
         metadata = self._metadata_from_detection_payload(payload)
         self.last_visual_localization = metadata.get("visual_localization")
         self.last_candidate_room_ids = list(metadata.get("candidate_room_ids", []))
+        self.last_view_theme_observations = list(metadata.get("view_theme_observations", []))
         grouped: dict[str, ViewDetection] = {}
         for record in payload.get("entities", []):
             if not isinstance(record, dict):
@@ -121,16 +130,21 @@ class ViewDetector:
             grouped["multiview"] = ViewDetection(capture_label="multiview", metadata=dict(metadata))
         return list(grouped.values())
 
-    def _detection_cache_matches_current_candidates(self, detection_path: Path, manifest: dict | None) -> bool:
+    def _detection_cache_matches_current_settings(self, detection_path: Path, manifest: dict | None) -> bool:
+        try:
+            payload = json.loads(detection_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False
+        if self.enable_view_themes:
+            if payload.get("cache_version") != 3:
+                return False
+            if not isinstance(payload.get("view_theme_observations"), list):
+                return False
         if manifest is None:
             return True
         expected_candidate_room_ids = self._candidate_room_ids(manifest)
         if not expected_candidate_room_ids:
             return True
-        try:
-            payload = json.loads(detection_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return False
         cached_candidate_room_ids = payload.get("candidate_room_ids")
         return cached_candidate_room_ids == expected_candidate_room_ids
 
@@ -164,11 +178,13 @@ class ViewDetector:
                         record[key] = value
                 records.append(record)
 
-        payload = {"cache_version": 2, "entities": records}
+        payload = {"cache_version": 3, "entities": records}
         if metadata.get("candidate_room_ids"):
             payload["candidate_room_ids"] = list(metadata["candidate_room_ids"])
         if isinstance(metadata.get("visual_localization"), dict):
             payload["visual_localization"] = dict(metadata["visual_localization"])
+        if isinstance(metadata.get("view_theme_observations"), list):
+            payload["view_theme_observations"] = list(metadata["view_theme_observations"])
         detection_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _write_trace_file(self, trace_path: Path) -> None:
@@ -231,10 +247,30 @@ class ViewDetector:
                 candidate_room_ids=candidate_room_ids,
             )
             self.last_visual_localization = dict(metadata["visual_localization"])
+        if self.enable_view_themes:
+            view_theme_payload = self._extract_view_themes(captures)
+            observations = view_theme_payload.get("view_theme_observations")
+            if isinstance(observations, list):
+                metadata["view_theme_observations"] = self._normalize_view_theme_observations(observations)
+                self.last_view_theme_observations = list(metadata["view_theme_observations"])
         if candidate_room_ids:
             metadata["candidate_room_ids"] = list(candidate_room_ids)
             self.last_candidate_room_ids = list(candidate_room_ids)
         return [ViewDetection(capture_label="multiview", entities=entities, metadata=metadata)] if entities or metadata else []
+
+    def _extract_view_themes(self, captures: list[dict]) -> dict:
+        request_body = self._build_view_theme_request_body(captures)
+        payload = self._create_response(request_body)
+        self.last_traces.append(
+            {
+                "capture_label": "view_themes",
+                "capture_labels": [f"view_{index}" for index, _ in enumerate(captures)],
+                "request": self._redact_request_body(request_body),
+                "response": self._clone_json(payload),
+            }
+        )
+        parsed = self._parse_output_payload(payload)
+        return parsed if isinstance(parsed, dict) else {}
 
     def _build_request_body(self, captures: list[dict]) -> dict:
         content = [{"type": "input_text", "text": build_view_detection_input(captures)}]
@@ -315,6 +351,46 @@ class ViewDetector:
                     "name": "visual_detection_localization",
                     "strict": True,
                     "schema": build_visual_detection_localization_schema(room_ids),
+                }
+            },
+        }
+
+    def _build_view_theme_request_body(self, captures: list[dict]) -> dict:
+        content = [{"type": "input_text", "text": build_view_theme_extraction_input(captures)}]
+        for index, capture in enumerate(captures):
+            content.extend(
+                [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            f"Panorama sector view_{index}. This is sector {index + 1} of {len(captures)} "
+                            "in clockwise order; the absolute allocentric direction is unknown."
+                        ),
+                    },
+                    {
+                        "type": "input_image",
+                        "image_url": self._image_to_data_url(Path(str(capture["path"]))),
+                        "detail": "high",
+                    },
+                ]
+            )
+        view_ids = [f"view_{index}" for index, _ in enumerate(captures)]
+        return {
+            "model": self.model,
+            "instructions": build_view_theme_extraction_instructions(),
+            "input": [
+                {
+                    "role": "user",
+                    "content": content,
+                }
+            ],
+            "reasoning": {"effort": "low"},
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "view_theme_extraction",
+                    "strict": True,
+                    "schema": build_view_theme_extraction_schema(view_ids),
                 }
             },
         }
@@ -408,6 +484,9 @@ class ViewDetector:
         visual_localization = payload.get("visual_localization")
         if isinstance(visual_localization, dict):
             metadata["visual_localization"] = dict(visual_localization)
+        view_theme_observations = payload.get("view_theme_observations")
+        if isinstance(view_theme_observations, list):
+            metadata["view_theme_observations"] = ViewDetector._normalize_view_theme_observations(view_theme_observations)
         return metadata
 
     @staticmethod
@@ -420,32 +499,136 @@ class ViewDetector:
                 merged["visual_localization"] = dict(view_detection.metadata["visual_localization"])
             if "candidate_room_ids" not in merged and isinstance(view_detection.metadata.get("candidate_room_ids"), list):
                 merged["candidate_room_ids"] = list(view_detection.metadata["candidate_room_ids"])
+            if "view_theme_observations" not in merged and isinstance(view_detection.metadata.get("view_theme_observations"), list):
+                merged["view_theme_observations"] = list(view_detection.metadata["view_theme_observations"])
         return merged
+
+    @staticmethod
+    def _normalize_view_theme_observations(observations: object) -> list[dict]:
+        if not isinstance(observations, list):
+            return []
+        normalized = []
+        for record in observations:
+            if not isinstance(record, dict):
+                continue
+            view_id = record.get("view_id")
+            if not isinstance(view_id, str) or not view_id:
+                continue
+            observed_theme = record.get("observed_theme")
+            confidence = record.get("confidence")
+            visible_room_label = record.get("visible_room_label")
+            evidence = record.get("evidence")
+            visual_evidence = record.get("visual_evidence")
+            theme_matches = record.get("theme_matches")
+            current_or_adjacent = record.get("current_or_adjacent")
+            spatial_boundary_evidence = record.get("spatial_boundary_evidence")
+            reason = record.get("reason")
+            normalized.append(
+                {
+                    "view_id": view_id,
+                    "observed_theme": observed_theme if isinstance(observed_theme, str) else "",
+                    "confidence": max(0.0, min(1.0, float(confidence))) if isinstance(confidence, (int, float)) else 0.0,
+                    "visible_room_label": visible_room_label if isinstance(visible_room_label, str) and visible_room_label else None,
+                    "evidence": [value for value in evidence if isinstance(value, str) and value] if isinstance(evidence, list) else [],
+                    "visual_evidence": [value for value in visual_evidence if isinstance(value, str) and value]
+                    if isinstance(visual_evidence, list)
+                    else [],
+                    "theme_matches": ViewDetector._normalize_theme_matches(theme_matches),
+                    "current_or_adjacent": current_or_adjacent
+                    if current_or_adjacent in {"current", "adjacent", "both", "ambiguous"}
+                    else "ambiguous",
+                    "spatial_boundary_evidence": [
+                        value for value in spatial_boundary_evidence if isinstance(value, str) and value
+                    ]
+                    if isinstance(spatial_boundary_evidence, list)
+                    else [],
+                    "reason": reason if isinstance(reason, str) else "",
+                }
+            )
+        return normalized
+
+    @staticmethod
+    def _normalize_theme_matches(theme_matches: object) -> list[dict]:
+        if not isinstance(theme_matches, list):
+            return []
+        normalized: list[dict] = []
+        for match in theme_matches:
+            if not isinstance(match, dict):
+                continue
+            room_ids = match.get("room_ids")
+            canonical_theme = match.get("canonical_theme")
+            confidence = match.get("confidence")
+            reason = match.get("reason")
+            normalized.append(
+                {
+                    "room_ids": [value for value in room_ids if isinstance(value, str) and value]
+                    if isinstance(room_ids, list)
+                    else [],
+                    "canonical_theme": canonical_theme if isinstance(canonical_theme, str) else "",
+                    "confidence": max(0.0, min(1.0, float(confidence)))
+                    if isinstance(confidence, (int, float))
+                    else 0.0,
+                    "reason": reason if isinstance(reason, str) else "",
+                }
+            )
+        return normalized
 
     @staticmethod
     def _normalize_visual_localization(visual_localization: dict, *, candidate_room_ids: list[str]) -> dict:
         candidate_set = set(candidate_room_ids)
-        room_distribution = []
+        raw_scores_by_room = {room_id: 0.0 for room_id in candidate_room_ids}
+        room_scores = []
+        raw_scores = visual_localization.get("room_scores")
+        if isinstance(raw_scores, list):
+            for record in raw_scores:
+                if not isinstance(record, dict):
+                    continue
+                room_id = record.get("room_id")
+                score = record.get("score")
+                if room_id in candidate_set and isinstance(score, (int, float)):
+                    evidence_score = max(0.0, min(10.0, float(score)))
+                    raw_scores_by_room[room_id] = evidence_score
+                    normalized_record = {"room_id": room_id, "score": evidence_score}
+                    evidence_type = record.get("evidence_type")
+                    if isinstance(evidence_type, str) and evidence_type:
+                        normalized_record["evidence_type"] = evidence_type
+                    reason = record.get("reason")
+                    if isinstance(reason, str):
+                        normalized_record["reason"] = reason
+                    room_scores.append(normalized_record)
+        room_distribution_by_room = (
+            evidence_scores_to_distribution(raw_scores_by_room)
+            if room_scores
+            else {room_id: 0.0 for room_id in candidate_room_ids}
+        )
         raw_distribution = visual_localization.get("room_distribution")
-        if isinstance(raw_distribution, list):
+        if not room_scores and isinstance(raw_distribution, list):
+            probability_scores = {room_id: 0.0 for room_id in candidate_room_ids}
             for record in raw_distribution:
                 if not isinstance(record, dict):
                     continue
                 room_id = record.get("room_id")
                 score = record.get("score")
                 if room_id in candidate_set and isinstance(score, (int, float)):
-                    room_distribution.append({"room_id": room_id, "score": max(0.0, float(score))})
+                    probability_scores[room_id] = max(0.0, float(score))
+            normalized_probability_scores = normalize_positive_scores(probability_scores)
+            if any(value > 0.0 for value in normalized_probability_scores.values()):
+                room_distribution_by_room = normalized_probability_scores
+        room_distribution = [
+            {"room_id": room_id, "score": float(room_distribution_by_room.get(room_id, 0.0))}
+            for room_id in candidate_room_ids
+        ]
         evidence_entities = visual_localization.get("evidence_entities")
         if not isinstance(evidence_entities, list):
             evidence_entities = []
-        predicted_room_id = visual_localization.get("predicted_room_id")
-        if predicted_room_id not in candidate_set:
+        predicted_room_id = max(room_distribution_by_room, key=room_distribution_by_room.get) if room_distribution_by_room else None
+        if predicted_room_id and room_distribution_by_room.get(predicted_room_id, 0.0) <= 0.0:
             predicted_room_id = None
-        confidence = visual_localization.get("confidence")
         summary = visual_localization.get("summary")
         return {
             "predicted_room_id": predicted_room_id,
-            "confidence": float(confidence) if isinstance(confidence, (int, float)) else 0.0,
+            "confidence": room_distribution_by_room.get(predicted_room_id, 0.0) if predicted_room_id else 0.0,
+            "room_scores": room_scores,
             "room_distribution": room_distribution,
             "evidence_entities": [value for value in evidence_entities if isinstance(value, str) and value],
             "summary": summary if isinstance(summary, str) else "",
@@ -585,6 +768,8 @@ class MultiViewAggregator:
                 metadata["visual_localization"] = dict(view_detection.metadata["visual_localization"])
             if "candidate_room_ids" not in metadata and isinstance(view_detection.metadata.get("candidate_room_ids"), list):
                 metadata["candidate_room_ids"] = list(view_detection.metadata["candidate_room_ids"])
+            if "view_theme_observations" not in metadata and isinstance(view_detection.metadata.get("view_theme_observations"), list):
+                metadata["view_theme_observations"] = list(view_detection.metadata["view_theme_observations"])
         metadata["inside_entities"] = [
             MultiViewAggregator._entity_to_dict(entity)
             for entity in entities

@@ -10,8 +10,6 @@ __pycache__/
 !.env.example
 .env.js
 **/.env.js
-artifacts/
 venv/
 renders/
 outputs/
-dataset/

@@ -37,7 +37,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--render-output-dir", default="renders/pano_perception")
     parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
     parser.add_argument("--pitch", type=float, default=0.0)
-    parser.add_argument("--fov", type=int, default=90)
+    parser.add_argument("--fov", type=int, default=45)
     parser.add_argument("--width", type=int, default=512)
     parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--current-heading", type=float, default=330.0)
@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-detection-cache",
         action="store_true",
         help="Ignore sibling *_detections.json files and call the detector model again.",
+    )
+    parser.add_argument(
+        "--enable-view-themes",
+        action="store_true",
+        help="Run a separate image-only per-view theme extraction step and include view_theme_observations in output.",
     )
     parser.add_argument("--output-path")
     return parser
@@ -95,6 +100,7 @@ def main() -> int:
         model=args.detector_model,
         request_timeout=args.vlm_timeout,
         use_detection_files=not args.no_detection_cache,
+        enable_view_themes=args.enable_view_themes,
         room_graph=None if args.legacy_entity_only else room_graph,
         grounding_index=None if args.legacy_entity_only else grounding_index,
     )
@@ -162,6 +168,7 @@ def main() -> int:
         ],
         "inside_entities": list(observation.metadata.get("inside_entities", [])),
         "outside_entities": list(observation.metadata.get("outside_entities", [])),
+        "view_theme_observations": list(observation.metadata.get("view_theme_observations", [])),
         "visual_localization": observation.metadata.get("visual_localization"),
         "candidate_room_ids": observation.metadata.get("candidate_room_ids"),
     }

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 VIEW_DETECTION_KINDS = ("artwork", "landmark", "signage", "passage", "other")
 ENTITY_LOCATION_SCOPES = ("inside", "outside", "unknown")
+ROOM_EVIDENCE_TYPES = ("weak_generic", "shared_theme", "room_specific", "direct_room_label")
 NAVIGATION_TASK_TYPES = (
     "artwork_goal_navigation",
     "artwork_instruction_following_navigation",
@@ -10,6 +11,29 @@ NAVIGATION_TASK_TYPES = (
     "gallery_instruction_following_navigation",
 )
 ALLOCENTRIC_DIRECTIONS = ("north", "east", "south", "west")
+CANONICAL_ROOM_THEMES = (
+    ("Room 4", "Ancient Egypt"),
+    ("Room 6", "Assyrian sculpture and Balawat Gates"),
+    ("Rooms 7, 8", "Assyria: Nimrud"),
+    ("Room 9", "Assyria: Nineveh"),
+    ("Room 10", "Assyria: Lion hunts, Siege of Lachish and Khorsabad"),
+    ("Room 12", "Greece: Minoans and Mycenaeans"),
+    ("Room 13", "Greece 1050-520 BC"),
+    ("Room 14", "Greek vases"),
+    ("Room 15", "Athens and Lycia"),
+    ("Room 16", "Greece: Bassai sculptures"),
+    ("Room 17", "Nereid Monument"),
+    ("Room 18", "Greece: Parthenon"),
+    ("Room 19", "Greece: Athens"),
+    ("Room 20", "Greeks and Lycians 400-325 BC"),
+    ("Room 21", "Mausoleum of Halikarnassos"),
+    ("Room 22", "The World of Alexander"),
+    ("Room 23", "Greek and Roman sculpture"),
+)
+
+
+def canonical_room_themes_text() -> str:
+    return "\n".join(f"- {room_id}: {theme}" for room_id, theme in CANONICAL_ROOM_THEMES)
 
 
 def build_view_detection_instructions() -> str:
@@ -100,6 +124,97 @@ def build_view_detection_schema() -> dict:
     }
 
 
+def build_view_theme_extraction_instructions() -> str:
+    return " ".join(
+        [
+            "You extract visual observations from museum panorama sectors.",
+            "Do not localize the camera or choose the current room.",
+            "Room candidates and the museum map are intentionally hidden.",
+            "For each sector, identify visible evidence, visible room or gallery label if any, best matching canonical room themes, and whether the evidence appears current, adjacent, both, or ambiguous.",
+            "Use only the provided canonical room themes; do not invent new theme labels.",
+            "Return JSON only.",
+        ]
+    )
+
+
+def build_view_theme_extraction_input(captures: list[dict[str, object]]) -> str:
+    view_ids = [f"view_{index}" for index, _ in enumerate(captures)]
+    return "\n".join(
+        [
+            "Per-view theme extraction task:",
+            f"These are {len(captures)} overlapping sectors from the same panorama.",
+            "The sectors are ordered clockwise, but the absolute allocentric direction of view_0 is unknown.",
+            "Inspect each sector independently.",
+            "Do not use room candidates, map relations, or heading labels.",
+            "Use confidence from 0.0 to 1.0 for each canonical theme match.",
+            "If evidence is generic or could match multiple themes, return multiple low-confidence theme_matches.",
+            'Use current_or_adjacent="ambiguous" when it is unclear whether the evidence is current-room or adjacent-room.',
+            "Include one view_theme_observations record for each view when possible.",
+            "",
+            "Canonical room themes:",
+            canonical_room_themes_text(),
+            "",
+            f"Panorama sectors in clockwise order: {', '.join(view_ids)}.",
+        ]
+    )
+
+
+def build_view_theme_extraction_schema(view_ids: list[str]) -> dict:
+    observation_schema = {
+        "type": "object",
+        "properties": {
+            "view_id": {"type": "string", "enum": view_ids},
+            "observed_theme": {
+                "type": "string",
+                "description": "Best matching canonical theme, or none. Do not invent labels.",
+            },
+            "confidence": {"type": "number"},
+            "visible_room_label": {"type": ["string", "null"]},
+            "evidence": {"type": "array", "items": {"type": "string"}},
+            "visual_evidence": {"type": "array", "items": {"type": "string"}},
+            "theme_matches": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "room_ids": {"type": "array", "items": {"type": "string"}},
+                        "canonical_theme": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["room_ids", "canonical_theme", "confidence", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            "current_or_adjacent": {"type": "string", "enum": ["current", "adjacent", "both", "ambiguous"]},
+            "spatial_boundary_evidence": {"type": "array", "items": {"type": "string"}},
+            "reason": {"type": "string"},
+        },
+        "required": [
+            "view_id",
+            "observed_theme",
+            "confidence",
+            "visible_room_label",
+            "evidence",
+            "visual_evidence",
+            "theme_matches",
+            "current_or_adjacent",
+            "spatial_boundary_evidence",
+            "reason",
+        ],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "view_theme_observations": {"type": "array", "items": observation_schema},
+            "summary": {"type": "string"},
+        },
+        "required": ["view_theme_observations", "summary"],
+        "additionalProperties": False,
+    }
+
+
 def build_visual_detection_localization_instructions() -> str:
     return " ".join(
         [
@@ -111,8 +226,18 @@ def build_visual_detection_localization_instructions() -> str:
             "Keep outside entities in the entity list, but use inside entities as the primary evidence for localization.",
             "Use candidate room titles, aliases, categories, and anchor entities as gallery theme descriptions.",
             "Treat passages, doorway views, and signs for adjacent rooms as useful context but weak evidence for the current room.",
-            "Return a normalized observation-only room distribution over the candidate rooms.",
-            "These probabilities must not include motion priors or room-connectivity priors.",
+            "Return independent evidence scores for every candidate room, not probabilities.",
+            "Before scoring each candidate room, classify the strongest supporting evidence as weak_generic, shared_theme, room_specific, or direct_room_label.",
+            "weak_generic means common visual evidence that appears in many museum rooms, such as display cases, statues, stone objects, doorways, arches, wall reliefs, or generic gallery layout.",
+            "shared_theme means evidence matching a broad theme shared by multiple candidate rooms. For example, Assyrian reliefs, Lamassu, Assyrian sculpture, or Middle East gallery can support several nearby Assyrian rooms such as Rooms 7, 8, 9, and 10.",
+            "room_specific means evidence pointing to a specific room theme or landmark, but not a directly visible room label.",
+            "direct_room_label means directly visible and legible text that explicitly identifies the current room or gallery, such as Room 8, Assyria: Nimrud, Room 10, or Assyria: Lion hunts.",
+            "A generic museum label, unreadable sign, exhibit caption, audio-guide number, or object label is not direct_room_label.",
+            "Use score 0 for visible contradiction, 2 for barely plausible weak_generic evidence, 4 for plausible generic objects or layout, 6 for several visible entities that match but are not unique, 8 for strong shared_theme evidence or likely room_specific evidence, 9 for very strong room_specific evidence, and 10 only for direct_room_label or unmistakable unique current-room evidence.",
+            "A score of 10 is not allowed for shared_theme evidence.",
+            "If multiple rooms share the same visible entities, give them similar scores and do not force a single winner.",
+            "If the image lacks unique landmarks or legible direct room labels, the top candidate should not be much higher than similar nearby rooms.",
+            "A broad Assyrian theme match should not by itself distinguish Room 10 from Rooms 7, 8, and 9.",
             "Do not invent room ids outside the candidate list.",
             "Return JSON only.",
         ]
@@ -166,9 +291,10 @@ def build_visual_detection_localization_input(
             "Task:",
             "1. Identify directly visible museum-relevant entities across all views.",
             "2. Assign location_scope=inside for entities in the current gallery, outside for entities visible only through adjacent openings, and unknown when uncertain.",
-            "3. Use inside entities and current-gallery visual themes to estimate observation-only compatibility for every candidate room.",
-            "4. Output exactly one room probability for each candidate room, normalized to sum to 1.",
-            "5. Preserve passages and outside entities in the entity list even when they are not used as primary localization evidence.",
+            "3. For every candidate room, classify evidence_type before scoring.",
+            "4. Use inside entities and current-gallery visual themes to assign an independent evidence score from 0 to 10 for every candidate room.",
+            "5. Output exactly one room_scores entry for each candidate room with room_id, evidence_type, score, and reason. These scores are raw evidence, not normalized probabilities.",
+            "6. Preserve passages and outside entities in the entity list even when they are not used as primary localization evidence.",
         ]
     )
     return "\n".join(lines)
@@ -194,21 +320,22 @@ def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
         "type": "object",
         "properties": {
             "room_id": {"type": "string", "enum": room_ids},
+            "evidence_type": {"type": "string", "enum": list(ROOM_EVIDENCE_TYPES)},
             "score": {"type": "number"},
+            "reason": {"type": "string"},
         },
-        "required": ["room_id", "score"],
+        "required": ["room_id", "evidence_type", "score", "reason"],
         "additionalProperties": False,
     }
     visual_localization_schema = {
         "type": "object",
         "properties": {
             "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
-            "confidence": {"type": "number"},
-            "room_distribution": {"type": "array", "items": room_score_schema},
+            "room_scores": {"type": "array", "items": room_score_schema},
             "evidence_entities": {"type": "array", "items": {"type": "string"}},
             "summary": {"type": "string"},
         },
-        "required": ["predicted_room_id", "confidence", "room_distribution", "evidence_entities", "summary"],
+        "required": ["predicted_room_id", "room_scores", "evidence_entities", "summary"],
         "additionalProperties": False,
     }
     return {
@@ -295,8 +422,17 @@ def build_localization_instructions() -> str:
             "Prefer stable in-room evidence such as statues, reliefs, busts, monuments, display cases, and explicit room signs.",
             "Treat passages, doorways, and corridor views as weaker evidence because they may reveal adjacent rooms.",
             "A sign for another room can indicate a nearby neighboring room, so do not over-weight it unless it strongly matches the overall scene.",
-            "Return a normalized observation distribution over the candidate rooms, where probabilities sum to 1.",
-            "These probabilities represent observation-only compatibility, not motion priors and not the final localization posterior.",
+            "Return independent evidence scores for every candidate room, not probabilities.",
+            "Before scoring each candidate room, classify the strongest supporting evidence as weak_generic, shared_theme, room_specific, or direct_room_label.",
+            "weak_generic means common entity evidence that appears in many museum rooms.",
+            "shared_theme means entity evidence matching a broad theme shared by multiple candidate rooms.",
+            "room_specific means entity evidence pointing to a specific room theme or landmark, but not a directly visible room label.",
+            "direct_room_label means directly visible and legible text that explicitly identifies the current room or gallery.",
+            "A generic museum label, unreadable sign, exhibit caption, audio-guide number, or object label is not direct_room_label.",
+            "Use score 0 for visible contradiction, 2 for barely plausible weak_generic evidence, 4 for plausible generic objects or layout, 6 for several visible entities that match but are not unique, 8 for strong shared_theme evidence or likely room_specific evidence, 9 for very strong room_specific evidence, and 10 only for direct_room_label or unmistakable unique current-room evidence.",
+            "A score of 10 is not allowed for shared_theme evidence.",
+            "If multiple rooms share the same visible entities, give them similar scores and do not force a single winner.",
+            "If the observation lacks unique landmarks or legible direct room labels, the top candidate should not be much higher than similar nearby rooms.",
             "Do not invent room ids outside the candidate list.",
             "Return JSON only.",
         ]
@@ -342,9 +478,11 @@ def build_localization_input(*, observation_entities: list[dict], candidates: li
         "",
         "Task:",
         "1. Judge visual compatibility for every candidate room using only the observation entities.",
-        "2. Output exactly one observation probability for each candidate room.",
-        "3. Make the observation probabilities sum to 1 across the candidate rooms.",
-        "4. Choose the single best predicted_room_id based on observation compatibility only.",
+        "2. Classify evidence_type before scoring each candidate room.",
+        "3. Output exactly one raw evidence score from 0 to 10 for each candidate room.",
+        "4. Include a short reason for each candidate room score.",
+        "5. Do not normalize scores and do not output calibrated probabilities.",
+        "6. Choose the best-supported predicted_room_id based on observation compatibility only.",
     ]
     return "\n".join(lines)
 
@@ -354,9 +492,11 @@ def build_localization_schema(room_ids: list[str]) -> dict:
         "type": "object",
         "properties": {
             "room_id": {"type": "string", "enum": room_ids},
+            "evidence_type": {"type": "string", "enum": list(ROOM_EVIDENCE_TYPES)},
             "score": {"type": "number"},
+            "reason": {"type": "string"},
         },
-        "required": ["room_id", "score"],
+        "required": ["room_id", "evidence_type", "score", "reason"],
         "additionalProperties": False,
     }
     return {
@@ -365,10 +505,10 @@ def build_localization_schema(room_ids: list[str]) -> dict:
             "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
             "confidence": {"type": "number"},
             "evidence": {"type": "array", "items": {"type": "string"}},
-            "room_distribution": {"type": "array", "items": room_score_schema},
+            "room_scores": {"type": "array", "items": room_score_schema},
             "summary": {"type": "string"},
         },
-        "required": ["predicted_room_id", "confidence", "evidence", "room_distribution", "summary"],
+        "required": ["predicted_room_id", "confidence", "evidence", "room_scores", "summary"],
         "additionalProperties": False,
     }
 

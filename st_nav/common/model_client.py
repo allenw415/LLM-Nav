@@ -14,7 +14,8 @@ DEFAULT_OPENAI_API_BASE = "https://api.openai.com/v1"
 DEFAULT_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 SUPPORTED_API_KINDS = {"responses", "chat_completions"}
 TRANSIENT_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
-MAX_HTTP_RETRIES = 3
+MAX_HTTP_RETRIES = 5
+HTTP_RETRY_BACKOFF_SECONDS = 1.0
 
 
 def resolve_api_kind(api_kind: str | None = None) -> str:
@@ -171,6 +172,8 @@ class ModelResponseClient:
         num_ctx: int | None = None,
         temperature: float | None = None,
         response_client: Callable[[dict], dict] | None = None,
+        max_http_retries: int | None = None,
+        retry_backoff_seconds: float | None = None,
     ):
         self.provider = (provider or "").strip().lower() or None
         self.api_key = api_key
@@ -180,6 +183,14 @@ class ModelResponseClient:
         self.num_ctx = num_ctx
         self.temperature = temperature
         self.response_client = response_client
+        self.max_http_retries = max(1, int(max_http_retries or _parse_int_env("ST_NAV_MAX_HTTP_RETRIES", MAX_HTTP_RETRIES)))
+        self.retry_backoff_seconds = max(
+            0.0,
+            float(retry_backoff_seconds if retry_backoff_seconds is not None else _parse_float_env(
+                "ST_NAV_HTTP_RETRY_BACKOFF_SECONDS",
+                HTTP_RETRY_BACKOFF_SECONDS,
+            )),
+        )
 
     def is_configured(self) -> bool:
         return self.response_client is not None or bool(self.api_key) or self.api_base != DEFAULT_OPENAI_API_BASE
@@ -215,33 +226,41 @@ class ModelResponseClient:
             headers=headers,
             method="POST",
         )
-        for attempt in range(1, MAX_HTTP_RETRIES + 1):
+        for attempt in range(1, self.max_http_retries + 1):
             try:
                 with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
                     return self._normalize_payload(json.loads(response.read().decode("utf-8")))
             except TimeoutError as exc:
-                if attempt < MAX_HTTP_RETRIES:
-                    time.sleep(float(attempt))
+                if attempt < self.max_http_retries:
+                    self._sleep_before_retry(attempt)
                     continue
                 raise TimeoutError(
                     f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
                 ) from exc
             except socket.timeout as exc:
-                if attempt < MAX_HTTP_RETRIES:
-                    time.sleep(float(attempt))
+                if attempt < self.max_http_retries:
+                    self._sleep_before_retry(attempt)
                     continue
                 raise TimeoutError(
                     f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
                 ) from exc
             except urllib.error.HTTPError as exc:
                 body = _read_http_error_body(exc)
-                if exc.code in TRANSIENT_HTTP_STATUS_CODES and attempt < MAX_HTTP_RETRIES:
-                    time.sleep(float(attempt))
+                if exc.code in TRANSIENT_HTTP_STATUS_CODES and attempt < self.max_http_retries:
+                    self._sleep_before_retry(attempt)
                     continue
                 detail = _format_http_error_detail(body)
                 raise RuntimeError(
                     f"Model API request failed with HTTP {exc.code} from {endpoint}: {exc.reason}.{detail}"
                 ) from exc
+            except urllib.error.URLError as exc:
+                if attempt < self.max_http_retries:
+                    self._sleep_before_retry(attempt)
+                    continue
+                raise RuntimeError(f"Model API request failed from {endpoint}: {exc.reason}") from exc
+
+    def _sleep_before_retry(self, attempt: int) -> None:
+        time.sleep(self.retry_backoff_seconds * float(attempt))
 
     @staticmethod
     def _normalize_payload(payload: dict) -> dict:
@@ -567,3 +586,23 @@ def _format_http_error_detail(body: str | None) -> str:
     if len(compact) > 300:
         compact = compact[:300].rstrip() + "..."
     return f" Response body: {compact}"
+
+
+def _parse_int_env(name: str, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
+def _parse_float_env(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
