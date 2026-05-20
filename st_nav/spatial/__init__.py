@@ -1,5 +1,5 @@
 from .engine import SpatialEngine
-from .grounding import GroundingIndex, SourcePanoResolver, build_grounding_template
+from .grounding import GroundingIndex, SourcePanoResolver
 from .localization import EvidenceScoreLocalizer, SpatialAlignmentRefiner
 from .routing import InstructionRoutePlanner, ParsedRoutePlan, RoutePlanner
 from .state import StateEstimator
@@ -14,5 +14,4 @@ __all__ = [
     "SourcePanoResolver",
     "SpatialEngine",
     "StateEstimator",
-    "build_grounding_template",
 ]

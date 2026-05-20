@@ -56,15 +56,18 @@ def room_candidate_payload(
         "title": node.get("title"),
         "category": node.get("category"),
         "aliases": aliases,
-        "anchor_entities": [
-            value
-            for value in entry.get("anchor_entities", [])
-            if isinstance(value, str) and value
-        ],
     }
     if transition_support is not None:
         payload["transition_support"] = float(transition_support)
-    payload.update(compact_visual_profile(node))
+    visual_profile = compact_visual_profile(node)
+    if visual_profile:
+        payload.update(visual_profile)
+    else:
+        payload["anchor_entities"] = [
+            value
+            for value in entry.get("anchor_entities", [])
+            if isinstance(value, str) and value
+        ]
     return payload
 
 

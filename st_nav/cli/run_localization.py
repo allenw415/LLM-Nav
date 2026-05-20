@@ -24,7 +24,6 @@ from st_nav import (
     PerceptionPipeline,
     RenderedView,
     SpatialAlignmentRefiner,
-    build_grounding_template,
     load_dotenv,
     resolve_model_environment,
 )
@@ -189,7 +188,7 @@ def build_synthetic_demo_inputs() -> tuple[dict[str, dict], dict[str, dict], dic
 
     room_graph = normalize_room_graph(explicit_map, max_room_number=100)
     normalized_pano_graph = normalize_pano_graph(pano_graph)
-    grounding = build_grounding_template(room_graph)
+    grounding = build_room_grounding_from_pano_room_mapping(room_graph, {})
     observation = Observation(
         pano_id="demo-current-pano",
         entities=[

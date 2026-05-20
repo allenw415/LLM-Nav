@@ -2,34 +2,7 @@ from __future__ import annotations
 
 import random
 
-from ..common.types import RoomGroundingEntry, SourcePanoResolution
-from ..common.room_profiles import visual_profile_anchor_entities
-
-
-def build_grounding_template(room_graph: dict[str, dict]) -> dict[str, dict]:
-    entries: dict[str, dict] = {}
-    for room_id, node in room_graph.items():
-        aliases = list(node.get("aliases") or [])
-        anchor_entities = []
-        title = node.get("title")
-        category = node.get("category")
-        if isinstance(title, str) and title:
-            anchor_entities.append(title)
-        if isinstance(category, str) and category:
-            anchor_entities.append(category)
-        anchor_entities.extend(
-            value for value in visual_profile_anchor_entities(node) if value not in anchor_entities
-        )
-
-        entry = RoomGroundingEntry(
-            room_id=room_id,
-            floor=str(node.get("floor", "unknown")),
-            aliases=aliases,
-            anchor_entities=anchor_entities,
-            notes="Fill pano_ids after manual alignment.",
-        )
-        entries[room_id] = entry.to_dict()
-    return entries
+from ..common.types import SourcePanoResolution
 
 
 class GroundingIndex:

@@ -61,7 +61,6 @@ from .spatial import (
     SpatialAlignmentRefiner,
     SourcePanoResolver,
     SpatialEngine,
-    build_grounding_template,
 )
 
 __all__ = [
@@ -108,7 +107,6 @@ __all__ = [
     "VIEW_DETECTION_KINDS",
     "ViewDetection",
     "ViewDetector",
-    "build_grounding_template",
     "build_navigation_parse_input",
     "build_navigation_parse_instructions",
     "build_navigation_parse_schema",

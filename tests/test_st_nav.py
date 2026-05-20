@@ -40,7 +40,6 @@ from st_nav import (
     SpatialEngine,
     TaskSpec,
     ViewDetector,
-    build_grounding_template,
     build_spatial_context_extraction_instructions,
     build_spatial_context_extraction_schema,
     build_visual_detection_localization_input,
@@ -61,6 +60,13 @@ from st_nav_data.normalize import (
     normalize_pano_graph,
     normalize_room_graph,
 )
+from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+
+
+def build_test_grounding(room_graph: dict, pano_room_grounding: dict | None = None) -> dict:
+    return build_room_grounding_from_pano_room_mapping(room_graph, pano_room_grounding or {})
+
+
 MUSEUM_CAPTURE_LABELS = [
     "north",
     "north_to_east",
@@ -1136,7 +1142,7 @@ class STNavTests(unittest.TestCase):
     def test_view_detector_can_use_vlm_response_client(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         downloads = []
         captured_bodies = []
         response_payload = {
@@ -1275,14 +1281,33 @@ class STNavTests(unittest.TestCase):
                 },
             }
         }
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         self.assertIn("lamassu reliefs", grounding["Room 8"]["anchor_entities"])
 
         candidate = room_candidate_payload(room_id="Room 8", node=room_graph["Room 8"], entry=grounding["Room 8"])
         visual_input = build_visual_detection_localization_input(captures=[], candidates=[candidate])
         self.assertIn("short_description=Nimrud gallery", visual_input)
         self.assertIn("visual_cues=lamassu reliefs, carved palace panels", visual_input)
+        self.assertNotIn("anchors=", visual_input)
         self.assertNotIn("text_labels=Assyria: Nimrud", visual_input)
+
+    def test_room_candidate_payload_uses_anchor_entities_without_visual_profile(self) -> None:
+        room_graph = {
+            "Room 8": {
+                "room_id": "Room 8",
+                "display_name": "Room 8",
+                "floor": "0",
+                "category": "Middle East",
+                "title": "Assyria: Nimrud",
+                "aliases": ["Room 8"],
+                "neighbors": [],
+            }
+        }
+        grounding = build_test_grounding(room_graph)
+
+        candidate = room_candidate_payload(room_id="Room 8", node=room_graph["Room 8"], entry=grounding["Room 8"])
+        visual_input = build_visual_detection_localization_input(captures=[], candidates=[candidate])
+        self.assertIn("anchors=Assyria: Nimrud, Middle East", visual_input)
 
     def test_normalized_artifact_loader_prefers_visual_profile_room_graph(self) -> None:
         from st_nav.cli._common import load_normalized_artifacts
@@ -1312,7 +1337,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_extracts_view_themes_without_heading_labels(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         calls = []
 
         def fake_response(body):
@@ -1392,7 +1417,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_can_parse_integrated_visual_localization(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         captured_bodies = []
         detector = ViewDetector(
             api_key="test-key",
@@ -1607,7 +1632,7 @@ class STNavTests(unittest.TestCase):
     def test_integrated_visual_eval_uses_existing_localizer_with_gt_prior(self) -> None:
         eval_module = self._load_pano_perception_eval_module()
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         captured = {}
 
         class FakeEvidenceScoreLocalizer:
@@ -1667,7 +1692,7 @@ class STNavTests(unittest.TestCase):
     def test_integrated_visual_eval_record_contains_observation_and_prior_rankings(self) -> None:
         eval_module = self._load_pano_perception_eval_module()
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
 
         class FakeEvidenceScoreLocalizer:
             def __init__(self, **kwargs):
@@ -1789,7 +1814,7 @@ class STNavTests(unittest.TestCase):
     def test_integrated_visual_eval_record_uses_runtime_spatial_refiner(self) -> None:
         eval_module = self._load_pano_perception_eval_module()
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         refine_calls = []
 
         class FakeSpatialAlignmentRefiner:
@@ -1879,7 +1904,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_writes_and_reuses_integrated_detection_cache(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         calls = []
         detector = ViewDetector(
             api_key="test-key",
@@ -1944,7 +1969,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_writes_and_reuses_view_theme_cache(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         calls = []
 
         def fake_response(body):
@@ -2019,7 +2044,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_refreshes_old_cache_when_view_themes_are_enabled(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         calls = []
 
         def fake_response(body):
@@ -2104,7 +2129,7 @@ class STNavTests(unittest.TestCase):
     def test_view_detector_can_preserve_passage_kind(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         downloads = []
 
         def fake_downloader(url: str, output_path: Path) -> None:
@@ -2170,7 +2195,7 @@ class STNavTests(unittest.TestCase):
 
     def test_view_detector_writes_and_reuses_detection_cache(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         calls = []
         detector = ViewDetector(
             api_key="test-key",
@@ -2412,7 +2437,7 @@ class STNavTests(unittest.TestCase):
     def test_spatial_engine_can_compute_shortest_room_route(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2426,7 +2451,7 @@ class STNavTests(unittest.TestCase):
     def test_spatial_update_does_not_map_pano_to_room_via_grounding(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 9"]["pano_ids"] = ["pano-23"]
         spatial = SpatialEngine(
             room_graph=room_graph,
@@ -2449,7 +2474,7 @@ class STNavTests(unittest.TestCase):
     def test_spatial_update_accepts_localized_room_from_observation_metadata(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2472,7 +2497,7 @@ class STNavTests(unittest.TestCase):
     def test_spatial_update_stabilizes_room_when_localizer_switches_room_without_pano_change(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
 
         class FakeLocalizer:
             def localize(self, **kwargs):
@@ -2550,7 +2575,7 @@ class STNavTests(unittest.TestCase):
     def test_generate_candidates_prioritizes_route_subgoal_without_known_heading(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2580,7 +2605,7 @@ class STNavTests(unittest.TestCase):
     def test_generate_candidates_prefers_grounded_room_for_target_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8", "pano-23"]
         grounding["Room 23"]["pano_ids"] = []
         spatial = SpatialEngine(
@@ -2610,7 +2635,7 @@ class STNavTests(unittest.TestCase):
     def test_extract_visible_passages_uses_spatial_alignment_instead_of_agent_heading(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2680,7 +2705,7 @@ class STNavTests(unittest.TestCase):
                 "pano-315": {"panoID": "pano-315", "floor": "0", "lat": 0.0, "lng": 0.0, "links": []},
             }
         )
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2726,7 +2751,7 @@ class STNavTests(unittest.TestCase):
                 },
             }
         )
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2770,7 +2795,7 @@ class STNavTests(unittest.TestCase):
     def test_generate_candidates_attaches_spatial_context_per_candidate(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2822,7 +2847,7 @@ class STNavTests(unittest.TestCase):
     def test_generate_candidates_blocks_immediate_backtrack_when_alternative_exists(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2883,7 +2908,7 @@ class STNavTests(unittest.TestCase):
                 },
             }
         )
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2906,7 +2931,7 @@ class STNavTests(unittest.TestCase):
     def test_generate_candidates_uses_context_observation_without_reusing_direction_alignment(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -2981,7 +3006,7 @@ class STNavTests(unittest.TestCase):
     def test_describe_view_contexts_uses_ego_spatial_context_metadata_when_alignment_views_missing(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -3027,7 +3052,7 @@ class STNavTests(unittest.TestCase):
     def test_build_current_room_context_includes_subgoal_theme_labels(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
@@ -3341,7 +3366,7 @@ class STNavTests(unittest.TestCase):
 
     def test_evidence_score_localizer_combines_room_scores_with_transition_prior(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         localizer = EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3375,7 +3400,7 @@ class STNavTests(unittest.TestCase):
 
     def test_evidence_score_localizer_selects_ratio_based_alignment_candidates(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         localizer = EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3408,7 +3433,7 @@ class STNavTests(unittest.TestCase):
 
     def test_evidence_score_localizer_skips_alignment_with_single_candidate(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         localizer = EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3458,7 +3483,7 @@ class STNavTests(unittest.TestCase):
             },
         }
         room_graph = normalize_room_graph(explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         responses = [
             {
                 "output_text": json.dumps(
@@ -3559,7 +3584,7 @@ class STNavTests(unittest.TestCase):
             "short_description": "Sculpture court with marble statues visible through the opening.",
             "visual_cues": ["marble statues", "pedestal sculpture displays"],
         }
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         refiner = SpatialAlignmentRefiner(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3578,7 +3603,7 @@ class STNavTests(unittest.TestCase):
 
     def test_evidence_score_localizer_uses_alignment_top1_without_rewriting_room_belief(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         responses = [
             {
                 "output_text": json.dumps(
@@ -3646,7 +3671,7 @@ class STNavTests(unittest.TestCase):
 
     def test_evidence_score_localizer_records_skip_reason_when_alignment_lacks_views(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         localizer = EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3681,7 +3706,7 @@ class STNavTests(unittest.TestCase):
     def test_spatial_engine_can_use_injected_evidence_score_localizer(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         localizer = EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=GroundingIndex(grounding),
@@ -3716,7 +3741,7 @@ class STNavTests(unittest.TestCase):
     def test_instruction_route_planner_runs_parse_then_shortest_path(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
 
         parser = LLMInstructionParser(
             room_graph=room_graph,
@@ -3761,7 +3786,7 @@ class STNavTests(unittest.TestCase):
 
     def test_source_pano_resolver_returns_representative_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8", "pano-8b"]
 
         resolver = SourcePanoResolver(GroundingIndex(grounding), rng=random.Random(0))
@@ -3794,7 +3819,7 @@ class STNavTests(unittest.TestCase):
 
     def test_source_resolution_workflow_runs_parse_and_resolve_source_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
 
         parser = LLMInstructionParser(
@@ -3837,7 +3862,7 @@ class STNavTests(unittest.TestCase):
     def test_episode_runner_passes_subgoal_and_alignment_context_to_policy(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
 
         class FakePerceptionProvider:
             def observe_from_manifest(self, manifest_path, *, current_heading):
@@ -3949,7 +3974,7 @@ class STNavTests(unittest.TestCase):
     def test_goal_reached_uses_grounded_pano_room_not_localized_room(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8", "pano-23"]
         grounding["Room 23"]["pano_ids"] = []
         spatial = SpatialEngine(
@@ -3983,7 +4008,7 @@ class STNavTests(unittest.TestCase):
 
     def test_navigation_pipeline_runs_source_resolution_then_episode_runner(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
 
         parser = LLMInstructionParser(
@@ -4054,7 +4079,7 @@ class STNavTests(unittest.TestCase):
                 }
             }
         )
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
 
         pipeline = build_navigation_pipeline(
@@ -4077,7 +4102,7 @@ class STNavTests(unittest.TestCase):
 
     def test_grounding_index_can_resolve_primary_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        grounding = build_grounding_template(room_graph)
+        grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
         grounding_index = GroundingIndex(
             grounding,
