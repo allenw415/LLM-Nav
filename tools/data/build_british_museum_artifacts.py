@@ -9,7 +9,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import build_grounding_template
 from st_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
     BRITISH_MUSEUM_EXCLUDED_EDGES,
@@ -57,7 +56,6 @@ def main() -> int:
         excluded_edges=BRITISH_MUSEUM_EXCLUDED_EDGES,
     )
     normalized_pano_graph = normalize_pano_graph(pano_graph)
-    room_grounding = build_grounding_template(normalized_room_graph)
 
     output_dir = (PROJECT_ROOT / args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -65,7 +63,6 @@ def main() -> int:
     outputs = {
         "room_graph.json": normalized_room_graph,
         "pano_graph.json": normalized_pano_graph,
-        "room_grounding.template.json": room_grounding,
     }
     for filename, payload in outputs.items():
         path = output_dir / filename

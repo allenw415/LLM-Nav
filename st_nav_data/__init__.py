@@ -35,6 +35,7 @@ from .pano_visualization import (
     shortest_pano_path,
 )
 from .pano_room_grounding import (
+    build_room_grounding_from_pano_room_mapping,
     find_batch_result_paths,
     rebuild_pano_room_grounding_from_batches,
     write_pano_room_grounding,
@@ -58,6 +59,7 @@ __all__ = [
     "build_manual_annotation_records",
     "build_visualization_payload",
     "build_room_candidates",
+    "build_room_grounding_from_pano_room_mapping",
     "collect_manual_seed_panos",
     "collect_seed_panos_for_rooms",
     "expand_seed_panos_by_hops",

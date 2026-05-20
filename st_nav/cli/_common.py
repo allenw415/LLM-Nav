@@ -5,6 +5,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from st_nav.common.room_profiles import preferred_room_graph_path
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -58,10 +60,24 @@ def load_normalized_artifacts(
     pano_room_grounding: bool = False,
 ) -> NormalizedArtifacts:
     resolved_dir = resolve_project_path(artifacts_dir)
+    loaded_room_graph = load_json(preferred_room_graph_path(resolved_dir)) if room_graph or grounding else None
+    loaded_pano_room_grounding = (
+        load_json(resolved_dir / "pano_room_grounding.json")
+        if pano_room_grounding or grounding
+        else None
+    )
+    loaded_grounding = None
+    if grounding:
+        from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+
+        loaded_grounding = build_room_grounding_from_pano_room_mapping(
+            loaded_room_graph or {},
+            loaded_pano_room_grounding or {},
+        )
     return NormalizedArtifacts(
         artifacts_dir=resolved_dir,
-        room_graph=load_json(resolved_dir / "room_graph.json") if room_graph else None,
+        room_graph=loaded_room_graph if room_graph else None,
         pano_graph=load_json(resolved_dir / "pano_graph.json") if pano_graph else None,
-        grounding=load_json(resolved_dir / "room_grounding.template.json") if grounding else None,
-        pano_room_grounding=load_json(resolved_dir / "pano_room_grounding.json") if pano_room_grounding else None,
+        grounding=loaded_grounding,
+        pano_room_grounding=loaded_pano_room_grounding if pano_room_grounding else None,
     )

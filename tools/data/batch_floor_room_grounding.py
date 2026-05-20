@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from st_nav import PanoramaRenderer, load_dotenv
+from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 from st_nav_data.room_grounder import ModelRoomGrounder, build_manual_annotation_records
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -173,7 +174,8 @@ def main() -> int:
     artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
     room_graph = load_json(artifacts_dir / "room_graph.json")
     pano_graph = load_json(artifacts_dir / "pano_graph.json")
-    room_grounding = load_json(artifacts_dir / "room_grounding.template.json")
+    pano_room_grounding = load_json(artifacts_dir / "pano_room_grounding.json")
+    room_grounding = build_room_grounding_from_pano_room_mapping(room_graph, pano_room_grounding)
 
     if args.pano_id_file:
         requested_pano_ids = load_pano_id_file((PROJECT_ROOT / args.pano_id_file).resolve())

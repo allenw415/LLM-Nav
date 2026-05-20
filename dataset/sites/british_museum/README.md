@@ -12,7 +12,7 @@ Typical normalized files used by the runtime:
 
 - `room_graph.json`
 - `pano_graph.json`
-- `room_grounding.template.json`
+- `pano_room_grounding.json`
 
 Additional grounding outputs such as Gemini predictions, manual review files,
 and compact pano-to-room mappings also live under `normalized/`.

@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from _common import (
+from ._common import (
     PROJECT_ROOT,
     ensure_project_root_on_path,
     load_json,
@@ -17,21 +17,20 @@ from _common import (
 ensure_project_root_on_path()
 
 from st_nav import (
+    EvidenceScoreLocalizer,
     EntityDetection,
     GroundingIndex,
-    LLMRoomLocalizer,
-    LLMSpatialAlignmentLocalizer,
     Observation,
     PerceptionPipeline,
     RenderedView,
-    RoomLocalizer,
-    SpatialEngine,
-    VisualObservationLocalizer,
+    SpatialAlignmentRefiner,
     build_grounding_template,
     load_dotenv,
     resolve_model_environment,
 )
+from st_nav.common.room_profiles import preferred_room_graph_path
 from st_nav_data.normalize import normalize_pano_graph, normalize_room_graph
+from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(
@@ -53,26 +52,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-pano-id", default="demo-start-pano")
     parser.add_argument("--start-room-id", default="Room 10")
     parser.add_argument("--current-heading", type=float, default=330.0)
-    parser.add_argument(
-        "--localizer",
-        choices=[
-            "bayesian-filter",
-            "heuristic",
-            "llm",
-            "visual-vlm",
-            "spatial-alignment-a",
-            "spatial-alignment-b",
-            "split-independent",
-        ],
-        default="bayesian-filter",
-    )
-    parser.add_argument("--bayesian-localizer", choices=["heuristic", "llm"], default="llm")
-    parser.add_argument("--spatial-alignment-mode", choices=["a", "b"], default="a")
     parser.add_argument("--llm-model", default=MODEL_ENV.model_name)
     parser.add_argument("--llm-api-key", default=MODEL_ENV.api_key)
     parser.add_argument("--llm-api-kind", default=MODEL_ENV.api_kind)
     parser.add_argument("--llm-api-base", default=MODEL_ENV.api_base)
     parser.add_argument("--llm-timeout", type=float, default=MODEL_ENV.request_timeout or 30.0)
+    parser.add_argument("--alignment-candidate-ratio-threshold", type=float, default=0.5)
+    parser.add_argument("--alignment-candidate-max", type=int, default=5)
     parser.add_argument(
         "--prior-room",
         action="append",
@@ -236,41 +222,40 @@ def build_synthetic_demo_inputs() -> tuple[dict[str, dict], dict[str, dict], dic
     return room_graph, normalized_pano_graph, grounding, observation, description
 
 
+def load_grounding_from_compact_mapping(artifacts_dir: Path, room_graph: dict[str, dict]) -> tuple[dict[str, dict], dict]:
+    pano_room_grounding_path = artifacts_dir / "pano_room_grounding.json"
+    pano_room_grounding = load_json(pano_room_grounding_path) if pano_room_grounding_path.exists() else {}
+    return build_room_grounding_from_pano_room_mapping(room_graph, pano_room_grounding), pano_room_grounding
+
+
 def build_manifest_demo_inputs(
     *,
     artifacts_dir: Path,
     manifest_path: Path,
     current_heading: float,
-) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict], Observation, str]:
-    room_graph = load_json(artifacts_dir / "room_graph.json")
+) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict], dict, Observation, str]:
+    room_graph = load_json(preferred_room_graph_path(artifacts_dir))
     pano_graph = load_json(artifacts_dir / "pano_graph.json")
-
-    grounding_path = artifacts_dir / "room_grounding.template.json"
-    if not grounding_path.exists():
-        raise RuntimeError(f"Missing grounding template: {grounding_path}")
-    grounding = load_json(grounding_path)
+    grounding, pano_room_grounding = load_grounding_from_compact_mapping(artifacts_dir, room_graph)
 
     pipeline = PerceptionPipeline(
         pano_graph=pano_graph,
         room_graph=room_graph,
-        grounding_index=GroundingIndex(grounding),
+        grounding_index=GroundingIndex(grounding, pano_to_room=pano_room_grounding),
     )
     observation = pipeline.observe_from_manifest(manifest_path, current_heading=current_heading)
     description = f"Manifest-based demo from cached detections: {manifest_path}"
-    return room_graph, pano_graph, grounding, observation, description
+    return room_graph, pano_graph, grounding, pano_room_grounding, observation, description
 
 
 def build_perception_json_demo_inputs(
     *,
     artifacts_dir: Path,
     perception_json_path: Path,
-) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict], Observation, str]:
-    room_graph = load_json(artifacts_dir / "room_graph.json")
+) -> tuple[dict[str, dict], dict[str, dict], dict[str, dict], dict, Observation, str]:
+    room_graph = load_json(preferred_room_graph_path(artifacts_dir))
     pano_graph = load_json(artifacts_dir / "pano_graph.json")
-    grounding_path = artifacts_dir / "room_grounding.template.json"
-    if not grounding_path.exists():
-        raise RuntimeError(f"Missing grounding template: {grounding_path}")
-    grounding = load_json(grounding_path)
+    grounding, pano_room_grounding = load_grounding_from_compact_mapping(artifacts_dir, room_graph)
 
     payload = load_json(perception_json_path)
     manifest_path = payload.get("manifest_path")
@@ -387,7 +372,7 @@ def build_perception_json_demo_inputs(
         metadata=metadata,
     )
     description = f"Perception-JSON demo from: {perception_json_path}"
-    return room_graph, pano_graph, grounding, observation, description
+    return room_graph, pano_graph, grounding, pano_room_grounding, observation, description
 
 
 def format_belief_lines(title: str, belief: dict[str, float], top_k: int) -> list[str]:
@@ -487,7 +472,6 @@ def build_localizer_summary(
     *,
     top_k: int,
     full_json: bool,
-    observation_only: bool = False,
 ) -> dict:
     observation_distribution = round_distribution(
         compact_distribution(localization.get("observation_distribution", {}), top_k=top_k)
@@ -495,17 +479,21 @@ def build_localizer_summary(
     posterior_room_belief = round_distribution(compact_distribution(localization.get("room_belief", {})))
     predicted_room_id = localization.get("predicted_room_id")
     confidence = round_probability(localization.get("confidence"))
-    if observation_only:
-        predicted_room_id, probability = best_room_from_distribution(localization.get("observation_distribution", {}))
-        confidence = round_probability(probability)
-        posterior_room_belief = observation_distribution
-
     payload = {
         "predicted_room_id": predicted_room_id,
         "confidence": confidence,
+        "base_predicted_room_id": localization.get("base_predicted_room_id"),
+        "base_room_belief": round_distribution(compact_distribution(localization.get("base_room_belief", {}))),
         "transition_support": round_distribution(compact_distribution(localization.get("transition_support", {}))),
         "observation_distribution": observation_distribution,
         "posterior_room_belief": posterior_room_belief,
+        "alignment_candidate_room_ids": list(localization.get("alignment_candidate_room_ids", [])),
+        "alignment_top_k": list(localization.get("alignment_top_k", []))[:top_k],
+        "alignment_predicted_room_id": localization.get("alignment_predicted_room_id"),
+        "alignment_applied": bool(localization.get("alignment_applied", False)),
+        "alignment_skipped_reason": localization.get("alignment_skipped_reason"),
+        "alignment_evidence": list(localization.get("alignment_evidence", [])),
+        "alignment_summary": localization.get("alignment_summary"),
         "evidence": localization.get("evidence", []),
         "spatial_alignment": compact_spatial_alignment(
             localization.get("spatial_alignment"),
@@ -518,6 +506,7 @@ def build_localizer_summary(
     }
     if full_json:
         payload["observation_likelihood"] = round_distribution(localization.get("observation_likelihood", {}))
+        payload["raw_room_scores"] = localization.get("raw_room_scores", {})
     return payload
 
 
@@ -600,12 +589,13 @@ def main() -> int:
 
     if args.mode == "synthetic":
         room_graph, pano_graph, grounding, observation, description = build_synthetic_demo_inputs()
+        pano_room_grounding = {}
         start_pano_id = "demo-start-pano"
     elif args.mode == "manifest":
         if not args.manifest_path:
             raise RuntimeError("--manifest-path is required when --mode manifest.")
         artifacts_dir = load_normalized_artifacts(args.artifacts_dir).artifacts_dir
-        room_graph, pano_graph, grounding, observation, description = build_manifest_demo_inputs(
+        room_graph, pano_graph, grounding, pano_room_grounding, observation, description = build_manifest_demo_inputs(
             artifacts_dir=artifacts_dir,
             manifest_path=resolve_project_path(args.manifest_path),
             current_heading=args.current_heading,
@@ -615,97 +605,43 @@ def main() -> int:
         if not args.perception_json_path:
             raise RuntimeError("--perception-json-path is required when --mode perception-json.")
         artifacts_dir = load_normalized_artifacts(args.artifacts_dir).artifacts_dir
-        room_graph, pano_graph, grounding, observation, description = build_perception_json_demo_inputs(
+        room_graph, pano_graph, grounding, pano_room_grounding, observation, description = build_perception_json_demo_inputs(
             artifacts_dir=artifacts_dir,
             perception_json_path=resolve_project_path(args.perception_json_path),
         )
         start_pano_id = args.start_pano_id
 
-    grounding_index = GroundingIndex(grounding)
+    grounding_index = GroundingIndex(grounding, pano_to_room=pano_room_grounding)
 
-    def build_bayesian_localizer(kind: str):
-        if kind == "llm":
-            return LLMRoomLocalizer(
-                room_graph=room_graph,
-                grounding_index=grounding_index,
-                model=args.llm_model,
-                api_key=args.llm_api_key,
-                api_base=args.llm_api_base,
-                api_kind=args.llm_api_kind,
-                request_timeout=args.llm_timeout,
-            )
-        return RoomLocalizer(
+    localizer = EvidenceScoreLocalizer(
+        room_graph=room_graph,
+        grounding_index=grounding_index,
+        alignment_candidate_ratio_threshold=args.alignment_candidate_ratio_threshold,
+        alignment_candidate_max=args.alignment_candidate_max,
+        spatial_refiner=SpatialAlignmentRefiner(
             room_graph=room_graph,
             grounding_index=grounding_index,
-        )
-
-    def build_visual_localizer():
-        return VisualObservationLocalizer(
-            room_graph=room_graph,
-            grounding_index=grounding_index,
-        )
-
-    def build_spatial_alignment_localizer(mode: str):
-        return LLMSpatialAlignmentLocalizer(
-            room_graph=room_graph,
-            grounding_index=grounding_index,
-            alignment_mode="text_from_images" if mode == "a" else "direct_images",
             model=args.llm_model,
             api_key=args.llm_api_key,
             api_base=args.llm_api_base,
             api_kind=args.llm_api_kind,
             request_timeout=args.llm_timeout,
-        )
-
-    observation_only = False
-    if args.localizer == "bayesian-filter":
-        localizer = build_bayesian_localizer(args.bayesian_localizer or "llm")
-    elif args.localizer == "heuristic":
-        localizer = build_bayesian_localizer("heuristic")
-    elif args.localizer == "llm":
-        localizer = build_bayesian_localizer("llm")
-    elif args.localizer == "visual-vlm":
-        localizer = build_visual_localizer()
-    elif args.localizer == "spatial-alignment-a":
-        localizer = build_spatial_alignment_localizer("a")
-        observation_only = True
-    elif args.localizer == "spatial-alignment-b":
-        localizer = build_spatial_alignment_localizer("b")
-        observation_only = True
-    elif args.localizer == "split-independent":
-        raise RuntimeError(
-            "Use `--localizer bayesian-filter` or `--localizer spatial-alignment-a|b`. "
-            "`split-independent` is no longer the recommended mode."
-        )
-    else:
-        localizer = build_bayesian_localizer("heuristic")
-
-    if args.localizer in {"spatial-alignment-a", "spatial-alignment-b"} and not observation.views:
-        raise RuntimeError(
-            f"{args.localizer} requires panorama images. Use --mode manifest or a perception JSON that includes manifest captures."
-        )
+        ),
+    )
     localization = localizer.localize(
         observation=observation,
         prior_room_belief=prior_room_belief,
         fallback_room_id=args.start_room_id,
     )
-    if args.localizer in {"spatial-alignment-a", "spatial-alignment-b"}:
-        summary = build_spatial_alignment_summary(
-            localization,
-            top_k=args.top_k,
-            full_json=args.full_json,
-        )
-    else:
-        summary = build_localizer_summary(
-            localization,
-            top_k=args.top_k,
-            full_json=args.full_json,
-            observation_only=observation_only,
-        )
+    summary = build_localizer_summary(
+        localization,
+        top_k=args.top_k,
+        full_json=args.full_json,
+    )
 
     payload = {
         "mode": args.mode,
-        "localizer_mode": args.localizer,
+        "localizer_mode": "evidence-score",
         "description": description,
         "start_room_id": args.start_room_id,
         "prior_room_source": prior_room_source,
@@ -741,7 +677,7 @@ def main() -> int:
     lines = [
         "Localization Demo",
         f"Mode: {args.mode}",
-        f"Localizer: {args.localizer}",
+        "Localizer: evidence-score",
         f"Description: {description}",
         f"Start room: {args.start_room_id}",
         f"Prior source: {prior_room_source}",
@@ -751,43 +687,26 @@ def main() -> int:
         *format_entity_lines(observation),
         "",
     ]
-    if args.localizer in {"spatial-alignment-a", "spatial-alignment-b"}:
-        ego_spatial_context = summary.get("ego_spatial_context") if isinstance(summary.get("ego_spatial_context"), dict) else {}
-        ego_context_text = ego_spatial_context.get("text") if isinstance(ego_spatial_context, dict) else None
-        map_context_block = summary.get("map_spatial_context")
-        lines.extend(
-            [
-                *format_belief_lines("Observation Distribution", summary.get("observation_distribution", {}), args.top_k),
-                "",
-                f"Predicted room: {summary.get('predicted_room_id')}",
-                f"Localization confidence: {float(summary.get('confidence') or 0.0):.{PROBABILITY_DECIMALS}f}",
-                (
-                    "Inferred view_0 allocentric direction: "
-                    f"{summary.get('inferred_view_0_allocentric_direction')}"
-                    if summary.get("inferred_view_0_allocentric_direction")
-                    else "Inferred view_0 allocentric direction: (none)"
-                ),
-                f"Evidence: {', '.join(summary.get('evidence', [])) or '(none)'}",
-            ]
-        )
-        lines.append("")
-        append_multiline_block(lines, "Map Spatial Context", map_context_block)
-        lines.append("")
-        append_multiline_block(lines, "Ego Spatial Context", ego_context_text)
-    else:
-        lines.extend(
-            [
-                *format_belief_lines("Transition Support", summary.get("transition_support", {}), args.top_k),
-                "",
-                *format_belief_lines("Observation Distribution", summary.get("observation_distribution", {}), args.top_k),
-                "",
-                *format_belief_lines("Posterior Room Belief", summary.get("posterior_room_belief", {}), args.top_k),
-                "",
-                f"Predicted room: {summary.get('predicted_room_id')}",
-                f"Localization confidence: {float(summary.get('confidence') or 0.0):.{PROBABILITY_DECIMALS}f}",
-                f"Evidence: {', '.join(summary.get('evidence', [])) or '(none)'}",
-            ]
-        )
+    lines.extend(
+        [
+            *format_belief_lines("Transition Support", summary.get("transition_support", {}), args.top_k),
+            "",
+            *format_belief_lines("Evidence Distribution", summary.get("observation_distribution", {}), args.top_k),
+            "",
+            *format_belief_lines("Base Room Belief", summary.get("base_room_belief", {}), args.top_k),
+            "",
+            *format_belief_lines("Final Room Belief", summary.get("posterior_room_belief", {}), args.top_k),
+            "",
+            f"Predicted room: {summary.get('predicted_room_id')}",
+            f"Base predicted room: {summary.get('base_predicted_room_id')}",
+            f"Localization confidence: {float(summary.get('confidence') or 0.0):.{PROBABILITY_DECIMALS}f}",
+            f"Alignment applied: {summary.get('alignment_applied')}",
+            f"Alignment candidates: {', '.join(summary.get('alignment_candidate_room_ids', [])) or '(none)'}",
+            f"Alignment top-k: {summary.get('alignment_top_k') or '(none)'}",
+            f"Alignment skipped reason: {summary.get('alignment_skipped_reason') or '(none)'}",
+            f"Evidence: {', '.join(summary.get('evidence', [])) or '(none)'}",
+        ]
+    )
     print("\n".join(lines))
     return 0
 

@@ -9,6 +9,23 @@ from .room_grounder import build_compact_pano_room_mapping, merge_records_by_pan
 JsonDict = dict[str, Any]
 
 
+def _visual_profile_anchor_entities(node: JsonDict, *, max_items: int = 6) -> list[str]:
+    profile = node.get("visual_profile")
+    if not isinstance(profile, dict):
+        return []
+    anchors: list[str] = []
+    short_description = profile.get("short_description")
+    if isinstance(short_description, str) and short_description:
+        anchors.append(short_description)
+    for key in ("visual_cues", "possible_text_labels"):
+        for value in profile.get(key, []):
+            if isinstance(value, str) and value and value not in anchors:
+                anchors.append(value)
+            if len(anchors) >= max_items:
+                return anchors
+    return anchors[:max_items]
+
+
 def load_results_file(path: str | Path) -> list[JsonDict]:
     resolved = Path(path)
     if not resolved.exists():
@@ -31,6 +48,53 @@ def find_batch_result_paths(batch_dir: str | Path) -> tuple[list[Path], list[Pat
     )
     manual_paths = sorted(resolved.glob("floor*_batch_*.manual.json"))
     return raw_paths, manual_paths
+
+
+def build_room_grounding_from_pano_room_mapping(room_graph: JsonDict, pano_room_grounding: JsonDict | None) -> JsonDict:
+    entries: JsonDict = {}
+    for room_id, node in room_graph.items():
+        if not isinstance(room_id, str) or not room_id:
+            continue
+        node = node if isinstance(node, dict) else {}
+        aliases = [value for value in list(node.get("aliases") or []) if isinstance(value, str) and value]
+        anchor_entities = []
+        for key in ("title", "category"):
+            value = node.get(key)
+            if isinstance(value, str) and value:
+                anchor_entities.append(value)
+        anchor_entities.extend(value for value in _visual_profile_anchor_entities(node) if value not in anchor_entities)
+        entries[room_id] = {
+            "room_id": room_id,
+            "floor": str(node.get("floor", "unknown")),
+            "pano_ids": [],
+            "aliases": aliases,
+            "anchor_entities": anchor_entities,
+            "notes": "Derived from pano_room_grounding.json.",
+        }
+
+    mappings = (pano_room_grounding or {}).get("mappings", pano_room_grounding or {})
+    if isinstance(mappings, dict):
+        for pano_id, room_id in mappings.items():
+            if not isinstance(pano_id, str) or not pano_id:
+                continue
+            if not isinstance(room_id, str) or not room_id or room_id == "null":
+                continue
+            entry = entries.setdefault(
+                room_id,
+                {
+                    "room_id": room_id,
+                    "floor": "unknown",
+                    "pano_ids": [],
+                    "aliases": [],
+                    "anchor_entities": [],
+                    "notes": "Derived from pano_room_grounding.json.",
+                },
+            )
+            pano_ids = entry.setdefault("pano_ids", [])
+            if isinstance(pano_ids, list) and pano_id not in pano_ids:
+                pano_ids.append(pano_id)
+
+    return {room_id: entries[room_id] for room_id in sorted(entries.keys())}
 
 
 def rebuild_pano_room_grounding_from_batches(

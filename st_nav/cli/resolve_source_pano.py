@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from _common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
+from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
 
 ensure_project_root_on_path()
 
@@ -20,9 +20,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    artifacts = load_normalized_artifacts(args.artifacts_dir, grounding=True)
+    artifacts = load_normalized_artifacts(args.artifacts_dir, pano_room_grounding=True)
 
-    resolver = SourcePanoResolver(GroundingIndex(artifacts.grounding or {}))
+    resolver = SourcePanoResolver(GroundingIndex(pano_to_room=artifacts.pano_room_grounding or {}))
     resolution = resolver.resolve(args.source_room_id)
 
     payload = {

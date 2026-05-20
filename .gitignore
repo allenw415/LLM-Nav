@@ -13,3 +13,7 @@ __pycache__/
 venv/
 renders/
 outputs/
+artifacts/pano_viewer/
+artifacts/pano_visualization/
+dataset/pipelines/pano_graph_visualization/
+dataset/sites/british_museum/normalized/room_grounding_batches/

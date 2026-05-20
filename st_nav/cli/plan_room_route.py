@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import argparse
-from _common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
+from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
 
 ensure_project_root_on_path()
 
@@ -25,13 +25,12 @@ def main() -> int:
         args.artifacts_dir,
         room_graph=True,
         pano_graph=True,
-        grounding=True,
     )
 
     spatial = SpatialEngine(
         room_graph=artifacts.room_graph or {},
         pano_graph=artifacts.pano_graph or {},
-        grounding_index=GroundingIndex(artifacts.grounding or {}),
+        grounding_index=GroundingIndex(),
     )
     shortest_path = spatial.shortest_room_route(
         args.source_room_id,

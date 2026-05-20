@@ -10,9 +10,6 @@ from ..common.env import resolve_model_environment
 from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     ENTITY_LOCATION_SCOPES,
-    build_view_detection_input,
-    build_view_detection_instructions,
-    build_view_detection_schema,
     build_view_theme_extraction_input,
     build_view_theme_extraction_instructions,
     build_view_theme_extraction_schema,
@@ -20,6 +17,7 @@ from ..common.prompts import (
     build_visual_detection_localization_instructions,
     build_visual_detection_localization_schema,
 )
+from ..common.room_profiles import room_candidate_payload
 from ..common.scoring import evidence_scores_to_distribution, normalize_positive_scores
 from ..common.types import EntityDetection, Observation, RenderedView, ViewDetection
 from .renderer import PanoramaRenderer, normalize_heading
@@ -217,11 +215,9 @@ class ViewDetector:
 
         candidate_room_ids = self._candidate_room_ids(manifest)
         candidates = self._candidate_records(candidate_room_ids)
-        request_body = (
-            self._build_visual_request_body(captures, candidates=candidates)
-            if candidates
-            else self._build_request_body(captures)
-        )
+        if not candidates:
+            raise RuntimeError("Perception requires room graph and grounding candidates for visual localization.")
+        request_body = self._build_visual_request_body(captures, candidates=candidates)
         payload = self._create_response(request_body)
         self.last_traces.append(
             {
@@ -271,44 +267,6 @@ class ViewDetector:
         )
         parsed = self._parse_output_payload(payload)
         return parsed if isinstance(parsed, dict) else {}
-
-    def _build_request_body(self, captures: list[dict]) -> dict:
-        content = [{"type": "input_text", "text": build_view_detection_input(captures)}]
-        for capture in captures:
-            label = str(capture.get("label", "unknown"))
-            heading = capture.get("heading")
-            heading_text = f"{float(heading):.1f} deg" if isinstance(heading, (int, float)) else "unknown heading"
-            content.extend(
-                [
-                    {
-                        "type": "input_text",
-                        "text": f"View label: {label}. Heading: {heading_text}.",
-                    },
-                    {
-                        "type": "input_image",
-                        "image_url": self._image_to_data_url(Path(str(capture["path"]))),
-                        "detail": "high",
-                    },
-                ]
-            )
-        return {
-            "model": self.model,
-            "instructions": build_view_detection_instructions(),
-            "input": [
-                {
-                    "role": "user",
-                    "content": content,
-                }
-            ],
-            "text": {
-                "format": {
-                    "type": "json_schema",
-                    "name": "view_detection",
-                    "strict": True,
-                    "schema": build_view_detection_schema(),
-                }
-            },
-        }
 
     def _build_visual_request_body(self, captures: list[dict], *, candidates: list[dict]) -> dict:
         content = [
@@ -462,15 +420,7 @@ class ViewDetector:
             node = self.room_graph.get(room_id, {})
             entry = self.grounding_index.room_entry(room_id) if self.grounding_index is not None else None
             entry = entry or {}
-            candidates.append(
-                {
-                    "room_id": room_id,
-                    "title": node.get("title"),
-                    "category": node.get("category"),
-                    "aliases": list(node.get("aliases") or []) + list(entry.get("aliases") or []),
-                    "anchor_entities": list(entry.get("anchor_entities") or []),
-                }
-            )
+            candidates.append(room_candidate_payload(room_id=room_id, node=node, entry=entry))
         return candidates
 
     @staticmethod

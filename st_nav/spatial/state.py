@@ -3,7 +3,7 @@ from __future__ import annotations
 from ..common.types import BeliefState, Observation, TaskSpec
 from ..perception.renderer import normalize_heading
 from .grounding import GroundingIndex
-from .localization import RoomLocalizer
+from .localization import EvidenceScoreLocalizer, SpatialAlignmentRefiner
 
 
 class StateEstimator:
@@ -13,14 +13,18 @@ class StateEstimator:
         room_graph: dict[str, dict],
         pano_graph: dict[str, dict],
         grounding_index: GroundingIndex,
-        localizer: RoomLocalizer | None = None,
+        localizer: EvidenceScoreLocalizer | None = None,
     ):
         self.room_graph = room_graph
         self.pano_graph = pano_graph
         self.grounding_index = grounding_index
-        self.localizer = localizer or RoomLocalizer(
+        self.localizer = localizer or EvidenceScoreLocalizer(
             room_graph=room_graph,
             grounding_index=grounding_index,
+            spatial_refiner=SpatialAlignmentRefiner(
+                room_graph=room_graph,
+                grounding_index=grounding_index,
+            ),
         )
 
     def initialize(
@@ -100,18 +104,17 @@ class StateEstimator:
                 observation.metadata["transition_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["observation_likelihood"] = dict(localization.get("observation_likelihood", {}))
-                observation.metadata["entity_observation_distribution"] = dict(
-                    localization.get("entity_observation_distribution", {})
+                observation.metadata["evidence_distribution"] = dict(localization.get("evidence_distribution", {}))
+                observation.metadata["base_predicted_room_id"] = localization.get("base_predicted_room_id")
+                observation.metadata["base_room_belief"] = dict(localization.get("base_room_belief", {}))
+                observation.metadata["alignment_candidate_room_ids"] = list(
+                    localization.get("alignment_candidate_room_ids", [])
                 )
-                observation.metadata["alignment_observation_distribution"] = dict(
-                    localization.get("alignment_observation_distribution", {})
-                )
-                observation.metadata["entity_transition_room_belief"] = dict(
-                    localization.get("entity_transition_room_belief", {})
-                )
-                observation.metadata["alignment_fusion_applied"] = bool(
-                    localization.get("alignment_fusion_applied", False)
-                )
+                observation.metadata["alignment_top_k"] = list(localization.get("alignment_top_k", []))
+                observation.metadata["alignment_predicted_room_id"] = localization.get("alignment_predicted_room_id")
+                observation.metadata["alignment_applied"] = bool(localization.get("alignment_applied", False))
+                if localization.get("alignment_skipped_reason"):
+                    observation.metadata["alignment_skipped_reason"] = localization.get("alignment_skipped_reason")
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
                 visual_localization = localization.get("visual_localization")
                 if isinstance(visual_localization, dict):

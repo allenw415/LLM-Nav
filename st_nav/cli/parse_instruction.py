@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
-from _common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
+from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_artifacts, render_json
 
 ensure_project_root_on_path()
 

@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from st_nav import PanoramaRenderer, load_dotenv
 from st_nav_data.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
+from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 from st_nav_data.room_grounder import (
     ModelRoomGrounder,
     build_compact_pano_room_mapping,
@@ -184,7 +185,8 @@ def main() -> int:
     artifacts_dir = (PROJECT_ROOT / args.artifacts_dir).resolve()
     room_graph = load_json(artifacts_dir / "room_graph.json")
     pano_graph = load_json(artifacts_dir / "pano_graph.json")
-    room_grounding = load_json(artifacts_dir / "room_grounding.template.json")
+    pano_room_grounding = load_json(artifacts_dir / "pano_room_grounding.json")
+    room_grounding = build_room_grounding_from_pano_room_mapping(room_graph, pano_room_grounding)
     manual_output_path = (PROJECT_ROOT / args.manual_output_path).resolve()
     existing_manual_records = load_existing_results(manual_output_path)
 

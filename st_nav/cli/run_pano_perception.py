@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from _common import (
+from ._common import (
     PROJECT_ROOT,
     ensure_project_root_on_path,
     load_normalized_artifacts,
@@ -42,11 +42,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--height", type=int, default=512)
     parser.add_argument("--current-heading", type=float, default=330.0)
     parser.add_argument("--demo-trace", action="store_true")
-    parser.add_argument(
-        "--legacy-entity-only",
-        action="store_true",
-        help="Use the original entity-only VLM detection prompt instead of integrated visual localization.",
-    )
     parser.add_argument(
         "--no-detection-cache",
         action="store_true",
@@ -101,8 +96,8 @@ def main() -> int:
         request_timeout=args.vlm_timeout,
         use_detection_files=not args.no_detection_cache,
         enable_view_themes=args.enable_view_themes,
-        room_graph=None if args.legacy_entity_only else room_graph,
-        grounding_index=None if args.legacy_entity_only else grounding_index,
+        room_graph=room_graph,
+        grounding_index=grounding_index,
     )
     pipeline = PerceptionPipeline(
         pano_graph=pano_graph,
@@ -124,13 +119,16 @@ def main() -> int:
         graph_path=str(artifacts.artifacts_dir / "pano_graph.json"),
     )
     if args.debug_request:
-        request_body = detector._build_request_body(
-            [
-                capture
-                for capture in manifest.get("captures", [])
-                if isinstance(capture, dict) and isinstance(capture.get("path"), str) and capture.get("path")
-            ]
-        )
+        captures = [
+            capture
+            for capture in manifest.get("captures", [])
+            if isinstance(capture, dict) and isinstance(capture.get("path"), str) and capture.get("path")
+        ]
+        candidate_room_ids = detector._candidate_room_ids(manifest)
+        candidates = detector._candidate_records(candidate_room_ids)
+        if not candidates:
+            raise RuntimeError("Perception debug request requires room graph and grounding candidates.")
+        request_body = detector._build_visual_request_body(captures, candidates=candidates)
         debug_payload = {
             "provider": detector.model_client.provider,
             "model": detector.model,

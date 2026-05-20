@@ -653,16 +653,18 @@ class EpisodeRunner:
                     observation_metadata.get("transition_support")
                     or observation_metadata.get("transition_room_support")
                 ),
-                "entity_observation_distribution": EpisodeRunner._clone_json(
-                    observation_metadata.get("entity_observation_distribution")
+                "evidence_distribution": EpisodeRunner._clone_json(
+                    observation_metadata.get("evidence_distribution")
                 ),
-                "alignment_observation_distribution": EpisodeRunner._clone_json(
-                    observation_metadata.get("alignment_observation_distribution")
+                "base_predicted_room_id": observation_metadata.get("base_predicted_room_id"),
+                "base_room_belief": EpisodeRunner._clone_json(observation_metadata.get("base_room_belief")),
+                "alignment_candidate_room_ids": EpisodeRunner._clone_json(
+                    observation_metadata.get("alignment_candidate_room_ids")
                 ),
-                "entity_transition_room_belief": EpisodeRunner._clone_json(
-                    observation_metadata.get("entity_transition_room_belief")
-                ),
-                "alignment_fusion_applied": observation_metadata.get("alignment_fusion_applied"),
+                "alignment_top_k": EpisodeRunner._clone_json(observation_metadata.get("alignment_top_k")),
+                "alignment_predicted_room_id": observation_metadata.get("alignment_predicted_room_id"),
+                "alignment_applied": observation_metadata.get("alignment_applied"),
+                "alignment_skipped_reason": observation_metadata.get("alignment_skipped_reason"),
                 "observation_likelihood": EpisodeRunner._clone_json(
                     observation_metadata.get("observation_likelihood")
                     or observation_metadata.get("observation_distribution")

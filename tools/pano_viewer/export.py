@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -10,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from st_nav import load_dotenv
 from st_nav_data.pano_visualization import (
     build_dot,
     build_floor_overview_svg,
@@ -22,8 +24,8 @@ from st_nav_data.pano_visualization import (
 )
 
 DEFAULT_ARTIFACTS_DIR = PROJECT_ROOT / "dataset/sites/british_museum/normalized"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "artifacts/pano_visualization/british_museum"
-VIEWER_SOURCE_DIR = PROJECT_ROOT / "scripts/pano_graph_visualization/web"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "artifacts/pano_viewer/british_museum"
+VIEWER_SOURCE_DIR = PROJECT_ROOT / "tools/pano_viewer/web"
 
 
 def parse_args() -> argparse.Namespace:
@@ -38,11 +40,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--route-source-pano-id")
     parser.add_argument("--route-target-pano-id")
     parser.add_argument("--copy-viewer", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--write-env-js", action=argparse.BooleanOptionalAction, default=True)
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    load_dotenv(PROJECT_ROOT / ".env")
     artifacts_dir = Path(args.artifacts_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -110,6 +114,8 @@ def main() -> None:
 
     if args.copy_viewer:
         copy_viewer(output_dir)
+    if args.write_env_js:
+        write_env_js(output_dir)
 
     print(
         "[pano-viz] "
@@ -121,6 +127,18 @@ def main() -> None:
 def copy_viewer(output_dir: Path) -> None:
     for name in ("index.html", "app.js", "styles.css"):
         shutil.copy2(VIEWER_SOURCE_DIR / name, output_dir / name)
+
+
+def write_env_js(output_dir: Path) -> None:
+    api_key = os.environ.get("GMAPS_API_KEY", "").strip()
+    env_path = output_dir / ".env.js"
+    if not api_key:
+        env_path.unlink(missing_ok=True)
+        return
+    env_path.write_text(
+        "window.GMAPS_API_KEY = " + json.dumps(api_key, ensure_ascii=False) + ";\n",
+        encoding="utf-8",
+    )
 
 
 def write_json(path: Path, payload: object) -> None:

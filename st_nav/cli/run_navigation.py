@@ -4,7 +4,7 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from _common import (
+from ._common import (
     PROJECT_ROOT,
     ensure_project_root_on_path,
     load_json,
@@ -16,23 +16,7 @@ from _common import (
 
 ensure_project_root_on_path()
 
-from st_nav import (
-    EpisodeRunner,
-    GroundingIndex,
-    LLMActionPolicy,
-    LLMInstructionParser,
-    LLMRoomLocalizer,
-    LLMSpatialAlignmentLocalizer,
-    ManifestPerceptionProvider,
-    NavigationPipeline,
-    PanoramaRenderer,
-    SourcePanoResolver,
-    SourceResolutionWorkflow,
-    SpatialEngine,
-    VisualObservationLocalizer,
-    load_dotenv,
-    resolve_model_environment,
-)
+from st_nav import NavigationPipelineConfig, build_navigation_pipeline, load_dotenv, resolve_model_environment
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(
@@ -46,11 +30,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the end-to-end navigation loop.")
     parser.add_argument("--instruction", required=True)
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
-    parser.add_argument(
-        "--localizer",
-        choices=["heuristic", "llm", "visual-vlm", "spatial-alignment-a", "spatial-alignment-b"],
-        default="visual-vlm",
-    )
+    parser.add_argument("--alignment-candidate-ratio-threshold", type=float, default=0.5)
+    parser.add_argument("--alignment-candidate-max", type=int, default=5)
     parser.add_argument("--manifest-map-json")
     parser.add_argument("--step-budget", type=int, default=15)
     parser.add_argument(
@@ -87,37 +68,6 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_localizer(args, *, room_graph: dict[str, dict], grounding_index: GroundingIndex):
-    if args.localizer == "heuristic":
-        return None
-    if args.localizer == "llm":
-        return LLMRoomLocalizer(
-            room_graph=room_graph,
-            grounding_index=grounding_index,
-            model=args.llm_model,
-            api_key=args.llm_api_key,
-            api_base=args.llm_api_base,
-            api_kind=args.llm_api_kind,
-            request_timeout=args.llm_timeout,
-        )
-    if args.localizer == "visual-vlm":
-        return VisualObservationLocalizer(
-            room_graph=room_graph,
-            grounding_index=grounding_index,
-        )
-    return LLMSpatialAlignmentLocalizer(
-        room_graph=room_graph,
-        grounding_index=grounding_index,
-        alignment_mode="text_from_images" if args.localizer == "spatial-alignment-a" else "direct_images",
-        entity_distribution_mode="llm",
-        model=args.llm_model,
-        api_key=args.llm_api_key,
-        api_base=args.llm_api_base,
-        api_kind=args.llm_api_kind,
-        request_timeout=args.llm_timeout,
-    )
-
-
 def serialize_candidate(candidate) -> dict:
     return {
         "target_pano_id": candidate.target_pano_id,
@@ -152,10 +102,14 @@ def serialize_trace(trace) -> dict:
             "grounded_room_id": observation_metadata.get("grounded_room_id"),
             "transition_support": observation_metadata.get("transition_support")
             or observation_metadata.get("transition_room_support"),
-            "entity_observation_distribution": observation_metadata.get("entity_observation_distribution"),
-            "alignment_observation_distribution": observation_metadata.get("alignment_observation_distribution"),
-            "entity_transition_room_belief": observation_metadata.get("entity_transition_room_belief"),
-            "alignment_fusion_applied": observation_metadata.get("alignment_fusion_applied"),
+            "evidence_distribution": observation_metadata.get("evidence_distribution"),
+            "base_predicted_room_id": observation_metadata.get("base_predicted_room_id"),
+            "base_room_belief": observation_metadata.get("base_room_belief"),
+            "alignment_candidate_room_ids": observation_metadata.get("alignment_candidate_room_ids"),
+            "alignment_top_k": observation_metadata.get("alignment_top_k"),
+            "alignment_predicted_room_id": observation_metadata.get("alignment_predicted_room_id"),
+            "alignment_applied": observation_metadata.get("alignment_applied"),
+            "alignment_skipped_reason": observation_metadata.get("alignment_skipped_reason"),
             "observation_likelihood": observation_metadata.get("observation_likelihood")
             or observation_metadata.get("observation_distribution"),
             "room_belief": observation_metadata.get("room_belief"),
@@ -381,53 +335,24 @@ def main() -> int:
         args.artifacts_dir,
         room_graph=True,
         pano_graph=True,
-        grounding=True,
         pano_room_grounding=True,
     )
     room_graph = artifacts.room_graph or {}
     pano_graph = artifacts.pano_graph or {}
-    grounding_index = GroundingIndex(
-        artifacts.grounding or {},
-        pano_to_room=artifacts.pano_room_grounding or {},
-    )
-
-    parser = LLMInstructionParser(
-        room_graph=room_graph,
-        model=args.llm_model,
-        api_key=args.llm_api_key,
-        api_base=args.llm_api_base,
-        api_kind=args.llm_api_kind,
-        request_timeout=args.llm_timeout,
-    )
-    source_resolution = SourceResolutionWorkflow(
-        instruction_parser=parser,
-        source_pano_resolver=SourcePanoResolver(grounding_index),
-    )
-    spatial_engine = SpatialEngine(
+    pipeline = build_navigation_pipeline(
         room_graph=room_graph,
         pano_graph=pano_graph,
-        grounding_index=grounding_index,
-        localizer=build_localizer(args, room_graph=room_graph, grounding_index=grounding_index),
-    )
-    runner = EpisodeRunner(
-        perception_provider=ManifestPerceptionProvider(
-            pano_graph=pano_graph,
-            room_graph=room_graph,
-            grounding_index=grounding_index,
+        grounding_payload={},
+        pano_room_grounding=artifacts.pano_room_grounding or {},
+        config=NavigationPipelineConfig(
+            llm_model=args.llm_model,
+            llm_api_key=args.llm_api_key,
+            llm_api_base=args.llm_api_base,
+            llm_api_kind=args.llm_api_kind,
+            llm_timeout=args.llm_timeout,
+            alignment_candidate_ratio_threshold=args.alignment_candidate_ratio_threshold,
+            alignment_candidate_max=args.alignment_candidate_max,
         ),
-        spatial_engine=spatial_engine,
-        policy=LLMActionPolicy(
-            model=args.llm_model,
-            api_key=args.llm_api_key,
-            api_base=args.llm_api_base,
-            api_kind=args.llm_api_kind,
-            request_timeout=args.llm_timeout,
-        ),
-        renderer=PanoramaRenderer(pano_graph),
-    )
-    pipeline = NavigationPipeline(
-        source_resolution_workflow=source_resolution,
-        episode_runner=runner,
     )
 
     manifest_paths = {}
