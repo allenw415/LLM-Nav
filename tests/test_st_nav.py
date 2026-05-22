@@ -49,6 +49,7 @@ from st_nav import (
     extract_output_text,
     load_dotenv,
     resolve_model_environment,
+    resolve_task_num_ctx,
 )
 from st_nav.common.room_profiles import room_candidate_payload
 from st_nav_data.normalize import (
@@ -82,11 +83,23 @@ MUSEUM_CAPTURE_LABELS = [
 class STNavTests(unittest.TestCase):
     @staticmethod
     def _load_pano_perception_eval_module():
-        module_path = Path(__file__).resolve().parents[1] / "tools/evaluation/eval_pano_perception_grounding.py"
+        module_path = Path(__file__).resolve().parents[1] / "tools/evaluation/localization/eval_localization.py"
         script_dir = str(module_path.parent)
         if script_dir not in sys.path:
             sys.path.insert(0, script_dir)
-        spec = importlib.util.spec_from_file_location("eval_pano_perception_grounding_test", module_path)
+        spec = importlib.util.spec_from_file_location("eval_localization_test", module_path)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+
+    @staticmethod
+    def _load_parse_instruction_eval_module():
+        module_path = Path(__file__).resolve().parents[1] / "tools/evaluation/parse_instruction/eval_parse_instruction.py"
+        script_dir = str(module_path.parent)
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+        spec = importlib.util.spec_from_file_location("eval_parse_instruction_test", module_path)
         module = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(module)
@@ -1062,6 +1075,63 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(task.waypoint_room_ids, ["Room 8", "Room 17"])
         self.assertEqual(task.goal_entities[0].name, "Townley Venus")
         self.assertAlmostEqual(task.goal_entities[0].confidence, 0.93)
+
+    def test_llm_instruction_parser_supports_artwork_gallery_instruction_following(self) -> None:
+        room_graph = normalize_room_graph(
+            {
+                **self.explicit_map,
+                "Room 6": {
+                    "name": "Room 6",
+                    "Level": 0,
+                    "category": "Middle East",
+                    "title": "Assyrian sculpture and Balawat Gates",
+                    "links": [],
+                },
+            }
+        )
+        parser = LLMInstructionParser(
+            room_graph=room_graph,
+            api_key="test-key",
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "task_type": "artwork_gallery_instruction_following_navigation",
+                        "source_room_id": "Room 6",
+                        "source_entity": {
+                            "name": "Room 6",
+                            "entity_type": "gallery",
+                            "predicted_room_id": "Room 6",
+                            "confidence": 1.0,
+                        },
+                        "goal_entities": [
+                            {
+                                "name": "Townley Venus",
+                                "entity_type": "artwork",
+                                "predicted_room_id": "Room 23",
+                                "confidence": 0.93,
+                            }
+                        ],
+                        "waypoint_entities": [
+                            {
+                                "name": "Lamassu",
+                                "entity_type": "artwork",
+                                "predicted_room_id": "Room 8",
+                                "confidence": 0.88,
+                            }
+                        ],
+                    }
+                )
+            },
+        )
+
+        task = parser.parse("Find the way from Room 6, passing the Lamassu, to the Townley Venus.")
+
+        self.assertEqual(task.task_type, "artwork_gallery_instruction_following_navigation")
+        self.assertEqual(task.source_room_id, "Room 6")
+        self.assertEqual(task.source_entity.entity_type, "gallery")
+        self.assertEqual(task.goal_room_ids, ["Room 23"])
+        self.assertEqual(task.waypoint_room_ids, ["Room 8"])
+        self.assertEqual(task.waypoint_entities[0].entity_type, "artwork")
 
     def test_llm_instruction_parser_requires_api_key(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -4147,6 +4217,208 @@ class STNavTests(unittest.TestCase):
 
         self.assertEqual(attempts["count"], 3)
         self.assertEqual(payload["output_text"], '{"ok": true}')
+
+
+    def test_resolve_task_num_ctx_prefers_explicit_then_task_env_then_fallback(self) -> None:
+        original = os.environ.get("ST_NAV_PARSE_INSTRUCTION_NUM_CTX")
+        try:
+            os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
+            self.assertEqual(
+                resolve_task_num_ctx(
+                    "parse_instruction",
+                    fallback_num_ctx=4096,
+                    default_num_ctx=1024,
+                ),
+                2048,
+            )
+            self.assertEqual(
+                resolve_task_num_ctx(
+                    "parse_instruction",
+                    explicit_num_ctx=1024,
+                    fallback_num_ctx=4096,
+                    default_num_ctx=2048,
+                ),
+                1024,
+            )
+            os.environ.pop("ST_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
+            self.assertEqual(
+                resolve_task_num_ctx(
+                    "parse_instruction",
+                    fallback_num_ctx=4096,
+                    default_num_ctx=2048,
+                ),
+                4096,
+            )
+            self.assertEqual(
+                resolve_task_num_ctx("parse_instruction", default_num_ctx=2048),
+                2048,
+            )
+        finally:
+            if original is None:
+                os.environ.pop("ST_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
+            else:
+                os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = original
+
+    def test_instruction_parser_uses_task_specific_num_ctx_with_explicit_override(self) -> None:
+        managed_keys = {
+            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
+            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
+            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
+            "ST_NAV_PARSE_INSTRUCTION_NUM_CTX": os.environ.get("ST_NAV_PARSE_INSTRUCTION_NUM_CTX"),
+        }
+        try:
+            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
+
+            room_graph = normalize_room_graph(self.explicit_map)
+            parser = LLMInstructionParser(room_graph=room_graph)
+            payload = parser.model_client._responses_to_ollama_chat_payload(
+                parser._build_request_body("Find the way from Room 8 to Room 23.")
+            )
+            self.assertEqual(parser.num_ctx, 2048)
+            self.assertEqual(payload["options"]["num_ctx"], 2048)
+
+            override_parser = LLMInstructionParser(room_graph=room_graph, num_ctx=1024)
+            override_payload = override_parser.model_client._responses_to_ollama_chat_payload(
+                override_parser._build_request_body("Find the way from Room 8 to Room 23.")
+            )
+            self.assertEqual(override_parser.num_ctx, 1024)
+            self.assertEqual(override_payload["options"]["num_ctx"], 1024)
+        finally:
+            for key, value in managed_keys.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_spatial_alignment_refiner_uses_task_specific_num_ctx_with_explicit_override(self) -> None:
+        managed_keys = {
+            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
+            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
+            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
+            "ST_NAV_LOCALIZATION_NUM_CTX": os.environ.get("ST_NAV_LOCALIZATION_NUM_CTX"),
+        }
+        try:
+            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ["ST_NAV_LOCALIZATION_NUM_CTX"] = "16384"
+
+            room_graph = normalize_room_graph(self.explicit_map)
+            grounding = build_test_grounding(room_graph)
+            refiner = SpatialAlignmentRefiner(
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+                response_client=lambda _: {},
+            )
+            self.assertEqual(refiner.num_ctx, 16384)
+            self.assertEqual(refiner.model_client.num_ctx, 16384)
+
+            override_refiner = SpatialAlignmentRefiner(
+                room_graph=room_graph,
+                grounding_index=GroundingIndex(grounding),
+                num_ctx=8192,
+                response_client=lambda _: {},
+            )
+            self.assertEqual(override_refiner.num_ctx, 8192)
+            self.assertEqual(override_refiner.model_client.num_ctx, 8192)
+        finally:
+            for key, value in managed_keys.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def test_parse_instruction_eval_reports_token_usage_and_report_columns(self) -> None:
+        module = self._load_parse_instruction_eval_module()
+
+        ollama_usage = module.extract_token_usage({"prompt_eval_count": 120, "eval_count": 30})
+        self.assertEqual(ollama_usage["input_tokens"], 120)
+        self.assertEqual(ollama_usage["output_tokens"], 30)
+        self.assertEqual(ollama_usage["total_tokens"], 150)
+        self.assertIsNone(ollama_usage["reasoning_tokens"])
+
+        hosted_usage = module.extract_token_usage(
+            {
+                "usage": {
+                    "input_tokens": 50,
+                    "output_tokens": 20,
+                    "total_tokens": 70,
+                    "output_tokens_details": {"reasoning_tokens": 7},
+                }
+            }
+        )
+        self.assertEqual(hosted_usage["reasoning_tokens"], 7)
+
+        results = [
+            {
+                "instruction": "Find the way from Room 8 to Room 23.",
+                "elapsed_seconds": 1.25,
+                "result": {
+                    "task_type": "gallery_goal_navigation",
+                    "source_room_id": "Room 8",
+                    "goal_room_ids": ["Room 23"],
+                    "waypoint_room_ids": [],
+                },
+                "input_tokens": 120,
+                "output_tokens": 30,
+                "total_tokens": 150,
+                "reasoning_tokens": None,
+                "raw_usage": {"prompt_eval_count": 120, "eval_count": 30},
+            },
+            {
+                "instruction": "Find the way from the Lamassu to the Townley Venus.",
+                "elapsed_seconds": 1.75,
+                "error": "parse failed",
+                "input_tokens": 50,
+                "output_tokens": 20,
+                "total_tokens": 70,
+                "reasoning_tokens": 7,
+                "raw_usage": {"input_tokens": 50, "output_tokens": 20, "total_tokens": 70},
+            },
+        ]
+        summary = module.summarize_results(results)
+        self.assertEqual(summary["total_input_tokens"], 170)
+        self.assertEqual(summary["total_output_tokens"], 50)
+        self.assertEqual(summary["total_tokens"], 220)
+        self.assertEqual(summary["total_reasoning_tokens"], 7)
+        self.assertEqual(summary["average_input_tokens"], 85.0)
+        self.assertEqual(summary["average_reasoning_tokens"], 7.0)
+
+        report = module.render_report(
+            {
+                "parser": "runtime",
+                "generated_at": "2026-05-21 00:00:00 +0000",
+                "case_count": 2,
+                "config": {
+                    "active_profile": "ollama",
+                    "model": "gemma4:31b",
+                    "api_base": "http://127.0.0.1:11434/v1",
+                    "api_kind": "chat_completions",
+                    "effective_num_ctx": 8192,
+                    "artifacts_dir": "dataset/sites/british_museum/normalized",
+                },
+                "summary": summary,
+                "results": results,
+            }
+        )
+        self.assertIn("Average input tokens", report)
+        self.assertIn("Reasoning Tokens", report)
+        self.assertIn("Effective num ctx", report)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ VIEW_DETECTION_KINDS = ("artwork", "landmark", "signage", "passage", "other")
 ENTITY_LOCATION_SCOPES = ("inside", "outside", "unknown")
 ROOM_EVIDENCE_TYPES = ("weak_generic", "shared_theme", "room_specific", "direct_room_label")
 NAVIGATION_TASK_TYPES = (
+    "artwork_gallery_instruction_following_navigation",
     "artwork_goal_navigation",
     "artwork_instruction_following_navigation",
     "gallery_goal_navigation",
@@ -276,14 +277,22 @@ def build_navigation_parse_instructions() -> str:
         [
             "You are a museum navigation reasoning parser.",
             "Classify the instruction into exactly one task type.",
+            "First extract the source, ordered waypoints, and ordered goals from the instruction, then classify each entity as gallery or artwork.",
+            "When there are no waypoint entities, choose gallery_goal_navigation or artwork_goal_navigation from the goal entity type; never use an instruction-following task type without waypoints.",
+            "For instruction-following tasks, use artwork_gallery_instruction_following_navigation only when one or more waypoint entities are present and the source, waypoint, and goal entities include both gallery and artwork entities.",
+            "Use gallery_instruction_following_navigation when all source, waypoint, and goal entities are galleries.",
+            "Use artwork_instruction_following_navigation when all source, waypoint, and goal entities are artworks.",
             "Extract the source, ordered waypoints, and ordered goals from the instruction.",
             "Preserve entity order from the original instruction.",
             "Treat explicit room or gallery mentions as gallery entities.",
+            "Treat named objects, sculptures, monuments, reliefs, gates, statues, and artworks as artwork entities.",
+            "Treat entities mentioned after from as source, entities mentioned after passing as waypoints, and entities mentioned after to as goals.",
             "Infer artwork room ids using only the provided gallery themes.",
             "Do not invent room ids, entities, or extra steps.",
             "If the source is implicit or missing, return source_room_id as null and source_entity as null.",
             "For gallery entities, predicted_room_id must match the mentioned room id and confidence must be 1.0.",
             "For artwork entities, predicted_room_id must be one allowed room id and confidence must be between 0 and 1.",
+            "Return JSON only.",
         ]
     )
 
@@ -297,11 +306,19 @@ def build_navigation_parse_input(*, instruction: str, room_ids: list[str], theme
             "Gallery themes:",
             theme_lines,
             "",
+            "Task types:",
+            "- gallery_goal_navigation: goal is a gallery, and there are no waypoints.",
+            "- artwork_goal_navigation: goal is an artwork, and there are no waypoints.",
+            "- gallery_instruction_following_navigation: all source, waypoint, and goal entities are galleries, and one or more waypoints are present.",
+            "- artwork_instruction_following_navigation: all source, waypoint, and goal entities are artworks, and one or more waypoints are present.",
+            "- artwork_gallery_instruction_following_navigation: one or more waypoints are present, and source, waypoint, and goal entities include both gallery and artwork entities.",
+            "",
             "Task:",
-            "1. Determine the navigation task type.",
-            "2. Extract the source entity if present.",
-            "3. Extract goal entities and waypoint entities in order.",
-            "4. Ground each entity to one allowed room id or null when required by the schema.",
+            "1. Identify source, waypoint, and goal spans from the wording.",
+            "2. Classify each extracted entity as gallery or artwork.",
+            "3. Determine whether waypoint entities are present.",
+            "4. Apply the task-type definitions exactly.",
+            "5. Ground each entity to one allowed room id or null when required by the schema.",
             "",
             f"Instruction: {instruction}",
         ]

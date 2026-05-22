@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Callable
 
-from ..common.env import resolve_model_environment
+from ..common.env import resolve_model_environment, resolve_task_num_ctx
 from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     NAVIGATION_TASK_TYPES,
@@ -16,8 +16,9 @@ from ..common.types import ParsedNavigationEntity, TaskSpec
 
 class LLMInstructionParser:
     """
-    LLM-only parser for the four task types used in the paper:
-    gallery-goal, artwork-goal, gallery-instruction-following, artwork-instruction-following.
+    LLM-only parser for navigation task types used in the paper:
+    gallery-goal, artwork-goal, gallery-instruction-following,
+    artwork-instruction-following, and mixed artwork/gallery instruction-following.
     """
 
     VALID_TASK_TYPES = set(NAVIGATION_TASK_TYPES)
@@ -31,6 +32,7 @@ class LLMInstructionParser:
         api_base: str | None = None,
         api_kind: str | None = None,
         request_timeout: float | None = None,
+        num_ctx: int | None = None,
         response_client: Callable[[dict], dict] | None = None,
     ):
         settings = resolve_model_environment(
@@ -44,6 +46,12 @@ class LLMInstructionParser:
         self.api_base = (api_base or settings.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
         self.api_kind = resolve_api_kind(api_kind or settings.api_kind)
         self.request_timeout = float(request_timeout if request_timeout is not None else (settings.request_timeout or 30.0))
+        self.num_ctx = resolve_task_num_ctx(
+            "parse_instruction",
+            explicit_num_ctx=num_ctx,
+            fallback_num_ctx=settings.num_ctx,
+            default_num_ctx=8192,
+        )
         self.response_client = response_client
         self.last_request_body: dict | None = None
         self.last_response_payload: dict | None = None
@@ -53,7 +61,7 @@ class LLMInstructionParser:
             api_base=self.api_base,
             api_kind=self.api_kind,
             request_timeout=self.request_timeout,
-            num_ctx=settings.num_ctx,
+            num_ctx=self.num_ctx,
             temperature=settings.temperature,
             response_client=self.response_client,
         )

@@ -1,0 +1,313 @@
+{
+  "parser": "runtime",
+  "generated_at": "2026-05-22 03:31:23 +0800",
+  "case_count": 10,
+  "config": {
+    "active_profile": "ollama",
+    "artifacts_dir": "dataset/sites/british_museum/normalized",
+    "model": "gemma4:31b",
+    "api_base": "http://127.0.0.1:11434/v1",
+    "api_kind": "chat_completions",
+    "request_timeout": 180.0,
+    "effective_num_ctx": 8192
+  },
+  "summary": {
+    "success_count": 10,
+    "error_count": 0,
+    "average_latency_seconds": 38.906,
+    "task_type_counts": {
+      "artwork_gallery_instruction_following_navigation": 4,
+      "artwork_goal_navigation": 1,
+      "gallery_goal_navigation": 3,
+      "gallery_instruction_following_navigation": 2
+    },
+    "total_input_tokens": 10788,
+    "average_input_tokens": 1078.8,
+    "total_output_tokens": 1737,
+    "average_output_tokens": 173.7,
+    "total_tokens": 12525,
+    "average_total_tokens": 1252.5,
+    "total_reasoning_tokens": null,
+    "average_reasoning_tokens": null
+  },
+  "results": [
+    {
+      "instruction": "Find the way from Room 4 to Room 23.",
+      "elapsed_seconds": 17.533,
+      "result": {
+        "task_type": "gallery_goal_navigation",
+        "source_room_id": "Room 4",
+        "source_entity": null,
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [],
+        "goal_entities": [
+          "Room 23"
+        ],
+        "waypoint_entities": []
+      },
+      "input_tokens": 1073,
+      "output_tokens": 85,
+      "total_tokens": 1158,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1073,
+        "eval_count": 85
+      }
+    },
+    {
+      "instruction": "Find the way from Room 8 to Room 23.",
+      "elapsed_seconds": 13.953,
+      "result": {
+        "task_type": "gallery_goal_navigation",
+        "source_room_id": "Room 8",
+        "source_entity": null,
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [],
+        "goal_entities": [
+          "Room 23"
+        ],
+        "waypoint_entities": []
+      },
+      "input_tokens": 1073,
+      "output_tokens": 83,
+      "total_tokens": 1156,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1073,
+        "eval_count": 83
+      }
+    },
+    {
+      "instruction": "Find the way from the Lamassu to the Townley Venus.",
+      "elapsed_seconds": 29.086,
+      "result": {
+        "task_type": "artwork_goal_navigation",
+        "source_room_id": "Room 6",
+        "source_entity": "Lamassu",
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [],
+        "goal_entities": [
+          "Townley Venus"
+        ],
+        "waypoint_entities": []
+      },
+      "input_tokens": 1074,
+      "output_tokens": 160,
+      "total_tokens": 1234,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1074,
+        "eval_count": 160
+      }
+    },
+    {
+      "instruction": "Find the way from the Nereid Monument to Room 18.",
+      "elapsed_seconds": 20.128,
+      "result": {
+        "task_type": "gallery_goal_navigation",
+        "source_room_id": "Room 17",
+        "source_entity": "Nereid Monument",
+        "goal_room_ids": [
+          "Room 18"
+        ],
+        "waypoint_room_ids": [],
+        "goal_entities": [
+          "Room 18"
+        ],
+        "waypoint_entities": []
+      },
+      "input_tokens": 1075,
+      "output_tokens": 121,
+      "total_tokens": 1196,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1075,
+        "eval_count": 121
+      }
+    },
+    {
+      "instruction": "Find the way from Room 4, passing Room 7 and Room 17, to Room 23.",
+      "elapsed_seconds": 23.343,
+      "result": {
+        "task_type": "gallery_instruction_following_navigation",
+        "source_room_id": "Room 4",
+        "source_entity": null,
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [
+          "Room 7",
+          "Room 17"
+        ],
+        "goal_entities": [
+          "Room 23"
+        ],
+        "waypoint_entities": [
+          "Room 7",
+          "Room 17"
+        ]
+      },
+      "input_tokens": 1084,
+      "output_tokens": 218,
+      "total_tokens": 1302,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1084,
+        "eval_count": 218
+      }
+    },
+    {
+      "instruction": "Find the way from Room 8, passing Room 9, to Room 23.",
+      "elapsed_seconds": 23.624,
+      "result": {
+        "task_type": "gallery_instruction_following_navigation",
+        "source_room_id": "Room 8",
+        "source_entity": "Room 8",
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [
+          "Room 9"
+        ],
+        "goal_entities": [
+          "Room 23"
+        ],
+        "waypoint_entities": [
+          "Room 9"
+        ]
+      },
+      "input_tokens": 1079,
+      "output_tokens": 212,
+      "total_tokens": 1291,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1079,
+        "eval_count": 212
+      }
+    },
+    {
+      "instruction": "Find the way from the Bronze Container for Cosmetic Items, passing the Lamassu and the Nereid Monument, to the Townley Venus.",
+      "elapsed_seconds": 145.491,
+      "result": {
+        "task_type": "artwork_gallery_instruction_following_navigation",
+        "source_room_id": "Room 12",
+        "source_entity": "Bronze Container for Cosmetic Items",
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [
+          "Room 6",
+          "Room 17"
+        ],
+        "goal_entities": [
+          "Townley Venus"
+        ],
+        "waypoint_entities": [
+          "Lamassu",
+          "Nereid Monument"
+        ]
+      },
+      "input_tokens": 1089,
+      "output_tokens": 267,
+      "total_tokens": 1356,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1089,
+        "eval_count": 267
+      }
+    },
+    {
+      "instruction": "Find the way from the Lamassu, passing Room 8, to Room 23.",
+      "elapsed_seconds": 41.374,
+      "result": {
+        "task_type": "artwork_gallery_instruction_following_navigation",
+        "source_room_id": "Room 6",
+        "source_entity": "the Lamassu",
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [
+          "Room 8"
+        ],
+        "goal_entities": [
+          "Room 23"
+        ],
+        "waypoint_entities": [
+          "Room 8"
+        ]
+      },
+      "input_tokens": 1080,
+      "output_tokens": 156,
+      "total_tokens": 1236,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1080,
+        "eval_count": 156
+      }
+    },
+    {
+      "instruction": "Find the way from Room 6, passing the Lamassu, to the Townley Venus.",
+      "elapsed_seconds": 26.024,
+      "result": {
+        "task_type": "artwork_gallery_instruction_following_navigation",
+        "source_room_id": "Room 6",
+        "source_entity": "Room 6",
+        "goal_room_ids": [
+          "Room 23"
+        ],
+        "waypoint_room_ids": [
+          "Room 6"
+        ],
+        "goal_entities": [
+          "Townley Venus"
+        ],
+        "waypoint_entities": [
+          "Lamassu"
+        ]
+      },
+      "input_tokens": 1080,
+      "output_tokens": 216,
+      "total_tokens": 1296,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1080,
+        "eval_count": 216
+      }
+    },
+    {
+      "instruction": "Find the way from the Townley Venus, passing Room 17, to the Lamassu.",
+      "elapsed_seconds": 48.508,
+      "result": {
+        "task_type": "artwork_gallery_instruction_following_navigation",
+        "source_room_id": "Room 23",
+        "source_entity": "Townley Venus",
+        "goal_room_ids": [
+          "Room 6"
+        ],
+        "waypoint_room_ids": [
+          "Room 17"
+        ],
+        "goal_entities": [
+          "Lamassu"
+        ],
+        "waypoint_entities": [
+          "Room 17"
+        ]
+      },
+      "input_tokens": 1081,
+      "output_tokens": 219,
+      "total_tokens": 1300,
+      "reasoning_tokens": null,
+      "raw_usage": {
+        "prompt_eval_count": 1081,
+        "eval_count": 219
+      }
+    }
+  ]
+}

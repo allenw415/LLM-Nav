@@ -85,6 +85,30 @@ def resolve_model_environment(
     )
 
 
+
+def resolve_task_num_ctx(
+    task_name: str,
+    *,
+    explicit_num_ctx: int | None = None,
+    fallback_num_ctx: int | None = None,
+    default_num_ctx: int | None = None,
+) -> int | None:
+    if explicit_num_ctx is not None:
+        return int(explicit_num_ctx)
+
+    normalized_task_name = _normalize_profile_name(task_name)
+    if normalized_task_name:
+        task_value = _parse_int(os.environ.get(f"ST_NAV_{normalized_task_name}_NUM_CTX"))
+        if task_value is not None:
+            return task_value
+
+    if fallback_num_ctx is not None:
+        return int(fallback_num_ctx)
+    if default_num_ctx is not None:
+        return int(default_num_ctx)
+    return None
+
+
 def _normalize_profile_name(value: str) -> str:
     normalized = []
     for char in value.strip().upper():

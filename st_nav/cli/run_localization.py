@@ -26,6 +26,7 @@ from st_nav import (
     SpatialAlignmentRefiner,
     load_dotenv,
     resolve_model_environment,
+    resolve_task_num_ctx,
 )
 from st_nav.common.room_profiles import preferred_room_graph_path
 from st_nav_data.normalize import normalize_pano_graph, normalize_room_graph
@@ -36,6 +37,11 @@ MODEL_ENV = resolve_model_environment(
     default_model="gpt-5-mini",
     default_api_base="https://api.openai.com/v1",
     default_api_kind="responses",
+)
+DEFAULT_LLM_NUM_CTX = resolve_task_num_ctx(
+    "localization",
+    fallback_num_ctx=MODEL_ENV.num_ctx,
+    default_num_ctx=16384,
 )
 
 PROBABILITY_DECIMALS = 2
@@ -56,6 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm-api-kind", default=MODEL_ENV.api_kind)
     parser.add_argument("--llm-api-base", default=MODEL_ENV.api_base)
     parser.add_argument("--llm-timeout", type=float, default=MODEL_ENV.request_timeout or 30.0)
+    parser.add_argument("--llm-num-ctx", type=int, default=DEFAULT_LLM_NUM_CTX)
     parser.add_argument("--alignment-candidate-ratio-threshold", type=float, default=0.5)
     parser.add_argument("--alignment-candidate-max", type=int, default=5)
     parser.add_argument(
@@ -625,6 +632,7 @@ def main() -> int:
             api_base=args.llm_api_base,
             api_kind=args.llm_api_kind,
             request_timeout=args.llm_timeout,
+            num_ctx=args.llm_num_ctx,
         ),
     )
     localization = localizer.localize(

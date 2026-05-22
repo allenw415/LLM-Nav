@@ -1,4 +1,4 @@
-from .env import ModelEnvironment, load_dotenv, resolve_model_environment
+from .env import ModelEnvironment, load_dotenv, resolve_model_environment, resolve_task_num_ctx
 from .model_client import ModelResponseClient, extract_output_text, parse_json_output, parse_json_text, resolve_api_kind
 from .prompts import (
     ALLOCENTRIC_DIRECTIONS,
@@ -81,5 +81,6 @@ __all__ = [
     "build_visual_detection_localization_schema",
     "load_dotenv",
     "resolve_model_environment",
+    "resolve_task_num_ctx",
     "resolve_api_kind",
 ]

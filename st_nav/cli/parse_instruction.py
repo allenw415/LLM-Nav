@@ -6,7 +6,7 @@ from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_
 
 ensure_project_root_on_path()
 
-from st_nav import LLMInstructionParser, load_dotenv, resolve_model_environment
+from st_nav import LLMInstructionParser, load_dotenv, resolve_model_environment, resolve_task_num_ctx
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(
@@ -14,8 +14,13 @@ MODEL_ENV = resolve_model_environment(
     default_api_base="https://api.openai.com/v1",
     default_api_kind="responses",
 )
+DEFAULT_LLM_NUM_CTX = resolve_task_num_ctx(
+    "parse_instruction",
+    fallback_num_ctx=MODEL_ENV.num_ctx,
+    default_num_ctx=8192,
+)
 
-# Example instructions for the four task types used by the parser:
+# Example instructions for the task types used by the parser:
 # 1. gallery_goal_navigation:
 #    "Find the way from Room 4 to Room 23."
 # 2. artwork_goal_navigation:
@@ -24,6 +29,8 @@ MODEL_ENV = resolve_model_environment(
 #    "Find the way from Room 4, passing Room 7 and Room 17, to Room 23."
 # 4. artwork_instruction_following_navigation:
 #    "Find the way from the Bronze Container for Cosmetic Items, passing the Lamassu and the Nereid Monument, to the Townley Venus."
+# 5. artwork_gallery_instruction_following_navigation:
+#    "Find the way from Room 6, passing the Lamassu, to the Townley Venus."
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Parse a navigation instruction with the LLM parser.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
@@ -34,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm-api-kind", default=MODEL_ENV.api_kind)
     parser.add_argument("--llm-api-base", default=MODEL_ENV.api_base)
     parser.add_argument("--llm-timeout", type=float, default=MODEL_ENV.request_timeout or 30.0)
+    parser.add_argument("--llm-num-ctx", type=int, default=DEFAULT_LLM_NUM_CTX)
     return parser
 
 
@@ -69,6 +77,7 @@ def main() -> int:
         api_kind=args.llm_api_kind,
         model=args.llm_model,
         request_timeout=args.llm_timeout,
+        num_ctx=args.llm_num_ctx,
     )
     if args.debug_request:
         request_body = parser._build_request_body(args.instruction)
@@ -79,6 +88,7 @@ def main() -> int:
             "api_base": parser.api_base,
             "endpoint": _resolve_endpoint(parser, request_body),
             "request_timeout": parser.request_timeout,
+            "num_ctx": parser.num_ctx,
             "has_api_key": bool(parser.api_key),
             "request_body": request_body,
             "transport_payload": _resolve_transport_payload(parser, request_body),

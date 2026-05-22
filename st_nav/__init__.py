@@ -39,6 +39,7 @@ from .common import (
     parse_json_output,
     parse_json_text,
     resolve_model_environment,
+    resolve_task_num_ctx,
     resolve_api_kind,
 )
 from .decision import GreedyActionPolicy, LLMActionPolicy, LLMInstructionParser
@@ -128,5 +129,6 @@ __all__ = [
     "parse_json_output",
     "parse_json_text",
     "resolve_model_environment",
+    "resolve_task_num_ctx",
     "resolve_api_kind",
 ]

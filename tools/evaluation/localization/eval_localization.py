@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -33,6 +33,7 @@ from st_nav import (
     SpatialAlignmentRefiner,
     load_dotenv,
     resolve_model_environment,
+    resolve_task_num_ctx,
 )
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -40,6 +41,11 @@ MODEL_ENV = resolve_model_environment(
     default_model="gpt-5-mini",
     default_api_base="https://api.openai.com/v1",
     default_api_kind="responses",
+)
+DEFAULT_LLM_NUM_CTX = resolve_task_num_ctx(
+    "localization",
+    fallback_num_ctx=MODEL_ENV.num_ctx,
+    default_num_ctx=16384,
 )
 
 
@@ -76,6 +82,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--render-output-dir", default="renders/pano_perception_grounding_eval")
     parser.add_argument("--render-api-key")
     parser.add_argument("--llm-api-key")
+    parser.add_argument("--llm-num-ctx", type=int, default=DEFAULT_LLM_NUM_CTX)
     parser.add_argument("--detector-model", default="gemma-4-31b-it")
     parser.add_argument("--detector-api-kind")
     parser.add_argument("--detector-api-base")
@@ -486,6 +493,7 @@ def localize_integrated_visual(
     vlm_timeout: float | None = None,
     alignment_candidate_ratio_threshold: float = 0.5,
     alignment_candidate_max: int = 5,
+    llm_num_ctx: int | None = None,
 ) -> dict:
     observation = observation_from_perception_payload(
         payload,
@@ -502,6 +510,7 @@ def localize_integrated_visual(
             api_base=detector_api_base,
             api_kind=detector_api_kind,
             request_timeout=alignment_timeout or vlm_timeout,
+            num_ctx=llm_num_ctx,
         )
     localizer = EvidenceScoreLocalizer(
         room_graph=room_graph,

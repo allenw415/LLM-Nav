@@ -6,7 +6,7 @@ from base64 import b64encode
 from pathlib import Path
 from typing import Callable
 
-from ..common.env import resolve_model_environment
+from ..common.env import resolve_model_environment, resolve_task_num_ctx
 from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     build_spatial_alignment_input,
@@ -316,6 +316,7 @@ class SpatialAlignmentRefiner:
         api_base: str | None = None,
         api_kind: str | None = None,
         request_timeout: float | None = None,
+        num_ctx: int | None = None,
         response_client: Callable[[dict], dict] | None = None,
     ):
         model_env = resolve_model_environment(
@@ -330,13 +331,19 @@ class SpatialAlignmentRefiner:
         self.api_base = (api_base or model_env.api_base or DEFAULT_OPENAI_API_BASE).rstrip("/")
         self.api_kind = resolve_api_kind(api_kind or model_env.api_kind)
         self.request_timeout = float(request_timeout if request_timeout is not None else (model_env.request_timeout or 180.0))
+        self.num_ctx = resolve_task_num_ctx(
+            "localization",
+            explicit_num_ctx=num_ctx,
+            fallback_num_ctx=model_env.num_ctx,
+            default_num_ctx=16384,
+        )
         self.model_client = ModelResponseClient(
             provider=model_env.provider,
             api_key=self.api_key,
             api_base=self.api_base,
             api_kind=self.api_kind,
             request_timeout=self.request_timeout,
-            num_ctx=model_env.num_ctx,
+            num_ctx=self.num_ctx,
             temperature=model_env.temperature,
             response_client=response_client,
         )
