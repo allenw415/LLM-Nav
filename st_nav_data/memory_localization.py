@@ -443,3 +443,44 @@ class SigLIP2Embedder:
         if not batches:
             return self.np.zeros((0, 0), dtype=self.np.float32)
         return self.np.concatenate(batches, axis=0).astype(self.np.float32)
+
+    def encode_texts(self, texts: Sequence[str]):
+        batches = []
+        cleaned_texts = [str(text).strip() for text in texts if str(text).strip()]
+        for start in range(0, len(cleaned_texts), self.batch_size):
+            batch_texts = cleaned_texts[start : start + self.batch_size]
+            inputs = self.processor(
+                text=batch_texts,
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+            )
+            if hasattr(inputs, "to"):
+                inputs = inputs.to(self.device)
+            else:
+                inputs = {key: value.to(self.device) for key, value in inputs.items()}
+            text_inputs = {
+                key: value
+                for key, value in dict(inputs).items()
+                if key in {"input_ids", "attention_mask", "token_type_ids", "position_ids"}
+            }
+            if "input_ids" not in text_inputs:
+                raise RuntimeError(
+                    f"Processor for {self.model_name} did not produce input_ids. Keys={sorted(dict(inputs).keys())}"
+                )
+            if not hasattr(self.model, "get_text_features"):
+                raise RuntimeError(f"Model {self.model_name} does not expose get_text_features.")
+            with self.torch.inference_mode():
+                model_output = self.model.get_text_features(**text_inputs)
+            embeddings = _extract_image_embedding_tensor(model_output)
+            if hasattr(embeddings, "ndim") and int(embeddings.ndim) == 3:
+                embeddings = embeddings.mean(dim=1)
+            if not hasattr(embeddings, "norm"):
+                raise TypeError(
+                    f"Expected tensor-like text embeddings from {self.model_name}, got {type(model_output).__name__}."
+                )
+            embeddings = embeddings / embeddings.norm(p=2, dim=-1, keepdim=True).clamp(min=1e-12)
+            batches.append(embeddings.detach().cpu().to(self.torch.float32).numpy())
+        if not batches:
+            return self.np.zeros((0, 0), dtype=self.np.float32)
+        return self.np.concatenate(batches, axis=0).astype(self.np.float32)
