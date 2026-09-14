@@ -1,0 +1,82 @@
+{
+  "schema": "llm_nav_thesis_chapter_4_index",
+  "schema_version": 1,
+  "thesis": {
+    "file": "Thesis_睦閎.pdf",
+    "edition": "September 2026",
+    "chapter": 4
+  },
+  "dataset": {
+    "section": "4.1",
+    "case_count": 715,
+    "entry": "4_1_dataset_and_environment/test_set_715.jsonl",
+    "canonical_manifest": "../experiment_manifest_715.json"
+  },
+  "main_experiment": {
+    "section": "4.3",
+    "table": "4-3",
+    "condition": {
+      "heading_offset": "estimated",
+      "view_count": 8,
+      "trajectory_memory": true,
+      "localization_stage": "spatial"
+    },
+    "entry": "4_3_main_results/main_results_715.jsonl",
+    "fixed_denominator_case_count": 715,
+    "success_count": 512,
+    "success_rate": 0.7160839160839161,
+    "average_spl": 0.5471203088195199
+  },
+  "ablations": {
+    "trajectory_memory": {
+      "section": "4.4.1",
+      "tables": ["4-9", "4-10"],
+      "entries": [
+        "4_4_ablations/trajectory_memory/without_trajectory_results_715.jsonl",
+        "4_4_ablations/trajectory_memory/with_trajectory_results_715.jsonl"
+      ]
+    },
+    "heading_offset": {
+      "section": "4.4.2",
+      "tables": ["4-11", "4-12"],
+      "entries": [
+        "4_4_ablations/heading_offset/estimated_offset_results_715.jsonl",
+        "4_4_ablations/heading_offset/ground_truth_offset_results_715.jsonl"
+      ]
+    },
+    "view_count": {
+      "section": "4.4.3",
+      "table": "4-13",
+      "entries": [
+        "4_4_ablations/view_count/4_view_results_715.jsonl",
+        "4_4_ablations/view_count/8_view_results_715.jsonl"
+      ]
+    },
+    "localization_stage": {
+      "section": "4.4.4",
+      "table": "4-14",
+      "entries": [
+        "4_4_ablations/localization_stage/visual_results_715.jsonl",
+        "4_4_ablations/localization_stage/bayesian_results_715.jsonl",
+        "4_4_ablations/localization_stage/spatial_results_715.jsonl"
+      ]
+    }
+  },
+  "failure_analysis": {
+    "section": "4.5",
+    "table": "4-15",
+    "condition": {
+      "heading_offset": "ground_truth_plus_30_deg",
+      "trajectory_memory": true
+    },
+    "raw_result": "4_5_failure_analysis/ground_truth_offset_with_trajectory_results_715.jsonl",
+    "room_transition_report": "4_5_failure_analysis/room_transition_analysis",
+    "thesis_filter": {
+      "excluded_room_ids": ["East stairs", "West stairs"],
+      "attempt_count": 2397,
+      "correct_count": 1998,
+      "wrong_count": 399,
+      "correct_rate": 0.8335419274092616
+    }
+  }
+}

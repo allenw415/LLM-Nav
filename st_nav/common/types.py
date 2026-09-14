@@ -108,8 +108,21 @@ class BeliefState:
     current_pano_id: str
     previous_pano_id: str | None = None
     current_room_id: str | None = None
+    pending_room_id: str | None = None
+    pending_room_confirmation_count: int = 0
+    pending_room_last_pano_id: str | None = None
     grounded_room_id: str | None = None
     current_heading: float = 0.0
+    geocentric_to_allocentric_offset_deg: float | None = None
+    heading_alignment_mode: str = "fixed"
+    heading_alignment_status: str = "uninitialized"
+    heading_alignment_source_step: int | None = None
+    heading_alignment_confidence: float | None = None
+    heading_alignment_view_0_geocentric_heading_deg: float | None = None
+    heading_alignment_view_0_allocentric_direction: str | None = None
+    heading_alignment_failure_reason: str | None = None
+    incoming_travel_heading: float | None = None
+    recent_travel_headings: list[float] = field(default_factory=list)
     pano_belief: dict[str, float] = field(default_factory=dict)
     room_belief: dict[str, float] = field(default_factory=dict)
     visited_panos: set[str] = field(default_factory=set)
@@ -171,6 +184,7 @@ class ReasoningInput:
     task: TaskSpec
     route: list[str]
     candidates: list[CandidateAction] = field(default_factory=list)
+    current_pano_id: str | None = None
     current_room_id: str | None = None
     subgoal_room_id: str | None = None
     current_room_context: JsonDict = field(default_factory=dict)

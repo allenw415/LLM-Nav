@@ -28,17 +28,72 @@ MODEL_ENV = resolve_model_environment(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the end-to-end navigation loop.")
-    parser.add_argument("--instruction", required=True)
+    parser.add_argument(
+        "--instruction",
+        help="Navigation query containing only the desired goal and optional ordered waypoints.",
+    )
+    parser.add_argument(
+        "--start-pano-id",
+        help="Required start panorama; its grounding determines the source room.",
+    )
+    parser.add_argument(
+        "--target-room-id",
+        help="Explicit target used instead of --instruction.",
+    )
+    parser.add_argument(
+        "--waypoint-room-ids",
+        nargs="*",
+        default=None,
+        help="Optional ordered room waypoints for explicit start/target navigation.",
+    )
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--alignment-candidate-ratio-threshold", type=float, default=0.5)
     parser.add_argument("--alignment-candidate-max", type=int, default=5)
+    parser.add_argument(
+        "--u-turn-threshold-deg",
+        type=float,
+        default=150.0,
+        help=(
+            "Treat candidates at or above this incoming-heading turn error as U-turns. "
+            "Geometry policy excludes them when another direction is available, but allows them at dead ends."
+        ),
+    )
+    parser.add_argument(
+        "--history-return-threshold-deg",
+        type=float,
+        default=30.0,
+        help=(
+            "Avoid candidates within this angle of the reverse of the recent two-heading displacement. "
+            "The filter uses heading history only and is relaxed when no alternative exists."
+        ),
+    )
+    parser.add_argument(
+        "--direction-policy",
+        choices=["geometry", "geometry-edge-visit", "llm"],
+        default="geometry",
+        help=(
+            "Select plain geometry, opt-in geometry with edge-visit cycle avoidance, "
+            "or LLM reasoning."
+        ),
+    )
     parser.add_argument("--manifest-map-json")
+    parser.add_argument(
+        "--no-detection-cache",
+        action="store_true",
+        help="Ignore sibling *_detections.json files and rerun VLM perception/localization.",
+    )
     parser.add_argument("--step-budget", type=int, default=15)
+    parser.add_argument(
+        "--localization-interval",
+        type=int,
+        default=3,
+        help="Run full visual localization initially and after this many movement actions.",
+    )
     parser.add_argument(
         "--start-heading",
         type=float,
         default=0.0,
-        help="Rendering reference only. Reasoning uses spatial alignment instead of assuming this is the true agent heading.",
+        help="Initial rendering reference. Return avoidance begins after graph-action heading history is available.",
     )
     parser.add_argument("--llm-model", default=MODEL_ENV.model_name)
     parser.add_argument("--llm-api-key", default=MODEL_ENV.api_key)
@@ -46,8 +101,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm-api-base", default=MODEL_ENV.api_base)
     parser.add_argument("--llm-timeout", type=float, default=MODEL_ENV.request_timeout or 30.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
-    parser.add_argument("--render-output-dir", default="renders/navigation_episode")
-    parser.add_argument("--render-heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
+    parser.add_argument(
+        "--render-missing",
+        action="store_true",
+        help="Allow paid image requests only after the shared render cache misses.",
+    )
+    parser.add_argument("--render-output-dir", default="renders/room_grounding_fov90")
+    parser.add_argument(
+        "--render-heading-mode",
+        choices=["museum", "cardinal", "cardinal4", "graph"],
+        default="museum",
+    )
     parser.add_argument("--render-pitch", type=float, default=0.0)
     parser.add_argument("--render-fov", type=int, default=90)
     parser.add_argument(
@@ -91,6 +155,12 @@ def serialize_trace(trace) -> dict:
         "grounded_room_id": observation_metadata.get("grounded_room_id"),
         "route": list(trace.route),
         "subgoal_room_id": trace.subgoal_room_id,
+        "completed_waypoint_room_ids": list(
+            trace.completed_waypoint_room_ids
+        ),
+        "remaining_waypoint_room_ids": list(
+            trace.remaining_waypoint_room_ids
+        ),
         "current_room_context": dict(trace.current_room_context),
         "visible_passages": list(trace.visible_passages),
         "view_contexts": list(trace.view_contexts),
@@ -98,7 +168,20 @@ def serialize_trace(trace) -> dict:
         "observation": {
             "pano_id": trace.observation.pano_id,
             "heading_estimate": trace.observation.heading_estimate,
+            "localization_performed": observation_metadata.get("localization_performed"),
+            "localization_interval": observation_metadata.get("localization_interval"),
+            "movement_steps_since_last_localization": observation_metadata.get(
+                "movement_steps_since_last_localization"
+            ),
+            "localization_skipped_reason": observation_metadata.get("localization_skipped_reason"),
             "localized_room_id": observation_metadata.get("localized_room_id"),
+            "localized_room_id_raw": observation_metadata.get("localized_room_id_raw"),
+            "localization_stabilized": observation_metadata.get("localization_stabilized"),
+            "pending_room_id": observation_metadata.get("pending_room_id"),
+            "pending_room_confirmation_count": observation_metadata.get("pending_room_confirmation_count"),
+            "room_switch_confirmations_required": observation_metadata.get(
+                "room_switch_confirmations_required"
+            ),
             "grounded_room_id": observation_metadata.get("grounded_room_id"),
             "transition_support": observation_metadata.get("transition_support")
             or observation_metadata.get("transition_room_support"),
@@ -139,6 +222,211 @@ def serialize_trace(trace) -> dict:
         },
     }
 
+
+def build_pano_viewer_episode(
+    navigation_payload: dict,
+    *,
+    step_budget: int | None = None,
+) -> dict:
+    source = navigation_payload.get("source")
+    source = source if isinstance(source, dict) else {}
+    task = navigation_payload.get("task")
+    task = task if isinstance(task, dict) else {}
+    final_state = navigation_payload.get("final_state")
+    final_state = final_state if isinstance(final_state, dict) else {}
+    traces = [
+        trace
+        for trace in navigation_payload.get("traces", [])
+        if isinstance(trace, dict)
+    ]
+
+    start_pano_id = source.get("source_pano_id")
+    if not isinstance(start_pano_id, str) or not start_pano_id:
+        start_pano_id = (
+            traces[0].get("pano_id")
+            if traces
+            else final_state.get("current_pano_id")
+        )
+    if not isinstance(start_pano_id, str) or not start_pano_id:
+        raise ValueError(
+            "Navigation output has no start panorama for pano viewer playback."
+        )
+
+    waypoint_room_ids = [
+        room_id
+        for room_id in task.get("waypoint_room_ids", [])
+        if isinstance(room_id, str) and room_id
+    ]
+    goal_room_ids = [
+        room_id
+        for room_id in task.get("goal_room_ids", [])
+        if isinstance(room_id, str) and room_id
+    ]
+    target_room_id = goal_room_ids[-1] if goal_room_ids else None
+    waypoint_room_ids = [
+        room_id for room_id in waypoint_room_ids if room_id != target_room_id
+    ]
+    pano_path = [start_pano_id]
+    rounds = []
+    completed_waypoints: list[str] = []
+    next_waypoint_index = 0
+
+    def trace_room_id(trace: dict) -> str | None:
+        grounded_room_id = trace.get("grounded_room_id")
+        if isinstance(grounded_room_id, str) and grounded_room_id:
+            return grounded_room_id
+        room_id = trace.get("room_id")
+        return room_id if isinstance(room_id, str) and room_id else None
+
+    def apply_trace_waypoint_progress(trace: dict) -> bool:
+        nonlocal completed_waypoints, next_waypoint_index
+        raw_completed = trace.get("completed_waypoint_room_ids")
+        raw_remaining = trace.get("remaining_waypoint_room_ids")
+        if not isinstance(raw_completed, list) or not isinstance(raw_remaining, list):
+            return False
+        completed_waypoints = [
+            room_id
+            for room_id in raw_completed
+            if isinstance(room_id, str) and room_id
+        ]
+        next_waypoint_index = len(completed_waypoints)
+        return True
+
+    def advance_waypoint(room_id: str | None) -> None:
+        nonlocal next_waypoint_index
+        if (
+            next_waypoint_index < len(waypoint_room_ids)
+            and room_id == waypoint_room_ids[next_waypoint_index]
+        ):
+            completed_waypoints.append(waypoint_room_ids[next_waypoint_index])
+            next_waypoint_index += 1
+
+    for trace_position, trace in enumerate(traces):
+        has_recorded_progress = apply_trace_waypoint_progress(trace)
+        current_room_id = trace_room_id(trace)
+        if not has_recorded_progress:
+            advance_waypoint(current_room_id)
+
+        policy_output = trace.get("policy_output")
+        policy_output = policy_output if isinstance(policy_output, dict) else {}
+        action = policy_output.get("action")
+        if not isinstance(action, dict):
+            break
+
+        current_pano_id = trace.get("pano_id")
+        next_pano_id = action.get("target_pano_id")
+        if not isinstance(current_pano_id, str) or not isinstance(next_pano_id, str):
+            raise ValueError(
+                f"Navigation trace {trace_position} has an incomplete panorama action."
+            )
+        if current_pano_id != pano_path[-1]:
+            raise ValueError(
+                f"Navigation trace {trace_position} starts at {current_pano_id}, "
+                f"but the trajectory is currently at {pano_path[-1]}."
+            )
+
+        next_trace = (
+            traces[trace_position + 1]
+            if trace_position + 1 < len(traces)
+            else None
+        )
+        next_room_id = None
+        if (
+            isinstance(next_trace, dict)
+            and next_trace.get("pano_id") == next_pano_id
+        ):
+            next_room_id = trace_room_id(next_trace)
+        action_metadata = action.get("metadata")
+        action_metadata = action_metadata if isinstance(action_metadata, dict) else {}
+        if not next_room_id:
+            grounded_target_room_id = action_metadata.get(
+                "grounded_target_room_id"
+            )
+            if (
+                isinstance(grounded_target_room_id, str)
+                and grounded_target_room_id
+            ):
+                next_room_id = grounded_target_room_id
+        if not next_room_id:
+            target_action_room_id = action.get("target_room_id")
+            if isinstance(target_action_room_id, str) and target_action_room_id:
+                next_room_id = target_action_room_id
+
+        movement = {
+            "local_step_index": trace.get("step_index", trace_position),
+            "current_pano_id": current_pano_id,
+            "next_pano_id": next_pano_id,
+            "current_room_id": current_room_id,
+            "next_room_id": next_room_id,
+            "selected_action_heading": action.get("absolute_heading"),
+            "subgoal_room_id": trace.get("subgoal_room_id"),
+            "active_target_room_id": target_room_id,
+            "score": action.get("score"),
+            "reason": action.get("reason"),
+        }
+        if not has_recorded_progress:
+            advance_waypoint(next_room_id)
+        round_payload = {
+            "round_index": trace_position,
+            "start_pano_id": current_pano_id,
+            "active_target_room_id": target_room_id,
+            "subgoal_room_id": trace.get("subgoal_room_id"),
+            "completed_waypoints": list(completed_waypoints),
+            "remaining_waypoints": list(
+                waypoint_room_ids[next_waypoint_index:]
+            ),
+            "movement_steps": [movement],
+        }
+        if (
+            current_room_id
+            and next_room_id
+            and current_room_id != next_room_id
+        ):
+            round_payload["room_boundary"] = {
+                "from_room_id": current_room_id,
+                "to_room_id": next_room_id,
+                "at_pano_id": next_pano_id,
+            }
+
+        rounds.append(round_payload)
+        pano_path.append(next_pano_id)
+
+    final_trace = traces[-1] if traces else {}
+    apply_trace_waypoint_progress(final_trace)
+    final_observed_room_id = trace_room_id(final_trace)
+    waypoints_complete = completed_waypoints == waypoint_room_ids
+    success = bool(
+        target_room_id
+        and final_observed_room_id == target_room_id
+        and waypoints_complete
+    )
+    if success:
+        reason = "goal_reached"
+    elif traces and not isinstance(
+        traces[-1].get("policy_output", {}).get("action"),
+        dict,
+    ):
+        reason = "stopped_without_action"
+    elif step_budget is not None and len(traces) >= step_budget:
+        reason = "step_budget_exhausted"
+    else:
+        reason = "navigation_incomplete"
+
+    return {
+        "schema": "st_nav_navigation_episode",
+        "schema_version": 1,
+        "start_pano_id": start_pano_id,
+        "final_pano_id": pano_path[-1],
+        "target_room_id": target_room_id,
+        "pano_path": pano_path,
+        "waypoint_room_ids": waypoint_room_ids,
+        "completed_waypoints": completed_waypoints,
+        "remaining_waypoints": waypoint_room_ids[next_waypoint_index:],
+        "ordered_targets": waypoint_room_ids + goal_room_ids,
+        "success": success,
+        "reason": reason,
+        "rounds": rounds,
+    }
 
 def print_trace_summary(result, *, stream=None) -> None:
     stream = stream or sys.stderr
@@ -198,6 +486,20 @@ def print_progress(event: dict, *, stream=None) -> None:
             file=stream,
         )
         return
+    if event_name == "manifest_cache_miss":
+        print(
+            f"[progress] manifest cache miss: pano={event.get('pano_id')}"
+            f" reason={event.get('reason')} manifest={event.get('manifest_path')}",
+            file=stream,
+        )
+        return
+    if event_name == "manifest_cache_hit":
+        print(
+            f"[progress] manifest cache hit: pano={event.get('pano_id')}"
+            f" source={event.get('source')} manifest={event.get('manifest_path')}",
+            file=stream,
+        )
+        return
     if event_name == "render_cached":
         print(
             f"[progress] render cached: pano={event.get('pano_id')} manifest={event.get('manifest_path')}",
@@ -230,12 +532,33 @@ def print_progress(event: dict, *, stream=None) -> None:
             file=stream,
         )
         return
-    if event_name == "localization_done":
+    if event_name in {"localization_done", "localization_skipped"}:
+        status = "done" if event_name == "localization_done" else "skipped"
+        pending_room_id = event.get("pending_room_id")
+        pending_text = ""
+        if pending_room_id:
+            pending_text = (
+                f" pending_room={pending_room_id}"
+                f" confirmation={event.get('pending_room_confirmation_count')}"
+                f"/{event.get('room_switch_confirmations_required')}"
+            )
         print(
-            f"[progress] localization done: step={event.get('step_index')}"
+            f"[progress] localization {status}: step={event.get('step_index')}"
             f" pano={event.get('current_pano_id')}"
+            f" moves_since_last={event.get('movement_steps_since_last_localization')}"
+            f" interval={event.get('localization_interval')}"
             f" localized_room={event.get('current_room_id')}"
-            f" grounded_room={event.get('grounded_room_id')}",
+            f" raw_localized_room={event.get('raw_localized_room_id')}"
+            f" grounded_room={event.get('grounded_room_id')}"
+            f"{pending_text}",
+            file=stream,
+        )
+        return
+    if event_name == "waypoint_completed":
+        print(
+            f"[progress] waypoint completed: step={event.get('step_index')}"
+            f" room={event.get('room_id')}"
+            f" remaining={event.get('remaining_waypoint_room_ids')}",
             file=stream,
         )
         return
@@ -329,8 +652,37 @@ def make_progress_callback(*, log_stream=None):
     return _callback
 
 
+def validate_navigation_args(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+) -> None:
+    has_instruction = bool(args.instruction and args.instruction.strip())
+    has_start = bool(args.start_pano_id and args.start_pano_id.strip())
+    has_target = bool(args.target_room_id and args.target_room_id.strip())
+    if not has_start:
+        parser.error("--start-pano-id is required for all navigation modes.")
+    if has_instruction and has_target:
+        parser.error("--instruction cannot be combined with --target-room-id.")
+    if has_instruction and args.waypoint_room_ids:
+        parser.error("--instruction cannot be combined with --waypoint-room-ids.")
+    if not has_instruction and not has_target:
+        parser.error(
+            "provide --instruction with --start-pano-id, or provide "
+            "--start-pano-id with --target-room-id."
+        )
+    if args.waypoint_room_ids and not has_target:
+        parser.error("--waypoint-room-ids requires --target-room-id.")
+    if args.localization_interval < 1:
+        parser.error("--localization-interval must be at least 1.")
+    if args.render_missing and not args.render_api_key:
+        parser.error("--render-missing requires --render-api-key or GMAPS_API_KEY.")
+
+
 def main() -> int:
-    args = build_parser().parse_args()
+    parser = build_parser()
+    args = parser.parse_args()
+    validate_navigation_args(parser, args)
+
     artifacts = load_normalized_artifacts(
         args.artifacts_dir,
         room_graph=True,
@@ -352,15 +704,17 @@ def main() -> int:
             llm_timeout=args.llm_timeout,
             alignment_candidate_ratio_threshold=args.alignment_candidate_ratio_threshold,
             alignment_candidate_max=args.alignment_candidate_max,
+            u_turn_threshold_deg=args.u_turn_threshold_deg,
+            history_return_threshold_deg=args.history_return_threshold_deg,
+            localization_interval=args.localization_interval,
+            direction_policy=args.direction_policy,
+            use_detection_cache=not args.no_detection_cache,
         ),
     )
 
     manifest_paths = {}
     if args.manifest_map_json:
         manifest_paths = load_json(resolve_project_path(args.manifest_map_json))
-    if not manifest_paths and not args.render_api_key:
-        raise RuntimeError("Provide --manifest-map-json for cached inputs or configure --render-api-key / GMAPS_API_KEY.")
-
     render_output_dir = None
     if args.render_output_dir:
         render_output_dir = str(resolve_project_path(args.render_output_dir))
@@ -378,10 +732,14 @@ def main() -> int:
         result = pipeline.run(
             args.instruction,
             progress_callback=progress_callback,
+            start_pano_id=args.start_pano_id,
+            target_room_id=args.target_room_id,
+            waypoint_room_ids=args.waypoint_room_ids,
             manifest_paths=manifest_paths,
             start_heading=args.start_heading,
             step_budget=args.step_budget,
             render_api_key=args.render_api_key,
+            render_missing=args.render_missing,
             render_output_dir=render_output_dir,
             render_heading_mode=args.render_heading_mode,
             render_pitch=args.render_pitch,
@@ -397,7 +755,7 @@ def main() -> int:
         else:
             print_trace_summary(result)
 
-        payload = {
+        navigation_payload = {
             "instruction": result.instruction,
             "task": {
                 "task_type": result.task.task_type,
@@ -412,8 +770,12 @@ def main() -> int:
             "final_state": {
                 "current_pano_id": result.final_state.current_pano_id,
                 "current_room_id": result.final_state.current_room_id,
+                "pending_room_id": result.final_state.pending_room_id,
+                "pending_room_confirmation_count": result.final_state.pending_room_confirmation_count,
                 "grounded_room_id": getattr(result.final_state, "grounded_room_id", None),
                 "current_heading": result.final_state.current_heading,
+                "incoming_travel_heading": result.final_state.incoming_travel_heading,
+                "recent_travel_headings": list(result.final_state.recent_travel_headings),
                 "visited_panos": sorted(result.final_state.visited_panos),
                 "visited_rooms": sorted(result.final_state.visited_rooms),
                 "room_belief": result.final_state.room_belief,
@@ -421,6 +783,8 @@ def main() -> int:
             "trace_count": len(result.traces),
             "traces": [serialize_trace(trace) for trace in result.traces],
         }
+        viewer_episode = build_pano_viewer_episode(navigation_payload, step_budget=args.step_budget)
+        payload = {**viewer_episode, **navigation_payload}
         output_text = render_json(payload)
         write_text_if_requested(output_text, args.output_path)
         trace_stream = getattr(progress_callback, "trace_stream", None)

@@ -42,16 +42,13 @@ from .common import (
     resolve_task_num_ctx,
     resolve_api_kind,
 )
-from .decision import GreedyActionPolicy, LLMActionPolicy, LLMInstructionParser
-from .execution import EpisodeRunner, EpisodeTrace
-from .memory import (
-    InteractiveMemoryNavigator,
-    MemoryImageRetriever,
-    MemoryLocalizationResult,
-    MemoryMatch,
-    MemoryRoomLocalizer,
-    PassageAlignmentAdvisor,
+from .decision import (
+    EdgeVisitActionPolicy,
+    GreedyActionPolicy,
+    LLMActionPolicy,
+    LLMInstructionParser,
 )
+from .execution import EpisodeRunner, EpisodeTrace
 from .perception import ManifestPerceptionProvider, MultiViewAggregator, PanoramaRenderer, PerceptionPipeline, ViewDetector
 from .pipeline import (
     NavigationPipeline,
@@ -82,16 +79,12 @@ __all__ = [
     "EpisodeRunner",
     "EpisodeTrace",
     "GroundingIndex",
+    "EdgeVisitActionPolicy",
     "GreedyActionPolicy",
     "LLMActionPolicy",
     "InstructionRoutePlanner",
-    "InteractiveMemoryNavigator",
     "ModelEnvironment",
     "ModelResponseClient",
-    "MemoryImageRetriever",
-    "MemoryLocalizationResult",
-    "MemoryMatch",
-    "MemoryRoomLocalizer",
     "NavigationPipeline",
     "NavigationPipelineConfig",
     "NavigationPipelineResult",
@@ -117,7 +110,6 @@ __all__ = [
     "TaskSpec",
     "PanoramaRenderer",
     "PerceptionPipeline",
-    "PassageAlignmentAdvisor",
     "SpatialAlignmentRefiner",
     "VIEW_DETECTION_KINDS",
     "ViewDetection",

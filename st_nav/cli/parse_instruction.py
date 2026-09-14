@@ -20,17 +20,9 @@ DEFAULT_LLM_NUM_CTX = resolve_task_num_ctx(
     default_num_ctx=8192,
 )
 
-# Example instructions for the task types used by the parser:
-# 1. gallery_goal_navigation:
-#    "Find the way from Room 4 to Room 23."
-# 2. artwork_goal_navigation:
-#    "Find the way from the Lamassu to the Townley Venus."
-# 3. gallery_instruction_following_navigation:
-#    "Find the way from Room 4, passing Room 7 and Room 17, to Room 23."
-# 4. artwork_instruction_following_navigation:
-#    "Find the way from the Bronze Container for Cosmetic Items, passing the Lamassu and the Nereid Monument, to the Townley Venus."
-# 5. artwork_gallery_instruction_following_navigation:
-#    "Find the way from Room 6, passing the Lamassu, to the Townley Venus."
+# Standalone parsing intentionally reports source_room_id/source_entity as null.
+# Source phrases such as "from Room 4" are ignored; navigation resolves the
+# actual source from --start-pano-id in run_navigation.py.
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Parse a navigation instruction with the LLM parser.")
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")

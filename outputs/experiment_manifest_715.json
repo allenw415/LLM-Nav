@@ -1,0 +1,72 @@
+{
+  "schema": "llm_nav_canonical_experiment_manifest",
+  "schema_version": 1,
+  "created_on": "2026-09-07",
+  "dataset": {
+    "path": "outputs/navigation_paths/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/test_set.jsonl",
+    "record_count": 715,
+    "size_bytes": 1666160,
+    "sha256": "7932c168e10ad77105309e4d7ec1c20d90d7c4611dbab521df3802786bf69538"
+  },
+  "results": [
+    {
+      "condition": "ground_truth_offset_without_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/geometry_localization_stages_combined715/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 85928866,
+      "sha256": "3c56f46d555471d43cc842ed487f2054b4a97eecfb667be6b555e7b85d2072f9"
+    },
+    {
+      "condition": "ground_truth_offset_with_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/geometry_edge_visit_localization_stages_combined715/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 75615038,
+      "sha256": "629bb42c0e140acbb45432e236c85a4d945b69231472a691c3c681cc6e05978f"
+    },
+    {
+      "condition": "estimated_offset_8view_without_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_incremental_10_20_30/milestones/per30/without_trajectory/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 116274304,
+      "sha256": "17a37a37135f170e8c8f8c70ea918d4190af223382517cecc234f72a05c2dfb6"
+    },
+    {
+      "condition": "estimated_offset_8view_with_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_incremental_10_20_30/milestones/per30/with_trajectory/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 104407610,
+      "sha256": "9375532a60ab4a31fba13c5d393bc9c77d9ac0cfefb6a2d8d15d43503d0557dc"
+    },
+    {
+      "condition": "estimated_offset_4view_without_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_cardinal4_incremental_10_20_30/milestones/per30/without_trajectory/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 135383527,
+      "sha256": "57638fefafaa6b6a7253ab59b2ac49648225bc339fd67f3cb58a8092fae8f7b8"
+    },
+    {
+      "condition": "estimated_offset_4view_with_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_cardinal4_incremental_10_20_30/milestones/per30/with_trajectory/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 126101415,
+      "sha256": "8524274ec06773bcfb85c18f3d7550042d97651bf1bd6dd495385894211db78d"
+    },
+    {
+      "condition": "estimated_offset_8view_visual_stage_with_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/localization_stage_ablation_8view_trajectory_initial_offset715/visual/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 121485110,
+      "sha256": "e8e27990a88c2fa3702ed8ba10a23c952e7ad75d2d26331b394f206a962ec3cf"
+    },
+    {
+      "condition": "estimated_offset_8view_bayesian_stage_with_trajectory",
+      "path": "outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/localization_stage_ablation_8view_trajectory_initial_offset715/bayesian/results.jsonl",
+      "record_count": 715,
+      "size_bytes": 109157496,
+      "sha256": "8603390a5e9ffc29a48e197761ade13a00c45082b86454187ff7d6a2b428ddf1"
+    }
+  ],
+  "aliases": {
+    "estimated_offset_8view_spatial_stage_with_trajectory": "estimated_offset_8view_with_trajectory"
+  }
+}

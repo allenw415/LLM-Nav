@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import random
 import subprocess
 import sys
@@ -64,12 +65,51 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--artifacts-dir", default="dataset/sites/british_museum/normalized")
     parser.add_argument("--grounding-path")
+    parser.add_argument(
+        "--sampling-mode",
+        choices=["per-room-limit", "all-galleries", "proportional-galleries"],
+        default="per-room-limit",
+        help=(
+            "per-room-limit samples up to --samples-per-room in each room; "
+            "all-galleries evaluates every grounded panorama in non-circulation rooms; "
+            "proportional-galleries samples a per-gallery fraction based on each gallery's grounded panorama count."
+        ),
+    )
     parser.add_argument("--samples-per-room", type=int, default=5)
+    parser.add_argument(
+        "--sample-ratio",
+        type=float,
+        default=0.2,
+        help="Fraction of grounded panoramas to sample per room when --sampling-mode=proportional-galleries.",
+    )
+    parser.add_argument(
+        "--min-samples-per-room",
+        type=int,
+        default=1,
+        help="Minimum panoramas to sample per room when --sampling-mode=proportional-galleries.",
+    )
+    parser.add_argument(
+        "--max-samples-per-room",
+        type=int,
+        default=None,
+        help="Optional per-room cap when --sampling-mode=proportional-galleries.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--room-id", action="append", default=[], help="Restrict evaluation to specific room ids. Repeatable.")
     parser.add_argument("--max-total", type=int, default=None, help="Optional cap on total sampled panoramas.")
     parser.add_argument("--output-dir", default="outputs/pano_perception_grounding_eval")
     parser.add_argument("--summary-output-path")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume from scored records in an existing summary JSON and retry unfinished/failed samples.",
+    )
+    parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=10,
+        help="Rewrite the partial summary after this many newly processed samples.",
+    )
     parser.add_argument("--force", action="store_true", help="Rerun perception even when a per-pano output JSON exists.")
     parser.add_argument(
         "--reuse-existing-output",
@@ -117,8 +157,11 @@ def room_samples_from_grounding(
     grounding_payload: dict,
     *,
     room_ids: set[str] | None,
-    samples_per_room: int,
+    samples_per_room: int | None,
     seed: int,
+    sample_ratio: float | None = None,
+    min_samples_per_room: int = 1,
+    max_samples_per_room: int | None = None,
     max_total: int | None = None,
 ) -> list[dict]:
     mappings = grounding_payload.get("mappings", grounding_payload)
@@ -140,7 +183,14 @@ def room_samples_from_grounding(
     for room_id in sorted(by_room):
         pano_ids = sorted(by_room[room_id])
         rng.shuffle(pano_ids)
-        for pano_id in pano_ids[: max(samples_per_room, 0)]:
+        selected_pano_ids = selected_pano_ids_for_room(
+            pano_ids,
+            samples_per_room=samples_per_room,
+            sample_ratio=sample_ratio,
+            min_samples_per_room=min_samples_per_room,
+            max_samples_per_room=max_samples_per_room,
+        )
+        for pano_id in selected_pano_ids:
             records.append({"room_id": room_id, "pano_id": pano_id})
 
     if max_total is not None:
@@ -148,12 +198,55 @@ def room_samples_from_grounding(
     return records
 
 
+def gallery_room_ids(room_graph: dict[str, dict]) -> set[str]:
+    return {
+        room_id
+        for room_id, payload in room_graph.items()
+        if isinstance(room_id, str)
+        and isinstance(payload, dict)
+        and str(payload.get("category", "")).casefold() != "circulation"
+    }
+
+
+def sample_counts_by_room(samples: list[dict]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for sample in samples:
+        room_id = sample.get("room_id", sample.get("expected_room_id"))
+        if not isinstance(room_id, str) or not room_id:
+            continue
+        counts[room_id] = counts.get(room_id, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def selected_pano_ids_for_room(
+    pano_ids: list[str],
+    *,
+    samples_per_room: int | None,
+    sample_ratio: float | None,
+    min_samples_per_room: int,
+    max_samples_per_room: int | None,
+) -> list[str]:
+    if sample_ratio is None:
+        limit = len(pano_ids) if samples_per_room is None else max(samples_per_room, 0)
+        return pano_ids[:limit]
+
+    requested = math.ceil(len(pano_ids) * sample_ratio)
+    requested = max(requested, max(min_samples_per_room, 0))
+    if max_samples_per_room is not None:
+        requested = min(requested, max_samples_per_room)
+    requested = min(requested, len(pano_ids))
+    return pano_ids[: max(requested, 0)]
+
+
 def room_samples_from_output_dir(
     output_dir: Path,
     grounding_payload: dict,
     *,
     room_ids: set[str] | None,
-    samples_per_room: int,
+    samples_per_room: int | None,
+    sample_ratio: float | None = None,
+    min_samples_per_room: int = 1,
+    max_samples_per_room: int | None = None,
     max_total: int | None = None,
 ) -> list[dict]:
     """Build sample list from existing per-pano output JSON files on disk.
@@ -188,8 +281,15 @@ def room_samples_from_output_dir(
 
     records = []
     for room_id in sorted(by_room):
-        pano_ids = by_room[room_id][: max(samples_per_room, 0)]
-        for pano_id in pano_ids:
+        pano_ids = by_room[room_id]
+        selected_pano_ids = selected_pano_ids_for_room(
+            pano_ids,
+            samples_per_room=samples_per_room,
+            sample_ratio=sample_ratio,
+            min_samples_per_room=min_samples_per_room,
+            max_samples_per_room=max_samples_per_room,
+        )
+        for pano_id in selected_pano_ids:
             records.append({"room_id": room_id, "pano_id": pano_id})
 
     if max_total is not None:
@@ -564,6 +664,7 @@ def score_results(records: list[dict]) -> dict:
         if any(isinstance(record.get("spatial_aligned"), dict) for record in scored):
             summary["spatial_aligned"] = rank_metrics(records, "spatial_aligned")
             summary["per_room"]["spatial_aligned"] = rank_metrics_by_room(records, "spatial_aligned")
+        summary["sample_counts_by_room"] = sample_counts_by_room(records)
         return summary
 
     matched = [record for record in scored if record.get("matched")]
@@ -763,38 +864,145 @@ def evaluate_sample(
 
 def main() -> int:
     args = build_parser().parse_args()
+    if args.checkpoint_every < 1:
+        raise ValueError("--checkpoint-every must be at least 1.")
+    if args.sampling_mode == "proportional-galleries":
+        if not (0 < args.sample_ratio <= 1):
+            raise ValueError("--sample-ratio must be in (0, 1] when --sampling-mode=proportional-galleries.")
+        if args.min_samples_per_room < 0:
+            raise ValueError("--min-samples-per-room must be at least 0.")
+        if args.max_samples_per_room is not None and args.max_samples_per_room < 1:
+            raise ValueError("--max-samples-per-room must be at least 1 when provided.")
+
     artifacts = load_normalized_artifacts(args.artifacts_dir, pano_room_grounding=True, room_graph=True, grounding=True)
     grounding_path = resolve_project_path(args.grounding_path) if args.grounding_path else artifacts.artifacts_dir / "pano_room_grounding.json"
     grounding_payload = load_json(grounding_path) if args.grounding_path else artifacts.pano_room_grounding or {}
     room_graph = artifacts.room_graph or {}
     grounding_index = GroundingIndex(artifacts.grounding or {})
+
     selected_room_ids = set(args.room_id) if args.room_id else None
+    samples_per_room: int | None = args.samples_per_room
+    sample_ratio: float | None = None
+    min_samples_per_room = 0
+    max_samples_per_room: int | None = None
+    if args.sampling_mode == "all-galleries":
+        galleries = gallery_room_ids(room_graph)
+        selected_room_ids = galleries if selected_room_ids is None else selected_room_ids & galleries
+        samples_per_room = None
+    elif args.sampling_mode == "proportional-galleries":
+        galleries = gallery_room_ids(room_graph)
+        selected_room_ids = galleries if selected_room_ids is None else selected_room_ids & galleries
+        samples_per_room = None
+        sample_ratio = args.sample_ratio
+        min_samples_per_room = args.min_samples_per_room
+        max_samples_per_room = args.max_samples_per_room
+
     output_dir = resolve_project_path(args.output_dir)
     if args.reuse_existing_output:
         samples = room_samples_from_output_dir(
             output_dir,
             grounding_payload,
             room_ids=selected_room_ids,
-            samples_per_room=args.samples_per_room,
+            samples_per_room=samples_per_room,
+            sample_ratio=sample_ratio,
+            min_samples_per_room=min_samples_per_room,
+            max_samples_per_room=max_samples_per_room,
             max_total=args.max_total,
         )
     else:
         samples = room_samples_from_grounding(
             grounding_payload,
             room_ids=selected_room_ids,
-            samples_per_room=args.samples_per_room,
+            samples_per_room=samples_per_room,
             seed=args.seed,
+            sample_ratio=sample_ratio,
+            min_samples_per_room=min_samples_per_room,
+            max_samples_per_room=max_samples_per_room,
             max_total=args.max_total,
         )
     if not samples:
         raise RuntimeError("No grounded panorama samples selected.")
-    records = []
-    for index, sample in enumerate(samples, start=1):
+
+    summary_output_path = resolve_project_path(args.summary_output_path or str(output_dir / "summary.json"))
+    records: list[dict] = []
+    if args.resume and summary_output_path.is_file():
+        previous_payload = load_json(summary_output_path)
+        previous_records = previous_payload.get("results", [])
+        selected_keys = {(str(sample["room_id"]), str(sample["pano_id"])) for sample in samples}
+        if isinstance(previous_records, list):
+            records = [
+                record
+                for record in previous_records
+                if isinstance(record, dict)
+                and record.get("status") == "scored"
+                and (str(record.get("expected_room_id")), str(record.get("pano_id"))) in selected_keys
+            ]
+
+    completed_keys = {
+        (str(record.get("expected_room_id")), str(record.get("pano_id")))
+        for record in records
+        if record.get("status") == "scored"
+    }
+    pending_samples = [
+        sample
+        for sample in samples
+        if (str(sample["room_id"]), str(sample["pano_id"])) not in completed_keys
+    ]
+    config = {
+        "pipeline": args.pipeline,
+        "artifacts_dir": args.artifacts_dir,
+        "grounding_path": str(grounding_path),
+        "sampling_mode": args.sampling_mode,
+        "samples_per_room": args.samples_per_room if args.sampling_mode == "per-room-limit" else None,
+        "sample_ratio": args.sample_ratio if args.sampling_mode == "proportional-galleries" else None,
+        "min_samples_per_room": args.min_samples_per_room if args.sampling_mode == "proportional-galleries" else None,
+        "max_samples_per_room": args.max_samples_per_room if args.sampling_mode == "proportional-galleries" else None,
+        "sample_count": len(samples),
+        "sample_counts_by_room": sample_counts_by_room(samples),
+        "seed": args.seed,
+        "room_ids": sorted(selected_room_ids) if selected_room_ids else None,
+        "max_total": args.max_total,
+        "fov": args.fov,
+        "heading_mode": args.heading_mode,
+        "reuse_existing_output": args.reuse_existing_output,
+        "no_detection_cache": args.no_detection_cache,
+        "enable_view_themes": args.enable_view_themes,
+        "detector_model": args.detector_model,
+        "enable_spatial_alignment": args.enable_spatial_alignment,
+        "alignment_candidate_ratio_threshold": args.alignment_candidate_ratio_threshold,
+        "alignment_candidate_max": args.alignment_candidate_max,
+        "alignment_model": args.alignment_model or args.detector_model,
+        "alignment_timeout": args.alignment_timeout,
+    }
+
+    def write_checkpoint(*, complete: bool) -> None:
+        scored_count = sum(1 for record in records if record.get("status") == "scored")
+        payload = {
+            "config": config,
+            "progress": {
+                "complete": complete,
+                "selected_count": len(samples),
+                "processed_count": len(records),
+                "scored_count": scored_count,
+                "pending_count": max(len(samples) - scored_count, 0),
+            },
+            "summary": score_results(records),
+            "results": records,
+        }
+        write_text_if_requested(render_json(payload), str(summary_output_path))
+
+    if args.resume:
+        print(
+            f"[pano-perception-eval] resume scored={len(completed_keys)} pending={len(pending_samples)}",
+            file=sys.stderr,
+        )
+
+    for index, sample in enumerate(pending_samples, start=1):
         sample_start_time = time.monotonic()
         output_path = output_path_for_sample(output_dir, sample)
         output_existed = output_path.exists()
         print(
-            f"[pano-perception-eval] {index}/{len(samples)} "
+            f"[pano-perception-eval] {index}/{len(pending_samples)} "
             f"room={sample['room_id']} pano={sample['pano_id']}"
             + (" (cached)" if output_existed and not args.force else ""),
             file=sys.stderr,
@@ -807,8 +1015,11 @@ def main() -> int:
             grounding_index=grounding_index,
         )
         records.append(record)
+        if index % args.checkpoint_every == 0:
+            write_checkpoint(complete=False)
+
         ran_perception = not output_existed or getattr(args, "force", False)
-        if args.delay > 0 and index < len(samples) and ran_perception:
+        if args.delay > 0 and index < len(pending_samples) and ran_perception:
             elapsed = time.monotonic() - sample_start_time
             remaining = args.delay - elapsed
             if remaining > 0:
@@ -844,41 +1055,12 @@ def main() -> int:
                     error_message = f" error={last_line[:1000]}"
             print(f"  status={record.get('status')}{error_message}", file=sys.stderr)
 
+    complete = len(records) == len(samples) and all(record.get("status") == "scored" for record in records)
     summary = score_results(records)
-    payload = {
-        "config": {
-            "pipeline": args.pipeline,
-            "artifacts_dir": args.artifacts_dir,
-            "grounding_path": str(grounding_path),
-            "samples_per_room": args.samples_per_room,
-            "seed": args.seed,
-            "room_ids": sorted(selected_room_ids) if selected_room_ids else None,
-            "max_total": args.max_total,
-            "fov": args.fov,
-            "heading_mode": args.heading_mode,
-            "reuse_existing_output": args.reuse_existing_output,
-            "no_detection_cache": args.no_detection_cache,
-            "enable_view_themes": args.enable_view_themes,
-            "detector_model": args.detector_model,
-            "enable_spatial_alignment": args.enable_spatial_alignment,
-            "alignment_candidate_ratio_threshold": args.alignment_candidate_ratio_threshold,
-            "alignment_candidate_max": args.alignment_candidate_max,
-            "alignment_model": args.alignment_model or args.detector_model,
-            "alignment_timeout": args.alignment_timeout,
-        },
-        "summary": summary,
-        "results": records,
-    }
-    summary_output_path = args.summary_output_path or str(output_dir / "summary.json")
-    write_text_if_requested(render_json(payload), summary_output_path)
-
-    print(render_json({"summary": summary, "summary_output_path": str(resolve_project_path(summary_output_path))}))
+    write_checkpoint(complete=complete)
+    print(render_json({"summary": summary, "summary_output_path": str(summary_output_path)}))
     if args.print_failures:
-        failures = [
-            record
-            for record in records
-            if is_failure_record(record)
-        ]
+        failures = [record for record in records if is_failure_record(record)]
         if failures:
             print(render_json({"failures": failures}))
     return 0

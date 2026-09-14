@@ -7,6 +7,8 @@ from .localization import EvidenceScoreLocalizer, SpatialAlignmentRefiner
 
 
 class StateEstimator:
+    ROOM_SWITCH_CONFIRMATIONS_REQUIRED = 2
+
     def __init__(
         self,
         *,
@@ -49,9 +51,7 @@ class StateEstimator:
             visited_rooms=visited_rooms,
         )
 
-    def update(self, state: BeliefState, observation: Observation) -> BeliefState:
-        previous_pano_id = state.current_pano_id
-        previous_room_id = state.current_room_id
+    def update(self, state: BeliefState, observation: Observation, *, localize: bool = True) -> BeliefState:
         state.current_pano_id = observation.pano_id
         state.grounded_room_id = self.grounding_index.room_for_pano(observation.pano_id)
         observation.metadata["grounded_room_id"] = state.grounded_room_id
@@ -60,14 +60,32 @@ class StateEstimator:
         if observation.heading_estimate is not None:
             state.current_heading = normalize_heading(observation.heading_estimate)
 
-        localized_room_id = observation.metadata.get("localized_room_id")
+        if not localize:
+            observation.metadata["localization_performed"] = False
+            observation.metadata["localization_skipped_reason"] = "localization_interval"
+            observation.metadata["localized_room_id"] = state.current_room_id
+            observation.metadata["room_belief"] = dict(state.room_belief)
+            observation.metadata["pending_room_id"] = state.pending_room_id
+            observation.metadata["pending_room_confirmation_count"] = state.pending_room_confirmation_count
+            observation.metadata["room_switch_confirmations_required"] = (
+                self.ROOM_SWITCH_CONFIRMATIONS_REQUIRED
+            )
+            unexplored = self._unexplored_neighbor_count(state)
+            if unexplored > 1 and (not state.junction_stack or state.junction_stack[-1] != state.current_pano_id):
+                state.junction_stack.append(state.current_pano_id)
+            return state
+
+        observation.metadata["localization_performed"] = True
+
+        localized_room_id = observation.metadata.get("localized_room_id_raw")
+        if not isinstance(localized_room_id, str):
+            localized_room_id = observation.metadata.get("localized_room_id")
         localization_confidence = observation.metadata.get("localization_confidence", 1.0)
         if (
             isinstance(localized_room_id, str)
             and localized_room_id in self.room_graph
             and isinstance(localization_confidence, (int, float))
         ):
-            state.current_room_id = localized_room_id
             room_belief = observation.metadata.get("room_belief")
             if isinstance(room_belief, dict):
                 normalized_room_belief = {
@@ -78,33 +96,36 @@ class StateEstimator:
                 state.room_belief = normalized_room_belief or {localized_room_id: float(localization_confidence)}
             else:
                 state.room_belief = {localized_room_id: float(localization_confidence)}
-            state.visited_rooms.add(localized_room_id)
+            self._apply_room_switch_confirmation(state, observation, localized_room_id)
         else:
+            prior_room_belief = dict(state.room_belief)
             localization = self.localizer.localize(
                 observation=observation,
-                prior_room_belief=state.room_belief,
+                prior_room_belief=prior_room_belief,
                 fallback_room_id=state.current_room_id,
             )
             localized_room_id = localization.get("predicted_room_id")
             if isinstance(localized_room_id, str) and localized_room_id in self.room_graph:
-                if (
-                    observation.pano_id == previous_pano_id
-                    and isinstance(previous_room_id, str)
-                    and localized_room_id != previous_room_id
-                ):
-                    room_belief = {localized_room_id: 1.0}
-                else:
-                    room_belief = dict(localization.get("room_belief", {}))
-                state.current_room_id = localized_room_id
+                room_belief = dict(localization.get("room_belief", {}))
                 state.room_belief = room_belief
-                state.visited_rooms.add(localized_room_id)
-                observation.metadata["localized_room_id"] = localized_room_id
                 observation.metadata["localization_confidence"] = float(localization.get("confidence", 0.0))
                 observation.metadata["room_belief"] = dict(room_belief)
                 observation.metadata["transition_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["transition_room_support"] = dict(localization.get("transition_support", {}))
                 observation.metadata["observation_likelihood"] = dict(localization.get("observation_likelihood", {}))
                 observation.metadata["evidence_distribution"] = dict(localization.get("evidence_distribution", {}))
+                observation.metadata["visual_room_scores"] = dict(localization.get("visual_room_scores", {}))
+                observation.metadata["visual_room_belief"] = dict(localization.get("visual_room_belief", {}))
+                observation.metadata["visual_predicted_room_id"] = localization.get("visual_predicted_room_id")
+                observation.metadata["prior_room_belief"] = dict(
+                    localization.get("prior_room_belief", prior_room_belief)
+                )
+                observation.metadata["bayesian_room_belief"] = dict(
+                    localization.get("bayesian_room_belief", {})
+                )
+                observation.metadata["bayesian_predicted_room_id"] = localization.get(
+                    "bayesian_predicted_room_id"
+                )
                 observation.metadata["base_predicted_room_id"] = localization.get("base_predicted_room_id")
                 observation.metadata["base_room_belief"] = dict(localization.get("base_room_belief", {}))
                 observation.metadata["alignment_candidate_room_ids"] = list(
@@ -113,6 +134,12 @@ class StateEstimator:
                 observation.metadata["alignment_top_k"] = list(localization.get("alignment_top_k", []))
                 observation.metadata["alignment_predicted_room_id"] = localization.get("alignment_predicted_room_id")
                 observation.metadata["alignment_applied"] = bool(localization.get("alignment_applied", False))
+                observation.metadata["spatial_predicted_room_id"] = localization.get(
+                    "spatial_predicted_room_id", localized_room_id
+                )
+                observation.metadata["effective_localization_stage"] = localization.get(
+                    "effective_localization_stage", "spatial"
+                )
                 if localization.get("alignment_skipped_reason"):
                     observation.metadata["alignment_skipped_reason"] = localization.get("alignment_skipped_reason")
                 observation.metadata["localization_evidence"] = list(localization.get("evidence", []))
@@ -122,15 +149,62 @@ class StateEstimator:
                 spatial_alignment = localization.get("spatial_alignment")
                 if isinstance(spatial_alignment, dict):
                     observation.metadata["spatial_alignment"] = dict(spatial_alignment)
+                localization_timing = localization.get("localization_timing")
+                if isinstance(localization_timing, dict):
+                    observation.metadata["localization_timing"] = dict(
+                        localization_timing
+                    )
                 ego_spatial_context = localization.get("ego_spatial_context")
                 if isinstance(ego_spatial_context, dict):
                     observation.metadata["ego_spatial_context"] = dict(ego_spatial_context)
+                self._apply_room_switch_confirmation(state, observation, localized_room_id)
 
         unexplored = self._unexplored_neighbor_count(state)
         if unexplored > 1 and (not state.junction_stack or state.junction_stack[-1] != state.current_pano_id):
             state.junction_stack.append(state.current_pano_id)
 
         return state
+
+    def _apply_room_switch_confirmation(
+        self,
+        state: BeliefState,
+        observation: Observation,
+        predicted_room_id: str,
+    ) -> None:
+        previous_room_id = state.current_room_id
+        observation.metadata["localized_room_id_raw"] = predicted_room_id
+
+        if previous_room_id is None or predicted_room_id == previous_room_id:
+            state.current_room_id = predicted_room_id
+            self._clear_pending_room_switch(state)
+        else:
+            if state.pending_room_id != predicted_room_id:
+                state.pending_room_id = predicted_room_id
+                state.pending_room_confirmation_count = 1
+                state.pending_room_last_pano_id = observation.pano_id
+            elif observation.pano_id != state.pending_room_last_pano_id:
+                state.pending_room_confirmation_count += 1
+                state.pending_room_last_pano_id = observation.pano_id
+
+            if state.pending_room_confirmation_count >= self.ROOM_SWITCH_CONFIRMATIONS_REQUIRED:
+                state.current_room_id = predicted_room_id
+                self._clear_pending_room_switch(state)
+
+        effective_room_id = state.current_room_id
+        if isinstance(effective_room_id, str):
+            state.visited_rooms.add(effective_room_id)
+        observation.metadata["localized_room_id"] = effective_room_id
+        observation.metadata["stabilized_room_id"] = effective_room_id
+        observation.metadata["localization_stabilized"] = effective_room_id != predicted_room_id
+        observation.metadata["pending_room_id"] = state.pending_room_id
+        observation.metadata["pending_room_confirmation_count"] = state.pending_room_confirmation_count
+        observation.metadata["room_switch_confirmations_required"] = self.ROOM_SWITCH_CONFIRMATIONS_REQUIRED
+
+    @staticmethod
+    def _clear_pending_room_switch(state: BeliefState) -> None:
+        state.pending_room_id = None
+        state.pending_room_confirmation_count = 0
+        state.pending_room_last_pano_id = None
 
     def goal_reached(self, task: TaskSpec, state: BeliefState) -> bool:
         if not task.goal_room_ids:

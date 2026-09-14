@@ -14,11 +14,13 @@ from unittest import mock
 from pathlib import Path
 
 from st_nav import (
+    BeliefState,
     CandidateAction,
     EvidenceScoreLocalizer,
     EntityDetection,
     EpisodeRunner,
     GroundingIndex,
+    GreedyActionPolicy,
     InstructionRoutePlanner,
     LLMActionPolicy,
     LLMInstructionParser,
@@ -50,6 +52,11 @@ from st_nav import (
     load_dotenv,
     resolve_model_environment,
     resolve_task_num_ctx,
+)
+from st_nav.cli.run_navigation import (
+    build_pano_viewer_episode,
+    build_parser as build_navigation_cli_parser,
+    validate_navigation_args,
 )
 from st_nav.common.room_profiles import room_candidate_payload
 from st_nav_data.normalize import (
@@ -451,6 +458,7 @@ class STNavTests(unittest.TestCase):
         )
         request_body = {
             "model": "gemma-4-26b-a4b-it",
+            "max_output_tokens": 16384,
             "instructions": "Return JSON only.",
             "input": [
                 {
@@ -491,6 +499,7 @@ class STNavTests(unittest.TestCase):
         )
         self.assertEqual(payload["generationConfig"]["responseMimeType"], "application/json")
         self.assertEqual(payload["generationConfig"]["responseJsonSchema"]["required"], ["answer"])
+        self.assertEqual(payload["generationConfig"]["maxOutputTokens"], 16384)
 
     def test_model_response_client_preserves_string_input_for_gemini(self) -> None:
         client = ModelResponseClient(
@@ -554,6 +563,51 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(payload["output_text"], '{"answer":"ok"}')
         self.assertEqual(urlopen_mock.call_count, 2)
         sleep_mock.assert_called_once_with(1.0)
+        telemetry = client.telemetry_snapshot()
+        self.assertEqual(telemetry["logical_call_count"], 1)
+        self.assertEqual(telemetry["successful_logical_call_count"], 1)
+        self.assertEqual(telemetry["failed_logical_call_count"], 0)
+        self.assertEqual(telemetry["text_logical_call_count"], 1)
+        self.assertEqual(telemetry["http_attempt_count"], 2)
+        self.assertEqual(telemetry["successful_http_attempt_count"], 1)
+        self.assertEqual(telemetry["failed_http_attempt_count"], 1)
+        self.assertEqual(telemetry["text_http_attempt_count"], 2)
+
+    def test_model_response_client_telemetry_classifies_image_and_failed_calls(self) -> None:
+        client = ModelResponseClient(
+            response_client=lambda request: {"output_text": "ok"},
+        )
+        client.create({"model": "demo", "input": "text only"})
+        client.create(
+            {
+                "model": "demo",
+                "input": [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": "inspect"},
+                            {"type": "input_image", "image_url": "data:image/png;base64,AA=="},
+                        ],
+                    }
+                ],
+            }
+        )
+        telemetry = client.telemetry_snapshot()
+        self.assertEqual(telemetry["logical_call_count"], 2)
+        self.assertEqual(telemetry["successful_logical_call_count"], 2)
+        self.assertEqual(telemetry["image_logical_call_count"], 1)
+        self.assertEqual(telemetry["text_logical_call_count"], 1)
+        self.assertEqual(telemetry["http_attempt_count"], 0)
+
+        failing_client = ModelResponseClient(
+            response_client=lambda request: (_ for _ in ()).throw(RuntimeError("failed")),
+        )
+        with self.assertRaisesRegex(RuntimeError, "failed"):
+            failing_client.create({"model": "demo", "input": "text"})
+        failing_telemetry = failing_client.telemetry_snapshot()
+        self.assertEqual(failing_telemetry["logical_call_count"], 1)
+        self.assertEqual(failing_telemetry["failed_logical_call_count"], 1)
+        self.assertEqual(failing_telemetry["successful_logical_call_count"], 0)
 
     def test_model_response_client_http_error_includes_response_body(self) -> None:
         client = ModelResponseClient(
@@ -973,14 +1027,21 @@ class STNavTests(unittest.TestCase):
             response_client=fake_response_client,
         )
         task = parser.parse("由 Room 8 到 Room 23")
-        self.assertEqual(task.source_room_id, "Room 8")
-        self.assertEqual(task.source_entity.name, "Room 8")
+        self.assertIsNone(task.source_room_id)
+        self.assertIsNone(task.source_entity)
         self.assertEqual(task.goal_room_ids, ["Room 23"])
         self.assertEqual(task.task_type, "gallery_goal_navigation")
-        self.assertIn("museum_navigation_parse", json.dumps(captured["body"]))
-        self.assertIn("Classify the instruction into exactly one task type.", captured["body"]["instructions"])
+        self.assertIn("navigation_query_parse", json.dumps(captured["body"]))
+        self.assertIn("Do not extract or return source entities", captured["body"]["instructions"])
         self.assertIn("Allowed room ids:", captured["body"]["input"])
         self.assertIn("Task:", captured["body"]["input"])
+        self.assertIn("Assyria: Nimrud", captured["body"]["input"])
+        schema = captured["body"]["text"]["format"]["schema"]
+        self.assertEqual(
+            set(schema["properties"]),
+            {"goal_entities", "waypoint_entities"},
+        )
+        self.assertFalse(schema["additionalProperties"])
         self.assertEqual(parser.last_request_body, captured["body"])
         self.assertEqual(
             parser.last_response_payload["output_text"],
@@ -1069,14 +1130,14 @@ class STNavTests(unittest.TestCase):
         )
         task = parser.parse("Find the way from Bronze Container for Cosmetic Items, passing the Lamassu, the Nereid Monument, to the Townley Venus.")
         self.assertEqual(task.task_type, "artwork_instruction_following_navigation")
-        self.assertEqual(task.source_room_id, "Room 14")
-        self.assertEqual(task.source_entity.entity_type, "artwork")
+        self.assertIsNone(task.source_room_id)
+        self.assertIsNone(task.source_entity)
         self.assertEqual(task.goal_room_ids, ["Room 23"])
         self.assertEqual(task.waypoint_room_ids, ["Room 8", "Room 17"])
         self.assertEqual(task.goal_entities[0].name, "Townley Venus")
         self.assertAlmostEqual(task.goal_entities[0].confidence, 0.93)
 
-    def test_llm_instruction_parser_supports_artwork_gallery_instruction_following(self) -> None:
+    def test_llm_instruction_parser_ignores_source_gallery_for_task_type(self) -> None:
         room_graph = normalize_room_graph(
             {
                 **self.explicit_map,
@@ -1126,18 +1187,19 @@ class STNavTests(unittest.TestCase):
 
         task = parser.parse("Find the way from Room 6, passing the Lamassu, to the Townley Venus.")
 
-        self.assertEqual(task.task_type, "artwork_gallery_instruction_following_navigation")
-        self.assertEqual(task.source_room_id, "Room 6")
-        self.assertEqual(task.source_entity.entity_type, "gallery")
+        self.assertEqual(task.task_type, "artwork_instruction_following_navigation")
+        self.assertIsNone(task.source_room_id)
+        self.assertIsNone(task.source_entity)
         self.assertEqual(task.goal_room_ids, ["Room 23"])
         self.assertEqual(task.waypoint_room_ids, ["Room 8"])
         self.assertEqual(task.waypoint_entities[0].entity_type, "artwork")
 
     def test_llm_instruction_parser_requires_api_key(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
-        parser = LLMInstructionParser(room_graph=room_graph, api_key=None)
-        with self.assertRaises(RuntimeError):
-            parser.parse("由 Room 8 到 Room 23")
+        with mock.patch.dict(os.environ, {}, clear=True):
+            parser = LLMInstructionParser(room_graph=room_graph, api_key=None)
+            with self.assertRaises(RuntimeError):
+                parser.parse("由 Room 8 到 Room 23")
 
     def test_llm_instruction_parser_raises_on_invalid_llm_output(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -1161,6 +1223,185 @@ class STNavTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             parser.parse("由 Room 8 到 Room 23")
+
+    def test_llm_instruction_parser_keeps_last_goal_and_ordered_unique_waypoints(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        parser = LLMInstructionParser(
+            room_graph=room_graph,
+            api_key="test-key",
+            response_client=lambda body: {
+                "output_text": json.dumps(
+                    {
+                        "goal_entities": [
+                            {
+                                "name": "Room 8",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 8",
+                                "confidence": 1.0,
+                            },
+                            {
+                                "name": "Room 23",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 23",
+                                "confidence": 1.0,
+                            },
+                        ],
+                        "waypoint_entities": [
+                            {
+                                "name": "Room 9",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 9",
+                                "confidence": 1.0,
+                            },
+                            {
+                                "name": "Room 9",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 9",
+                                "confidence": 1.0,
+                            },
+                            {
+                                "name": "Room 23",
+                                "entity_type": "gallery",
+                                "predicted_room_id": "Room 23",
+                                "confidence": 1.0,
+                            },
+                        ],
+                    }
+                )
+            },
+        )
+
+        task = parser.parse("Starting at Room 8, go via Room 9 to Room 23.")
+
+        self.assertIsNone(task.source_room_id)
+        self.assertEqual(task.goal_room_ids, ["Room 23"])
+        self.assertEqual(task.waypoint_room_ids, ["Room 9"])
+        self.assertEqual(task.task_type, "gallery_instruction_following_navigation")
+
+    def test_llm_instruction_parser_rejects_entity_validation_errors(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        invalid_goals = [
+            {
+                "name": "Unknown gallery",
+                "entity_type": "gallery",
+                "predicted_room_id": "Room 999",
+                "confidence": 0.5,
+            },
+            {
+                "name": "Room 23",
+                "entity_type": "gallery",
+                "predicted_room_id": "Room 23",
+                "confidence": 0.9,
+            },
+            {
+                "name": "Room 23",
+                "entity_type": "gallery",
+                "predicted_room_id": "Room 23",
+                "confidence": 1.5,
+            },
+            {
+                "name": "Room 23",
+                "entity_type": "gallery",
+                "predicted_room_id": None,
+                "confidence": 0.5,
+            },
+        ]
+        for invalid_goal in invalid_goals:
+            with self.subTest(invalid_goal=invalid_goal):
+                parser = LLMInstructionParser(
+                    room_graph=room_graph,
+                    api_key="test-key",
+                    response_client=lambda body, goal=invalid_goal: {
+                        "output_text": json.dumps(
+                            {
+                                "goal_entities": [goal],
+                                "waypoint_entities": [],
+                            }
+                        )
+                    },
+                )
+                with self.assertRaises(ValueError):
+                    parser.parse("Go to a gallery.")
+
+    def test_navigation_cli_rejects_instruction_only_and_mixed_modes(self) -> None:
+        parser = build_navigation_cli_parser()
+        valid_queries = [
+            ["--instruction", "Go to Room 23", "--start-pano-id", "pano-8"],
+            ["--start-pano-id", "pano-8", "--target-room-id", "Room 23"],
+        ]
+        for arguments in valid_queries:
+            validate_navigation_args(parser, parser.parse_args(arguments))
+
+        invalid_queries = [
+            ["--instruction", "Go to Room 23"],
+            [
+                "--instruction",
+                "Go to Room 23",
+                "--start-pano-id",
+                "pano-8",
+                "--target-room-id",
+                "Room 23",
+            ],
+            [
+                "--instruction",
+                "Go via Room 9 to Room 23",
+                "--start-pano-id",
+                "pano-8",
+                "--waypoint-room-ids",
+                "Room 9",
+            ],
+        ]
+        for arguments in invalid_queries:
+            with (
+                self.subTest(arguments=arguments),
+                mock.patch("sys.stderr", io.StringIO()),
+                self.assertRaises(SystemExit),
+            ):
+                validate_navigation_args(parser, parser.parse_args(arguments))
+
+    def test_navigation_pipeline_rejects_missing_or_mixed_sources(self) -> None:
+        pipeline = NavigationPipeline(
+            source_resolution_workflow=mock.Mock(),
+            episode_runner=mock.Mock(),
+        )
+        with self.assertRaises(ValueError):
+            pipeline.run("Go to Room 23")
+        with self.assertRaises(ValueError):
+            pipeline.run(
+                "Go to Room 23",
+                start_pano_id="pano-8",
+                target_room_id="Room 23",
+            )
+        with self.assertRaises(ValueError):
+            pipeline.run(start_pano_id="pano-8")
+
+    def test_source_resolution_rejects_ungrounded_start_pano(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        workflow = SourceResolutionWorkflow(
+            instruction_parser=mock.Mock(room_graph=room_graph),
+            source_pano_resolver=SourcePanoResolver(
+                GroundingIndex(pano_to_room={"mappings": {}})
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "not grounded"):
+            workflow.run_explicit(
+                start_pano_id="unknown-pano",
+                target_room_id="Room 23",
+            )
+
+        unknown_room_workflow = SourceResolutionWorkflow(
+            instruction_parser=mock.Mock(room_graph=room_graph),
+            source_pano_resolver=SourcePanoResolver(
+                GroundingIndex(
+                    pano_to_room={"mappings": {"bad-pano": "Room 999"}}
+                )
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "unknown room"):
+            unknown_room_workflow.run_explicit(
+                start_pano_id="bad-pano",
+                target_room_id="Room 23",
+            )
 
     def test_perception_pipeline_exposes_render_detect_aggregate_flow(self) -> None:
         pano_graph = normalize_pano_graph(self.pano_graph)
@@ -1621,6 +1862,64 @@ class STNavTests(unittest.TestCase):
             counts[sample["room_id"]] = counts.get(sample["room_id"], 0) + 1
         self.assertEqual(counts, {"Room 10": 1, "Room 8": 2, "Room 9": 2})
 
+    def test_pano_perception_eval_all_gallery_samples_follow_room_pano_counts(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        grounding_payload = {
+            "mappings": {
+                "r8-a": "Room 8",
+                "r8-b": "Room 8",
+                "r9-a": "Room 9",
+                "stairs-a": "West stairs",
+            }
+        }
+        room_graph = {
+            "Room 8": {"category": "Themes"},
+            "Room 9": {"category": "Themes"},
+            "West stairs": {"category": "Circulation"},
+        }
+
+        samples = eval_module.room_samples_from_grounding(
+            grounding_payload,
+            room_ids=eval_module.gallery_room_ids(room_graph),
+            samples_per_room=None,
+            seed=0,
+        )
+
+        self.assertEqual(eval_module.sample_counts_by_room(samples), {"Room 8": 2, "Room 9": 1})
+
+    def test_pano_perception_eval_proportional_gallery_sampling_scales_with_room_size(self) -> None:
+        eval_module = self._load_pano_perception_eval_module()
+        grounding_payload = {
+            "mappings": {
+                "r8-a": "Room 8",
+                "r8-b": "Room 8",
+                "r8-c": "Room 8",
+                "r8-d": "Room 8",
+                "r8-e": "Room 8",
+                "r9-a": "Room 9",
+                "r9-b": "Room 9",
+                "r9-c": "Room 9",
+                "stairs-a": "West stairs",
+            }
+        }
+        room_graph = {
+            "Room 8": {"category": "Themes"},
+            "Room 9": {"category": "Themes"},
+            "West stairs": {"category": "Circulation"},
+        }
+
+        samples = eval_module.room_samples_from_grounding(
+            grounding_payload,
+            room_ids=eval_module.gallery_room_ids(room_graph),
+            samples_per_room=None,
+            seed=0,
+            sample_ratio=0.4,
+            min_samples_per_room=1,
+            max_samples_per_room=2,
+        )
+
+        self.assertEqual(eval_module.sample_counts_by_room(samples), {"Room 8": 2, "Room 9": 2})
+
     def test_pano_perception_eval_ranking_and_summary_metrics(self) -> None:
         eval_module = self._load_pano_perception_eval_module()
 
@@ -2033,6 +2332,10 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(first[0].entities[0].location_scope, "inside")
         self.assertEqual(second[0].entities[0].location_scope, "inside")
+        self.assertIs(first[0].metadata["visual_cache_hit"], False)
+        self.assertIs(second[0].metadata["visual_cache_hit"], True)
+        self.assertEqual(first[0].metadata["visual_cache_version"], 3)
+        self.assertEqual(second[0].metadata["visual_cache_version"], 3)
         self.assertEqual(cache_payload["cache_version"], 3)
         self.assertEqual(cache_payload["entities"][0]["location_scope"], "inside")
         self.assertEqual(cache_payload["visual_localization"]["predicted_room_id"], "Room 8")
@@ -2552,19 +2855,76 @@ class STNavTests(unittest.TestCase):
         )
         state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
 
+        first_observation = Observation(
+            pano_id="pano-23",
+            heading_estimate=60.0,
+            metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
+        )
+        updated = spatial.update(state, first_observation)
+
+        self.assertEqual(updated.current_room_id, "Room 8")
+        self.assertEqual(updated.pending_room_id, "Room 23")
+        self.assertEqual(updated.pending_room_confirmation_count, 1)
+        self.assertEqual(first_observation.metadata["localized_room_id_raw"], "Room 23")
+        self.assertEqual(first_observation.metadata["localized_room_id"], "Room 8")
+
         updated = spatial.update(
             state,
             Observation(
-                pano_id="pano-23",
+                pano_id="pano-23-confirmation",
                 heading_estimate=60.0,
                 metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
             ),
         )
         self.assertEqual(updated.current_room_id, "Room 23")
+        self.assertIsNone(updated.pending_room_id)
+        self.assertEqual(updated.pending_room_confirmation_count, 0)
         self.assertEqual(updated.room_belief, {"Room 23": 0.9})
         self.assertIsNone(updated.grounded_room_id)
 
-    def test_spatial_update_stabilizes_room_when_localizer_switches_room_without_pano_change(self) -> None:
+    def test_spatial_update_resets_pending_confirmation_when_prediction_changes(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(self.pano_graph)
+        grounding = build_test_grounding(room_graph)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex(grounding),
+        )
+        state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
+
+        spatial.update(
+            state,
+            Observation(
+                pano_id="pano-a",
+                metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
+            ),
+        )
+        spatial.update(
+            state,
+            Observation(
+                pano_id="pano-b",
+                metadata={"localized_room_id": "Room 9", "localization_confidence": 0.9},
+            ),
+        )
+
+        self.assertEqual(state.current_room_id, "Room 8")
+        self.assertEqual(state.pending_room_id, "Room 9")
+        self.assertEqual(state.pending_room_confirmation_count, 1)
+
+        spatial.update(
+            state,
+            Observation(
+                pano_id="pano-c",
+                metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
+            ),
+        )
+
+        self.assertEqual(state.current_room_id, "Room 8")
+        self.assertEqual(state.pending_room_id, "Room 23")
+        self.assertEqual(state.pending_room_confirmation_count, 1)
+
+    def test_spatial_update_requires_same_new_room_from_two_different_panos(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
         grounding = build_test_grounding(room_graph)
@@ -2588,18 +2948,44 @@ class STNavTests(unittest.TestCase):
         )
         state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
 
-        observation = Observation(
+        first_observation = Observation(
             pano_id="pano-8",
             heading_estimate=330.0,
             metadata={},
         )
-        updated = spatial.update(state, observation)
+        updated = spatial.update(state, first_observation)
+
+        self.assertEqual(updated.current_room_id, "Room 8")
+        self.assertEqual(updated.pending_room_id, "Room 23")
+        self.assertEqual(updated.pending_room_confirmation_count, 1)
+        self.assertEqual(first_observation.metadata["localized_room_id"], "Room 8")
+        self.assertEqual(first_observation.metadata["localized_room_id_raw"], "Room 23")
+        self.assertTrue(first_observation.metadata["localization_stabilized"])
+
+        same_pano_observation = Observation(
+            pano_id="pano-8",
+            heading_estimate=330.0,
+            metadata={},
+        )
+        updated = spatial.update(state, same_pano_observation)
+
+        self.assertEqual(updated.current_room_id, "Room 8")
+        self.assertEqual(updated.pending_room_id, "Room 23")
+        self.assertEqual(updated.pending_room_confirmation_count, 1)
+
+        different_pano_observation = Observation(
+            pano_id="pano-23",
+            heading_estimate=60.0,
+            metadata={},
+        )
+        updated = spatial.update(state, different_pano_observation)
 
         self.assertEqual(updated.current_room_id, "Room 23")
-        self.assertEqual(updated.room_belief, {"Room 23": 1.0})
-        self.assertEqual(observation.metadata["localized_room_id"], "Room 23")
-        self.assertNotIn("localized_room_id_raw", observation.metadata)
-        self.assertNotIn("localization_stabilized", observation.metadata)
+        self.assertIsNone(updated.pending_room_id)
+        self.assertEqual(updated.pending_room_confirmation_count, 0)
+        self.assertEqual(different_pano_observation.metadata["localized_room_id"], "Room 23")
+        self.assertEqual(different_pano_observation.metadata["localized_room_id_raw"], "Room 23")
+        self.assertFalse(different_pano_observation.metadata["localization_stabilized"])
 
     def test_renderer_can_render_explicit_candidate_captures(self) -> None:
         pano_graph = normalize_pano_graph(
@@ -2914,7 +3300,7 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(spatial_context["salient_entities"][0]["name"], "Greek statue")
         self.assertEqual(spatial_context["theme_hints"][0]["label"], "Greek and Roman sculpture")
 
-    def test_generate_candidates_blocks_immediate_backtrack_when_alternative_exists(self) -> None:
+    def test_generate_candidates_does_not_use_previous_or_visited_nodes_for_selection(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
         grounding = build_test_grounding(room_graph)
@@ -2925,78 +3311,274 @@ class STNavTests(unittest.TestCase):
         )
         state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8", start_heading=330.0)
         state.previous_pano_id = "pano-9"
-        observation = Observation(
-            pano_id="pano-8",
-            views=[
-                RenderedView(label="north", heading=330.0, path="/tmp/view_0.png"),
-                RenderedView(label="east", heading=60.0, path="/tmp/view_1.png"),
-                RenderedView(label="south", heading=150.0, path="/tmp/view_2.png"),
-                RenderedView(label="west", heading=240.0, path="/tmp/view_3.png"),
-            ],
-            metadata={"spatial_alignment": {"view_0_allocentric_direction": "north"}},
-        )
+        state.visited_panos.update({"pano-9", "pano-23"})
+        state.visited_rooms.update({"Room 9", "Room 23"})
+        state.incoming_travel_heading = 330.0
 
-        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"], observation=observation)
+        candidates = spatial.generate_candidates(state, ["Room 8", "Room 23"])
 
-        self.assertNotIn("pano-9", [candidate.target_pano_id for candidate in candidates])
+        self.assertIn("pano-9", [candidate.target_pano_id for candidate in candidates])
         self.assertIn("pano-23", [candidate.target_pano_id for candidate in candidates])
+        self.assertNotIn("is_immediate_backtrack", candidates[0].metadata)
+        target_errors = [candidate.metadata["target_relative_diff_deg"] for candidate in candidates]
+        self.assertEqual(target_errors, sorted(target_errors))
+        for candidate in candidates:
+            self.assertIsInstance(candidate.metadata["turn_error_deg"], float)
+            self.assertNotIn("turn_penalty_deg", candidate.metadata)
+            self.assertNotIn("motion_adjusted_cost_deg", candidate.metadata)
 
-    def test_generate_candidates_keeps_immediate_backtrack_when_it_is_only_option(self) -> None:
-        room_graph = normalize_room_graph(
-            {
-                "Room A": {
-                    "name": "Room A",
-                    "Level": 0,
-                    "category": "Test",
-                    "title": "Room A",
-                    "links": [{"direction": "right", "name": "Room B"}],
-                },
-                "Room B": {
-                    "name": "Room B",
-                    "Level": 0,
-                    "category": "Test",
-                    "title": "Room B",
-                    "links": [{"direction": "left", "name": "Room A"}],
-                },
-            }
-        )
-        pano_graph = normalize_pano_graph(
-            {
-                "pano-a": {
-                    "panoID": "pano-a",
-                    "floor": "0",
-                    "lat": 0.0,
-                    "lng": 0.0,
-                    "links": [{"panoID": "pano-b", "heading": 90.0, "description": None}],
-                },
-                "pano-b": {
-                    "panoID": "pano-b",
-                    "floor": "0",
-                    "lat": 0.0,
-                    "lng": 0.0,
-                    "links": [{"panoID": "pano-a", "heading": 270.0, "description": None}],
-                },
-            }
-        )
-        grounding = build_test_grounding(room_graph)
+    def test_heading_only_policy_reaches_room_23_from_reported_start_pano(self) -> None:
+        artifacts_dir = Path(__file__).resolve().parents[1] / "dataset/sites/british_museum/normalized"
+        room_graph = json.loads((artifacts_dir / "room_graph.json").read_text())
+        pano_graph = json.loads((artifacts_dir / "pano_graph.json").read_text())
+        grounding_payload = json.loads((artifacts_dir / "pano_room_grounding.json").read_text())
+        grounding_index = GroundingIndex({}, pano_to_room=grounding_payload)
         spatial = SpatialEngine(
             room_graph=room_graph,
             pano_graph=pano_graph,
-            grounding_index=GroundingIndex(grounding),
+            grounding_index=grounding_index,
         )
-        state = spatial.initialize(start_pano_id="pano-b", start_room_id="Room B", start_heading=330.0)
-        state.previous_pano_id = "pano-a"
-        observation = Observation(
-            pano_id="pano-b",
-            views=[RenderedView(label="north", heading=330.0, path="/tmp/view_0.png")],
-            metadata={"spatial_alignment": {"view_0_allocentric_direction": "north"}},
+        policy = GreedyActionPolicy()
+        task = TaskSpec(
+            task_type="gallery_goal_navigation",
+            raw_instruction="Navigate from the reported panorama to Room 23.",
+            source_room_id="Room 8",
+            goal_room_ids=["Room 23"],
+        )
+        state = spatial.initialize(
+            start_pano_id="ouv5c3H-tL1o8awhAX27Uw",
+            start_room_id="Room 8",
+            start_heading=0.0,
+        )
+        traversed = [state.current_pano_id]
+
+        for _ in range(15):
+            if grounding_index.room_for_pano(state.current_pano_id) == "Room 23":
+                break
+            route = spatial.route_to_goal(task, state)
+            subgoal_room_id = spatial.next_subgoal_room_id(state, route)
+            candidates = spatial.generate_candidates(state, route)
+            decision = policy.choose_next_action(
+                ReasoningInput(
+                    task=task,
+                    route=route,
+                    candidates=candidates,
+                    current_room_id=state.current_room_id,
+                    subgoal_room_id=subgoal_room_id,
+                )
+            )
+            self.assertIsNotNone(decision.action)
+            action = decision.action
+            state.current_pano_id = action.target_pano_id
+            state.current_heading = action.absolute_heading
+            state.incoming_travel_heading = action.absolute_heading
+            state.recent_travel_headings.append(action.absolute_heading)
+            state.recent_travel_headings = state.recent_travel_headings[-2:]
+            traversed.append(state.current_pano_id)
+
+        self.assertEqual(grounding_index.room_for_pano(state.current_pano_id), "Room 23")
+        self.assertEqual(
+            traversed,
+            [
+                "ouv5c3H-tL1o8awhAX27Uw",
+                "m6pGwJVs_EXQLhFk-pscZw",
+                "WW6UK09Lg3p4Jpxsf_54mg",
+                "7grGsbOXqpEMDLgTG6VfmQ",
+                "yhefW17T4Ru4HFlymjRMWQ",
+                "JK44-iXUvic1mv3GUGMaUQ",
+                "6NL7LiZ1lgnAM6AGrACYyw",
+                "cz-P-2bFqhRZa9h9b8mMFg",
+                "Li54te8XaSyXgj2x_c2msA",
+            ],
+        )
+        self.assertEqual(len(traversed), len(set(traversed)))
+
+    def test_goal_direction_and_return_avoidance_reach_room_8_from_reported_start_pano(self) -> None:
+        artifacts_dir = Path(__file__).resolve().parents[1] / "dataset/sites/british_museum/normalized"
+        room_graph = json.loads((artifacts_dir / "room_graph.json").read_text())
+        pano_graph = json.loads((artifacts_dir / "pano_graph.json").read_text())
+        grounding_payload = json.loads((artifacts_dir / "pano_room_grounding.json").read_text())
+        grounding_index = GroundingIndex({}, pano_to_room=grounding_payload)
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=grounding_index,
+        )
+        policy = GreedyActionPolicy()
+        task = TaskSpec(
+            task_type="gallery_goal_navigation",
+            raw_instruction="Navigate from the reported Room 4 panorama to Room 8.",
+            source_room_id="Room 4",
+            goal_room_ids=["Room 8"],
+        )
+        state = spatial.initialize(
+            start_pano_id="sdzaVCXiayIzBiovL-quRQ",
+            start_room_id="Room 4",
+            start_heading=0.0,
+        )
+        traversed = [state.current_pano_id]
+
+        for _ in range(15):
+            grounded_room_id = grounding_index.room_for_pano(state.current_pano_id)
+            if grounded_room_id:
+                state.current_room_id = grounded_room_id
+            if grounded_room_id == "Room 8":
+                break
+            route = spatial.route_to_goal(task, state)
+            subgoal_room_id = spatial.next_subgoal_room_id(state, route)
+            candidates = spatial.generate_candidates(state, route)
+            decision = policy.choose_next_action(
+                ReasoningInput(
+                    task=task,
+                    route=route,
+                    candidates=candidates,
+                    current_room_id=state.current_room_id,
+                    subgoal_room_id=subgoal_room_id,
+                )
+            )
+            self.assertIsNotNone(decision.action)
+            action = decision.action
+            state.current_pano_id = action.target_pano_id
+            state.current_heading = action.absolute_heading
+            state.incoming_travel_heading = action.absolute_heading
+            state.recent_travel_headings.append(action.absolute_heading)
+            state.recent_travel_headings = state.recent_travel_headings[-2:]
+            traversed.append(state.current_pano_id)
+
+        self.assertEqual(grounding_index.room_for_pano(state.current_pano_id), "Room 8")
+        self.assertEqual(len(traversed) - 1, 12)
+        self.assertEqual(len(traversed), len(set(traversed)))
+
+    def test_geometry_policy_avoids_u_turn_when_another_heading_is_available(self) -> None:
+        policy = GreedyActionPolicy(u_turn_threshold_deg=150.0)
+        u_turn = CandidateAction(
+            target_pano_id="MUYIYpafZuCpaEgOxIl3FA",
+            target_room_id="Room 4",
+            absolute_heading=153.34259,
+            relative_heading=183.34259,
+            relative_label="back",
+            route_step_index=0,
+            score=2.54,
+            reason="lower cost but reverses the incoming heading",
+            metadata={
+                "turn_error_deg": 179.99999,
+                "target_relative_diff_deg": 10.0,
+            },
+        )
+        alternative = CandidateAction(
+            target_pano_id="Es_kd7CsGIHdho7I3juJxw",
+            target_room_id="Room 4",
+            absolute_heading=49.955177,
+            relative_heading=79.955177,
+            relative_label="right",
+            route_step_index=0,
+            score=1.61,
+            reason="higher cost but continues without a U-turn",
+            metadata={
+                "turn_error_deg": 76.612577,
+                "target_relative_diff_deg": 80.0,
+            },
         )
 
-        candidates = spatial.generate_candidates(state, ["Room B", "Room A"], observation=observation)
+        output = policy.choose_next_action(
+            ReasoningInput(
+                task=TaskSpec(
+                    task_type="gallery_goal_navigation",
+                    raw_instruction="Navigate from Room 4 to Room 8.",
+                    source_room_id="Room 4",
+                    goal_room_ids=["Room 8"],
+                ),
+                route=["Room 4", "Room 8"],
+                candidates=[u_turn, alternative],
+                current_room_id="Room 4",
+                subgoal_room_id="Room 8",
+            )
+        )
 
-        self.assertEqual(len(candidates), 1)
-        self.assertEqual(candidates[0].target_pano_id, "pano-a")
-        self.assertTrue(candidates[0].metadata["is_immediate_backtrack"])
+        self.assertIsNotNone(output.action)
+        self.assertEqual(output.action.target_pano_id, "Es_kd7CsGIHdho7I3juJxw")
+        self.assertIn("avoided_u_turns=[MUYIYpafZuCpaEgOxIl3FA]", output.rationale)
+
+    def test_geometry_policy_avoids_three_pano_cycle_using_heading_history_only(self) -> None:
+        artifacts_dir = Path(__file__).resolve().parents[1] / "dataset/sites/british_museum/normalized"
+        room_graph = json.loads((artifacts_dir / "room_graph.json").read_text())
+        pano_graph = json.loads((artifacts_dir / "pano_graph.json").read_text())
+        grounding_payload = json.loads((artifacts_dir / "pano_room_grounding.json").read_text())
+        spatial = SpatialEngine(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_index=GroundingIndex({}, pano_to_room=grounding_payload),
+        )
+        state = spatial.initialize(
+            start_pano_id="Es_kd7CsGIHdho7I3juJxw",
+            start_room_id="Room 4",
+        )
+        state.incoming_travel_heading = 49.955177
+        state.recent_travel_headings = [333.3426, 49.955177]
+        candidates = spatial.generate_candidates(state, ["Room 4", "Room 8"])
+
+        return_candidate = next(
+            candidate for candidate in candidates if candidate.target_pano_id == "MUYIYpafZuCpaEgOxIl3FA"
+        )
+        self.assertAlmostEqual(return_candidate.metadata["history_return_heading_deg"], 191.6488885)
+        self.assertAlmostEqual(return_candidate.metadata["history_return_error_deg"], 3.5996885)
+
+        output = GreedyActionPolicy().choose_next_action(
+            ReasoningInput(
+                task=TaskSpec(
+                    task_type="gallery_goal_navigation",
+                    raw_instruction="Navigate from Room 4 to Room 8.",
+                    source_room_id="Room 4",
+                    goal_room_ids=["Room 8"],
+                ),
+                route=["Room 4", "Room 8"],
+                candidates=candidates,
+                current_room_id="Room 4",
+                subgoal_room_id="Room 8",
+            )
+        )
+
+        self.assertIsNotNone(output.action)
+        self.assertEqual(output.action.target_pano_id, "1h1pr9kWh892UlmKqvH9Sg")
+        self.assertIn("avoided_history_returns=[MUYIYpafZuCpaEgOxIl3FA]", output.rationale)
+
+    def test_geometry_policy_allows_u_turn_when_it_is_the_only_option(self) -> None:
+        policy = GreedyActionPolicy(u_turn_threshold_deg=150.0)
+        only_candidate = CandidateAction(
+            target_pano_id="previous-pano",
+            target_room_id="Room 4",
+            absolute_heading=180.0,
+            relative_heading=180.0,
+            relative_label="back",
+            route_step_index=0,
+            score=1.0,
+            reason="only exit from a dead end",
+            metadata={
+                "turn_error_deg": 180.0,
+                "history_return_error_deg": 0.0,
+                "target_relative_diff_deg": 180.0,
+            },
+        )
+
+        output = policy.choose_next_action(
+            ReasoningInput(
+                task=TaskSpec(
+                    task_type="gallery_goal_navigation",
+                    raw_instruction="Leave a dead end.",
+                    source_room_id="Room 4",
+                    goal_room_ids=["Room 8"],
+                ),
+                route=["Room 4", "Room 8"],
+                candidates=[only_candidate],
+                current_room_id="Room 4",
+                subgoal_room_id="Room 8",
+            )
+        )
+
+        self.assertIsNotNone(output.action)
+        self.assertEqual(output.action.target_pano_id, "previous-pano")
+        self.assertNotIn("avoided_u_turns", output.rationale)
+        self.assertNotIn("avoided_history_returns", output.rationale)
 
     def test_generate_candidates_uses_context_observation_without_reusing_direction_alignment(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -3294,6 +3876,7 @@ class STNavTests(unittest.TestCase):
                     score=3.0,
                     reason="competitive",
                     metadata={
+                        "allocentric_heading_deg": 176.0,
                         "target_relative_diff_deg": 20.0,
                         "inferred_target_room_id": "Room 23",
                         "spatial_context": {},
@@ -3341,6 +3924,13 @@ class STNavTests(unittest.TestCase):
         self.assertNotIn("candidate_absolute_heading_deg", payload_text)
         self.assertIn("candidate_geocentric_heading_deg", payload_text)
         self.assertIn("target_allocentric_heading_deg", payload_text)
+        self.assertIn("incoming_geocentric_heading_deg", payload_text)
+        self.assertIn("turn_error_deg", payload_text)
+        self.assertIn("history_return_heading_deg", payload_text)
+        self.assertIn("history_return_error_deg", payload_text)
+        self.assertIn("target_direction_error_deg", payload_text)
+        self.assertIn("\"candidate_allocentric_heading_deg\": 176.0", payload_text)
+        self.assertNotIn("motion_adjusted_cost_deg", payload_text)
         self.assertNotIn("\"neighbors\"", payload_text)
         self.assertNotIn("matched_room_ids", payload_text)
         self.assertNotIn("allocentric_directions", payload_text)
@@ -3467,6 +4057,144 @@ class STNavTests(unittest.TestCase):
         self.assertGreater(localization["observation_likelihood"]["Room 23"], localization["observation_likelihood"]["Room 8"])
         self.assertGreater(localization["room_belief"]["Room 23"], localization["room_belief"]["Room 8"])
         self.assertEqual(localization["evidence"], ["Greek marble statue"])
+
+    def test_evidence_score_localizer_visual_stage_uses_visual_state_and_disables_runtime_spatial(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_test_grounding(room_graph)
+        localizer = EvidenceScoreLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            effective_stage="visual",
+            spatial_refiner=None,
+        )
+
+        localization = localizer.localize(
+            observation=Observation(
+                pano_id="pano-23",
+                metadata={
+                    "floor": "0",
+                    "visual_localization": {
+                        "room_scores": [
+                            {"room_id": "Room 8", "score": 1.0},
+                            {"room_id": "Room 23", "score": 9.0},
+                        ]
+                    },
+                },
+            ),
+            prior_room_belief={"Room 8": 1.0},
+            fallback_room_id="Room 8",
+        )
+
+        self.assertEqual(localization["effective_localization_stage"], "visual")
+        self.assertEqual(
+            localization["predicted_room_id"],
+            localization["visual_predicted_room_id"],
+        )
+        self.assertEqual(localization["room_belief"], localization["visual_room_belief"])
+        self.assertIsNone(localization["spatial_predicted_room_id"])
+        self.assertEqual(
+            localization["alignment_skipped_reason"],
+            "disabled_by_effective_stage",
+        )
+
+    def test_evidence_score_localizer_bayesian_stage_uses_bayesian_state(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_test_grounding(room_graph)
+        localizer = EvidenceScoreLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            effective_stage="bayesian",
+            spatial_refiner=None,
+        )
+
+        localization = localizer.localize(
+            observation=Observation(
+                pano_id="pano-23",
+                metadata={
+                    "floor": "0",
+                    "visual_localization": {
+                        "room_scores": [
+                            {"room_id": "Room 8", "score": 1.0},
+                            {"room_id": "Room 23", "score": 9.0},
+                        ]
+                    },
+                },
+            ),
+            prior_room_belief={"Room 8": 1.0},
+            fallback_room_id="Room 8",
+        )
+
+        self.assertEqual(localization["effective_localization_stage"], "bayesian")
+        self.assertEqual(
+            localization["predicted_room_id"],
+            localization["bayesian_predicted_room_id"],
+        )
+        self.assertEqual(localization["room_belief"], localization["bayesian_room_belief"])
+        self.assertIsNone(localization["spatial_predicted_room_id"])
+
+    def test_nonspatial_stage_still_runs_step_zero_spatial_alignment_for_offset(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_test_grounding(room_graph)
+        refine_calls = []
+
+        class FakeSpatialRefiner:
+            def refine(self, *, observation, candidate_room_ids):
+                refine_calls.append(list(candidate_room_ids))
+                return {
+                    "applied": True,
+                    "alignment_predicted_room_id": "Room 8",
+                    "alignment_top_k": [{"room_id": "Room 8", "score": 1.0}],
+                    "spatial_alignment": {
+                        "geocentric_to_allocentric_offset_deg": 30.0,
+                        "view_0_geocentric_heading_deg": 330.0,
+                        "view_0_allocentric_direction": "north",
+                        "alignment_confidence": 1.0,
+                    },
+                    "spatial_timing": {
+                        "program_module_ms": 1.0,
+                        "vlm_response_ms": 2.0,
+                        "stage_total_ms": 3.0,
+                        "logical_vlm_call_count": 2,
+                    },
+                }
+
+        localizer = EvidenceScoreLocalizer(
+            room_graph=room_graph,
+            grounding_index=GroundingIndex(grounding),
+            effective_stage="visual",
+            spatial_refiner=FakeSpatialRefiner(),
+        )
+        observation = Observation(
+            pano_id="pano-23",
+            metadata={
+                "floor": "0",
+                "force_spatial_alignment": True,
+                "visual_localization": {
+                    "room_scores": [
+                        {"room_id": "Room 8", "score": 1.0},
+                        {"room_id": "Room 23", "score": 9.0},
+                    ]
+                },
+            },
+        )
+
+        localization = localizer.localize(
+            observation=observation,
+            prior_room_belief={},
+            fallback_room_id=None,
+        )
+
+        self.assertEqual(len(refine_calls), 1)
+        self.assertTrue(localization["alignment_applied"])
+        self.assertEqual(localization["spatial_predicted_room_id"], "Room 8")
+        self.assertEqual(
+            localization["predicted_room_id"],
+            localization["visual_predicted_room_id"],
+        )
+        self.assertEqual(
+            localization["spatial_alignment"]["geocentric_to_allocentric_offset_deg"],
+            30.0,
+        )
 
     def test_evidence_score_localizer_selects_ratio_based_alignment_candidates(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -3789,21 +4517,36 @@ class STNavTests(unittest.TestCase):
             localizer=localizer,
         )
         state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
-        updated = spatial.update(
-            state,
-            Observation(
-                pano_id="pano-23",
-                metadata={
-                    "floor": "0",
-                    "visual_localization": {
-                        "room_scores": [
-                            {"room_id": "Room 8", "score": 1.0},
-                            {"room_id": "Room 23", "score": 9.0},
-                        ]
-                    },
+        first_observation = Observation(
+            pano_id="pano-23",
+            metadata={
+                "floor": "0",
+                "visual_localization": {
+                    "room_scores": [
+                        {"room_id": "Room 8", "score": 1.0},
+                        {"room_id": "Room 23", "score": 9.0},
+                    ]
                 },
-            ),
+            },
         )
+        updated = spatial.update(state, first_observation)
+
+        self.assertEqual(updated.current_room_id, "Room 8")
+        self.assertEqual(updated.pending_room_id, "Room 23")
+
+        confirmation_observation = Observation(
+            pano_id="pano-23-confirmation",
+            metadata={
+                "floor": "0",
+                "visual_localization": {
+                    "room_scores": [
+                        {"room_id": "Room 8", "score": 1.0},
+                        {"room_id": "Room 23", "score": 9.0},
+                    ]
+                },
+            },
+        )
+        updated = spatial.update(state, confirmation_observation)
 
         self.assertEqual(updated.current_room_id, "Room 23")
         self.assertEqual(updated.room_belief["Room 23"], max(updated.room_belief.values()))
@@ -3812,6 +4555,7 @@ class STNavTests(unittest.TestCase):
         room_graph = normalize_room_graph(self.explicit_map)
         pano_graph = normalize_pano_graph(self.pano_graph)
         grounding = build_test_grounding(room_graph)
+        grounding["Room 9"]["pano_ids"] = ["pano-9"]
 
         parser = LLMInstructionParser(
             room_graph=room_graph,
@@ -3849,7 +4593,10 @@ class STNavTests(unittest.TestCase):
             ),
         )
 
-        plan = planner.plan("由 Room 9 到 Room 23")
+        plan = planner.plan(
+            "由 Room 9 到 Room 23",
+            start_pano_id="pano-9",
+        )
         self.assertEqual(plan.source_room_id, "Room 9")
         self.assertEqual(plan.target_room_id, "Room 23")
         self.assertEqual(plan.shortest_path, ["Room 9", "Room 8", "Room 23"])
@@ -3899,11 +4646,11 @@ class STNavTests(unittest.TestCase):
                 "output_text": json.dumps(
                     {
                         "task_type": "gallery_goal_navigation",
-                        "source_room_id": "Room 8",
+                        "source_room_id": "Room 9",
                         "source_entity": {
-                            "name": "Room 8",
+                            "name": "Room 9",
                             "entity_type": "gallery",
-                            "predicted_room_id": "Room 8",
+                            "predicted_room_id": "Room 9",
                             "confidence": 1.0,
                         },
                         "goal_entities": [
@@ -3924,10 +4671,194 @@ class STNavTests(unittest.TestCase):
             source_pano_resolver=SourcePanoResolver(GroundingIndex(grounding)),
         )
 
-        result = workflow.run("Find the way from Room 8 to Room 23.")
+        result = workflow.run(
+            "Find the way from Room 9 to Room 23.",
+            start_pano_id="pano-8",
+        )
 
         self.assertEqual(result.task.source_room_id, "Room 8")
         self.assertEqual(result.source_pano.pano_id, "pano-8")
+
+    def test_episode_runner_rerenders_when_mapped_manifest_cache_is_incomplete(self) -> None:
+        events = []
+
+        class RecordingRenderer:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def render(self, **kwargs):
+                self.calls.append(kwargs)
+                output_dir = Path(kwargs["output_dir"]) / kwargs["pano_id"]
+                output_dir.mkdir(parents=True, exist_ok=True)
+                image_path = output_dir / "fresh.png"
+                image_path.write_bytes(b"fresh")
+                manifest_path = output_dir / "fresh_manifest.json"
+                manifest_path.write_text(
+                    json.dumps({"captures": [{"path": str(image_path)}]}),
+                    encoding="utf-8",
+                )
+                return {
+                    "manifest_path": str(manifest_path),
+                    "captures": [{"path": str(image_path)}],
+                }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_dir = Path(tmpdir)
+            stale_manifest_path = cache_dir / "stale_manifest.json"
+            stale_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "heading_mode": "museum",
+                        "pitch": 0.0,
+                        "fov": 90,
+                        "size": {"width": 512, "height": 512},
+                        "captures": [
+                            {
+                                "label": label,
+                                "path": str(cache_dir / f"missing-{index}.png"),
+                            }
+                            for index, label in enumerate(MUSEUM_CAPTURE_LABELS)
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            renderer = RecordingRenderer()
+            runner = EpisodeRunner(
+                perception_provider=None,
+                spatial_engine=None,
+                policy=None,
+                renderer=renderer,
+            )
+            manifest_paths = {"pano-8": str(stale_manifest_path)}
+
+            resolved = runner._ensure_manifest(
+                pano_id="pano-8",
+                manifest_paths=manifest_paths,
+                render_api_key="render-key",
+                render_missing=True,
+                render_output_dir=cache_dir / "fresh",
+                render_heading_mode="museum",
+                render_pitch=0.0,
+                render_fov=90,
+                render_width=512,
+                render_height=512,
+                render_graph_path=None,
+                progress_callback=events.append,
+            )
+
+            self.assertEqual(len(renderer.calls), 1)
+            self.assertEqual(resolved, manifest_paths["pano-8"])
+            self.assertTrue(Path(resolved).is_file())
+            self.assertEqual(events[0]["event"], "manifest_cache_miss")
+            self.assertEqual(events[0]["reason"], "capture_image_missing")
+
+    def test_episode_runner_reuses_complete_mapped_manifest_cache(self) -> None:
+        class FailingRenderer:
+            def render(self, **kwargs):
+                raise AssertionError("Complete cache should not be rendered again.")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_dir = Path(tmpdir)
+            captures = []
+            for index, label in enumerate(MUSEUM_CAPTURE_LABELS):
+                image_path = cache_dir / f"cached-{index}.png"
+                image_path.write_bytes(b"cached")
+                captures.append({"label": label, "path": str(image_path)})
+            manifest_path = cache_dir / "cached_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "heading_mode": "museum",
+                        "pitch": 0.0,
+                        "fov": 90,
+                        "size": {"width": 512, "height": 512},
+                        "captures": captures,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runner = EpisodeRunner(
+                perception_provider=None,
+                spatial_engine=None,
+                policy=None,
+                renderer=FailingRenderer(),
+            )
+
+            resolved = runner._ensure_manifest(
+                pano_id="pano-8",
+                manifest_paths={"pano-8": str(manifest_path)},
+                render_api_key="render-key",
+                render_output_dir=cache_dir / "fresh",
+                render_heading_mode="museum",
+                render_pitch=0.0,
+                render_fov=90,
+                render_width=512,
+                render_height=512,
+                render_graph_path=None,
+                progress_callback=None,
+            )
+
+            self.assertEqual(resolved, str(manifest_path))
+
+    def test_episode_runner_discovers_complete_render_manifest_without_map(self) -> None:
+        events = []
+
+        class FailingRenderer:
+            def render(self, **kwargs):
+                raise AssertionError("Discovered cache should not be rendered again.")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            render_dir = Path(tmpdir) / "renders"
+            pano_dir = render_dir / "pano-8"
+            pano_dir.mkdir(parents=True)
+            captures = []
+            for index, label in enumerate(MUSEUM_CAPTURE_LABELS):
+                image_path = pano_dir / f"cached-{index}.png"
+                image_path.write_bytes(b"cached")
+                captures.append({"label": label, "path": str(image_path)})
+            manifest_path = pano_dir / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "heading_mode": "museum",
+                        "pitch": 0.0,
+                        "fov": 90,
+                        "size": {"width": 512, "height": 512},
+                        "captures": captures,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            runner = EpisodeRunner(
+                perception_provider=None,
+                spatial_engine=None,
+                policy=None,
+                renderer=FailingRenderer(),
+            )
+            manifest_paths = {}
+
+            resolved = runner._ensure_manifest(
+                pano_id="pano-8",
+                manifest_paths=manifest_paths,
+                render_api_key="render-key",
+                render_output_dir=render_dir,
+                render_heading_mode="museum",
+                render_pitch=0.0,
+                render_fov=90,
+                render_width=512,
+                render_height=512,
+                render_graph_path=None,
+                progress_callback=events.append,
+            )
+
+            self.assertEqual(resolved, manifest_path)
+            self.assertEqual(manifest_paths["pano-8"], manifest_path)
+            self.assertEqual(events[0]["event"], "manifest_cache_hit")
+            self.assertEqual(events[0]["source"], "render_output_dir")
 
     def test_episode_runner_passes_subgoal_and_alignment_context_to_policy(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -3979,18 +4910,38 @@ class STNavTests(unittest.TestCase):
             policy=policy,
         )
 
-        final_state, traces = runner.run(
-            task=TaskSpec(
-                task_type="gallery_goal_navigation",
-                raw_instruction="Find the way from Room 8 to Room 23.",
-                source_room_id="Room 8",
-                goal_room_ids=["Room 23"],
-            ),
-            start_pano_id="pano-8",
-            start_room_id="Room 8",
-            manifest_paths={"pano-8": "/tmp/pano-8_manifest.json"},
-            step_budget=1,
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            captures = []
+            for index, label in enumerate(MUSEUM_CAPTURE_LABELS):
+                image_path = Path(tmpdir) / f"pano-8-{index}.png"
+                image_path.write_bytes(b"cached")
+                captures.append({"label": label, "path": str(image_path)})
+            manifest_path = Path(tmpdir) / "pano-8_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "pano_id": "pano-8",
+                        "heading_mode": "museum",
+                        "pitch": 0.0,
+                        "fov": 90,
+                        "size": {"width": 512, "height": 512},
+                        "captures": captures,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            final_state, traces = runner.run(
+                task=TaskSpec(
+                    task_type="gallery_goal_navigation",
+                    raw_instruction="Find the way from Room 8 to Room 23.",
+                    source_room_id="Room 8",
+                    goal_room_ids=["Room 23"],
+                ),
+                start_pano_id="pano-8",
+                start_room_id="Room 8",
+                manifest_paths={"pano-8": str(manifest_path)},
+                step_budget=1,
+            )
 
         self.assertEqual(final_state.current_room_id, "Room 8")
         self.assertEqual(len(traces), 1)
@@ -4002,6 +4953,212 @@ class STNavTests(unittest.TestCase):
             policy.last_reasoning_input.spatial_alignment["view_0_allocentric_direction"],
             "west",
         )
+
+    def test_episode_runner_completes_waypoints_in_order_before_target(self) -> None:
+        pano_rooms = {
+            "A": "Room 1",
+            "B": "Room 3",
+            "T": "Room 4",
+            "C": "Room 2",
+            "D": "Room 3",
+            "E": "Room 4",
+        }
+        next_panos = {"A": "B", "B": "T", "T": "C", "C": "D", "D": "E"}
+
+        class FakePerceptionProvider:
+            def observe(self, manifest_path, current_heading):
+                pano_id = str(manifest_path)
+                return Observation(
+                    pano_id=pano_id,
+                    heading_estimate=current_heading,
+                    metadata={"localized_room_id": pano_rooms[pano_id]},
+                )
+
+        class FakeSpatialEngine:
+            def __init__(self):
+                self.grounding_index = GroundingIndex(
+                    pano_to_room={"mappings": pano_rooms}
+                )
+                self.routed_waypoints = []
+
+            def initialize(self, *, start_pano_id, start_room_id, start_heading):
+                return BeliefState(
+                    current_pano_id=start_pano_id,
+                    current_room_id=start_room_id,
+                    grounded_room_id=pano_rooms[start_pano_id],
+                    current_heading=start_heading,
+                )
+
+            def update(self, state, observation):
+                room_id = pano_rooms[observation.pano_id]
+                state.current_pano_id = observation.pano_id
+                state.current_room_id = room_id
+                state.grounded_room_id = room_id
+                observation.metadata["grounded_room_id"] = room_id
+                return state
+
+            def route_to_goal(self, task, state):
+                self.routed_waypoints.append(tuple(task.waypoint_room_ids))
+                return [
+                    state.current_room_id,
+                    *task.waypoint_room_ids,
+                    *task.goal_room_ids,
+                ]
+
+            def next_subgoal_room_id(self, state, route):
+                return route[1] if len(route) > 1 else None
+
+            def build_current_room_context(self, state, route):
+                return {"room_id": state.current_room_id}
+
+            def extract_visible_passages(self, state, observation):
+                return []
+
+            def goal_reached(self, task, state):
+                return pano_rooms[state.current_pano_id] == task.goal_room_ids[-1]
+
+            def describe_view_contexts(self, observation):
+                return []
+
+            def generate_candidates(self, state, route, **kwargs):
+                next_pano_id = next_panos.get(state.current_pano_id)
+                if next_pano_id is None:
+                    return []
+                return [
+                    CandidateAction(
+                        target_pano_id=next_pano_id,
+                        absolute_heading=0.0,
+                        relative_heading=0.0,
+                        relative_label="front",
+                        target_room_id=pano_rooms[next_pano_id],
+                        score=1.0,
+                        reason="test sequence",
+                    )
+                ]
+
+        class FirstCandidatePolicy:
+            def choose_next_action(self, reasoning_input):
+                action = reasoning_input.candidates[0] if reasoning_input.candidates else None
+                return PolicyOutput(action=action, rationale="follow test sequence")
+
+        class ManifestFreeEpisodeRunner(EpisodeRunner):
+            def _ensure_manifest(self, *, pano_id, **kwargs):
+                return pano_id
+
+        spatial_engine = FakeSpatialEngine()
+        events = []
+        runner = ManifestFreeEpisodeRunner(
+            perception_provider=FakePerceptionProvider(),
+            spatial_engine=spatial_engine,
+            policy=FirstCandidatePolicy(),
+        )
+        final_state, traces = runner.run(
+            task=TaskSpec(
+                task_type="gallery_instruction_following_navigation",
+                raw_instruction="Go via Room 2 and Room 3 to Room 4.",
+                source_room_id="Room 1",
+                goal_room_ids=["Room 4"],
+                waypoint_room_ids=["Room 2", "Room 3"],
+            ),
+            start_pano_id="A",
+            start_room_id="Room 1",
+            step_budget=10,
+            progress_callback=events.append,
+        )
+
+        self.assertEqual(final_state.current_pano_id, "E")
+        self.assertEqual(len(traces), 6)
+        self.assertIsNotNone(traces[2].policy_output.action)
+        self.assertEqual(traces[2].remaining_waypoint_room_ids, ["Room 2", "Room 3"])
+        self.assertEqual(traces[3].completed_waypoint_room_ids, ["Room 2"])
+        self.assertEqual(traces[3].remaining_waypoint_room_ids, ["Room 3"])
+        self.assertEqual(traces[-1].completed_waypoint_room_ids, ["Room 2", "Room 3"])
+        self.assertEqual(traces[-1].remaining_waypoint_room_ids, [])
+        self.assertIsNone(traces[-1].policy_output.action)
+        self.assertEqual(
+            [event["room_id"] for event in events if event["event"] == "waypoint_completed"],
+            ["Room 2", "Room 3"],
+        )
+        self.assertEqual(
+            spatial_engine.routed_waypoints,
+            [
+                ("Room 2", "Room 3"),
+                ("Room 2", "Room 3"),
+                ("Room 2", "Room 3"),
+                ("Room 3",),
+                (),
+                (),
+            ],
+        )
+
+    def test_navigation_output_builds_pano_viewer_episode(self) -> None:
+        navigation_payload = {
+            "source": {"source_pano_id": "A"},
+            "task": {
+                "waypoint_room_ids": ["Room 2"],
+                "goal_room_ids": ["Room 3"],
+            },
+            "final_state": {"current_pano_id": "C", "current_room_id": "Room 3"},
+            "traces": [
+                {
+                    "step_index": 0,
+                    "pano_id": "A",
+                    "room_id": "Room 1",
+                    "grounded_room_id": "Room 1",
+                    "subgoal_room_id": "Room 2",
+                    "policy_output": {
+                        "action": {
+                            "target_pano_id": "B",
+                            "target_room_id": "Room 2",
+                            "absolute_heading": 12.0,
+                            "score": 4.0,
+                            "reason": "matches_subgoal",
+                            "metadata": {"grounded_target_room_id": "Room 2"},
+                        }
+                    },
+                },
+                {
+                    "step_index": 1,
+                    "pano_id": "B",
+                    "room_id": "Room 2",
+                    "grounded_room_id": "Room 2",
+                    "subgoal_room_id": "Room 3",
+                    "policy_output": {
+                        "action": {
+                            "target_pano_id": "C",
+                            "target_room_id": "Room 3",
+                            "absolute_heading": 359.0,
+                            "score": 5.0,
+                            "reason": "matches_subgoal",
+                            "metadata": {"grounded_target_room_id": "Room 3"},
+                        }
+                    },
+                },
+                {
+                    "step_index": 2,
+                    "pano_id": "C",
+                    "room_id": "Room 3",
+                    "grounded_room_id": "Room 3",
+                    "subgoal_room_id": None,
+                    "policy_output": {"action": None},
+                },
+            ],
+        }
+
+        episode = build_pano_viewer_episode(navigation_payload, step_budget=15)
+
+        self.assertEqual(episode["schema"], "st_nav_navigation_episode")
+        self.assertEqual(episode["pano_path"], ["A", "B", "C"])
+        self.assertEqual(episode["final_pano_id"], "C")
+        self.assertEqual(episode["completed_waypoints"], ["Room 2"])
+        self.assertTrue(episode["success"])
+        self.assertEqual(episode["reason"], "goal_reached")
+        self.assertEqual(len(episode["rounds"]), 2)
+        first_movement = episode["rounds"][0]["movement_steps"][0]
+        self.assertEqual(first_movement["current_pano_id"], "A")
+        self.assertEqual(first_movement["next_pano_id"], "B")
+        self.assertEqual(first_movement["selected_action_heading"], 12.0)
+        self.assertEqual(episode["rounds"][0]["room_boundary"]["to_room_id"], "Room 2")
 
     def test_serialize_trace_includes_localization_distributions(self) -> None:
         observation = Observation(
@@ -4024,6 +5181,8 @@ class STNavTests(unittest.TestCase):
         trace.room_id = "Room 8"
         trace.route = ["Room 8", "Room 23"]
         trace.subgoal_room_id = "Room 23"
+        trace.completed_waypoint_room_ids = []
+        trace.remaining_waypoint_room_ids = []
         trace.current_room_context = {"room_id": "Room 8"}
         trace.visible_passages = []
         trace.view_contexts = []
@@ -4040,6 +5199,8 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(payload["observation"]["base_room_belief"]["Room 8"], 0.9)
         self.assertEqual(payload["observation"]["observation_likelihood"]["Room 8"], 0.72)
         self.assertEqual(payload["observation"]["room_belief"]["Room 8"], 0.9)
+        self.assertEqual(payload["completed_waypoint_room_ids"], [])
+        self.assertEqual(payload["remaining_waypoint_room_ids"], [])
 
     def test_goal_reached_uses_grounded_pano_room_not_localized_room(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
@@ -4053,11 +5214,19 @@ class STNavTests(unittest.TestCase):
             grounding_index=GroundingIndex(grounding),
         )
         state = spatial.initialize(start_pano_id="pano-8", start_room_id="Room 8")
-        updated = spatial.update(
+        spatial.update(
             state,
             Observation(
                 pano_id="pano-23",
                 heading_estimate=60.0,
+                metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
+            ),
+        )
+        updated = spatial.update(
+            state,
+            Observation(
+                pano_id="pano-8",
+                heading_estimate=240.0,
                 metadata={"localized_room_id": "Room 23", "localization_confidence": 0.9},
             ),
         )
@@ -4126,12 +5295,59 @@ class STNavTests(unittest.TestCase):
             episode_runner=runner,
         )
 
-        result = pipeline.run("Find the way from Room 8 to Room 23.", step_budget=3)
+        result = pipeline.run(
+            "Find the way from Room 8 to Room 23.",
+            start_pano_id="pano-8",
+            step_budget=3,
+        )
 
         self.assertEqual(result.task.source_room_id, "Room 8")
         self.assertEqual(result.source.source_pano.pano_id, "pano-8")
         self.assertEqual(result.final_state["final_pano_id"], "pano-8")
         self.assertEqual(result.traces, ["trace-0"])
+        self.assertEqual(runner.last_call["start_pano_id"], "pano-8")
+        self.assertEqual(runner.last_call["start_room_id"], "Room 8")
+        self.assertEqual(runner.last_call["step_budget"], 3)
+
+    def test_navigation_pipeline_accepts_explicit_start_pano_and_target_room(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        grounding = build_test_grounding(room_graph)
+        grounding["Room 8"]["pano_ids"] = ["pano-8"]
+
+        class NoParseInstructionParser:
+            def __init__(self, graph):
+                self.room_graph = graph
+
+            def parse(self, instruction):
+                raise AssertionError("Explicit navigation must bypass instruction parsing.")
+
+        class FakeEpisodeRunner:
+            def __init__(self) -> None:
+                self.last_call = None
+
+            def run(self, **kwargs):
+                self.last_call = kwargs
+                return {"final_pano_id": kwargs["start_pano_id"]}, ["trace-0"]
+
+        runner = FakeEpisodeRunner()
+        pipeline = NavigationPipeline(
+            source_resolution_workflow=SourceResolutionWorkflow(
+                instruction_parser=NoParseInstructionParser(room_graph),
+                source_pano_resolver=SourcePanoResolver(GroundingIndex(grounding)),
+            ),
+            episode_runner=runner,
+        )
+
+        result = pipeline.run(
+            start_pano_id="pano-8",
+            target_room_id="Room 23",
+            step_budget=3,
+        )
+
+        self.assertEqual(result.task.source_room_id, "Room 8")
+        self.assertEqual(result.task.goal_room_ids, ["Room 23"])
+        self.assertEqual(result.source.source_pano.pano_id, "pano-8")
+        self.assertEqual(result.source.source_pano.resolution_method, "explicit_start_pano")
         self.assertEqual(runner.last_call["start_pano_id"], "pano-8")
         self.assertEqual(runner.last_call["start_room_id"], "Room 8")
         self.assertEqual(runner.last_call["step_budget"], 3)
@@ -4162,13 +5378,48 @@ class STNavTests(unittest.TestCase):
                 llm_api_kind="responses",
                 llm_api_base="https://example.test/v1",
                 llm_timeout=1.0,
+                u_turn_threshold_deg=160.0,
+                history_return_threshold_deg=25.0,
+                use_detection_cache=False,
             ),
         )
 
         self.assertIsInstance(pipeline, NavigationPipeline)
         self.assertIsInstance(pipeline.episode_runner, EpisodeRunner)
         self.assertIsInstance(pipeline.source_resolution_workflow, SourceResolutionWorkflow)
+        self.assertIsInstance(pipeline.episode_runner.perception_provider, ManifestPerceptionProvider)
+        self.assertFalse(pipeline.episode_runner.perception_provider.pipeline.detector.use_detection_files)
+        self.assertIsInstance(pipeline.episode_runner.policy, GreedyActionPolicy)
         self.assertIsInstance(pipeline.episode_runner.spatial_engine.state_estimator.localizer, EvidenceScoreLocalizer)
+        self.assertEqual(pipeline.episode_runner.policy.u_turn_threshold_deg, 160.0)
+        self.assertEqual(pipeline.episode_runner.policy.history_return_threshold_deg, 25.0)
+
+    def test_build_navigation_pipeline_can_opt_into_llm_direction_policy(self) -> None:
+        room_graph = normalize_room_graph(self.explicit_map)
+        pano_graph = normalize_pano_graph(
+            {
+                "pano-8": {
+                    "panoID": "pano-8",
+                    "floor": "0",
+                    "lat": 0.0,
+                    "lng": 0.0,
+                    "links": [],
+                }
+            }
+        )
+        pipeline = build_navigation_pipeline(
+            room_graph=room_graph,
+            pano_graph=pano_graph,
+            grounding_payload=build_test_grounding(room_graph),
+            config=NavigationPipelineConfig(
+                llm_model="test-model",
+                llm_api_key="test-key",
+                direction_policy="llm",
+            ),
+        )
+
+        self.assertIsInstance(pipeline.episode_runner.perception_provider, ManifestPerceptionProvider)
+        self.assertIsInstance(pipeline.episode_runner.policy, LLMActionPolicy)
 
     def test_grounding_index_can_resolve_primary_pano(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)

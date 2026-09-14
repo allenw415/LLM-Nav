@@ -1,0 +1,466 @@
+{
+  "schema": "st_nav.estimated_gallery_areas",
+  "schema_version": 2,
+  "site": "british_museum",
+  "floor": "0",
+  "unit": "m2",
+  "description": "VLM-annotated map-relative gallery footprint estimates. Values are not architectural floor-plan measurements.",
+  "area_methods": {
+    "vlm_map_relative_estimate": "Shoelace pixel area of VLM-annotated visitor-map polygons, scaled by a robust median of user-selected anchors.",
+    "vlm_alternate_map_relative_estimate": "Shoelace pixel area from a user-supplied alternate Level 0 map, calibrated independently with the same four room anchors."
+  },
+  "map_annotation": {
+    "source": "dataset/sites/british_museum/maps/level_0_gallery_regions_vlm.json",
+    "image_width": 1244,
+    "image_height": 1260,
+    "coordinate_system": "pixel_xy_top_left",
+    "annotation_method": "VLM-assisted visual interpretation of the published Level 0 visitor map"
+  },
+  "map_relative_calibration": {
+    "method": "Median of observed-area-to-VLM-map-footprint ratios for Rooms 1, 15, 27, and 17; Room 17 is retained as a validation outlier and the median prevents it from dominating the scale.",
+    "selected_m2_per_pixel": 0.02213855322754596,
+    "selected_m_per_pixel": 0.1487902995075484,
+    "anchor_m2_per_pixel_min": 0.020871080139372822,
+    "anchor_m2_per_pixel_max": 0.025147885241052943,
+    "anchors": [
+      {
+        "room_id": "Room 1",
+        "role": "primary",
+        "observed_area_m2": 1061.4,
+        "map_pixel_area": 48080.0,
+        "m2_per_pixel": 0.022075707154742098
+      },
+      {
+        "room_id": "Room 15",
+        "role": "primary",
+        "observed_area_m2": 177.7,
+        "map_pixel_area": 8004.0,
+        "m2_per_pixel": 0.022201399300349825
+      },
+      {
+        "room_id": "Room 27",
+        "role": "primary",
+        "observed_area_m2": 119.8,
+        "map_pixel_area": 5740.0,
+        "m2_per_pixel": 0.020871080139372822
+      },
+      {
+        "room_id": "Room 17",
+        "role": "validation_outlier",
+        "observed_area_m2": 340.1,
+        "map_pixel_area": 13524.0,
+        "m2_per_pixel": 0.025147885241052943
+      }
+    ],
+    "alternate_map_room_calibrations": {
+      "Room 11": {
+        "source_image_filename": "codex-clipboard-1f21bba4-248d-46ea-b720-b3025f0c7358.png",
+        "source_description": "User-supplied alternate British Museum Level 0 map on which Room 11 has a visible footprint.",
+        "image_width": 1583,
+        "image_height": 2649,
+        "selected_m2_per_pixel": 0.03106556941326901,
+        "anchor_m2_per_pixel_min": 0.029860418743768692,
+        "anchor_m2_per_pixel_max": 0.03294265788454088,
+        "anchors": [
+          {
+            "room_id": "Room 1",
+            "observed_area_m2": 1061.4,
+            "map_pixel_area": 34748.0,
+            "m2_per_pixel": 0.03054564291470013
+          },
+          {
+            "room_id": "Room 15",
+            "observed_area_m2": 177.7,
+            "map_pixel_area": 5626.0,
+            "m2_per_pixel": 0.031585495911837895
+          },
+          {
+            "room_id": "Room 27",
+            "observed_area_m2": 119.8,
+            "map_pixel_area": 4012.0,
+            "m2_per_pixel": 0.029860418743768692
+          },
+          {
+            "room_id": "Room 17",
+            "observed_area_m2": 340.1,
+            "map_pixel_area": 10324.0,
+            "m2_per_pixel": 0.03294265788454088
+          }
+        ]
+      }
+    }
+  },
+  "excluded_route_room_ids": [
+    "East stairs",
+    "West stairs",
+    "North stairs",
+    "North lift"
+  ],
+  "rooms": [
+    {
+      "room_id": "Room 1",
+      "room_title": "Enlightenment",
+      "map_pixel_area": 48080,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 1064.4216391804098,
+      "estimated_area_low_m2": 1003.4815331010453,
+      "estimated_area_high_m2": 1209.1103223898256,
+      "is_anchor": true,
+      "anchor_role": "primary",
+      "anchor_observed_area_m2": 1061.4,
+      "anchor_residual_percent": 0.2846843019040701
+    },
+    {
+      "room_id": "Room 2",
+      "room_title": "Collecting the world",
+      "map_pixel_area": 14294,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 316.44847983454196,
+      "estimated_area_low_m2": 298.3312195121951,
+      "estimated_area_high_m2": 359.46387163561076,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 4",
+      "room_title": "Egyptian sculpture",
+      "map_pixel_area": 51030,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 1129.7303712016703,
+      "estimated_area_low_m2": 1065.051219512195,
+      "estimated_area_high_m2": 1283.2965838509317,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 6",
+      "room_title": "Assyrian sculpture and Balawat Gates",
+      "map_pixel_area": 18439,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 408.2127829627199,
+      "estimated_area_low_m2": 384.8418466898955,
+      "estimated_area_high_m2": 463.70185595977523,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 7",
+      "room_title": "Assyria: Nimrud",
+      "map_pixel_area": 14478,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 320.5219736284104,
+      "estimated_area_low_m2": 302.17149825783974,
+      "estimated_area_high_m2": 364.0910825199645,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 8",
+      "room_title": "Assyria: Nimrud",
+      "map_pixel_area": 5871,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 129.97544599892234,
+      "estimated_area_low_m2": 122.53411149825784,
+      "estimated_area_high_m2": 147.64323425022184,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 9",
+      "room_title": "Assyria: Nineveh",
+      "map_pixel_area": 13794,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 305.37920322076894,
+      "estimated_area_low_m2": 287.8956794425087,
+      "estimated_area_high_m2": 346.8899290150843,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 10",
+      "room_title": "Assyria: Lion hunts, Siege of Lachish and Khorsabad",
+      "map_pixel_area": 26162,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 579.1888295390573,
+      "estimated_area_low_m2": 546.0291986062717,
+      "estimated_area_high_m2": 657.9189736764271,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 11",
+      "room_title": "Greece: Cycladic Islands",
+      "map_pixel_area": 1911.0,
+      "area_source": "vlm_alternate_map_relative_estimate",
+      "effective_area_m2": 59.366303148757076,
+      "estimated_area_low_m2": 57.06326021934197,
+      "estimated_area_high_m2": 62.95341921735762,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null,
+      "annotation_source_image": "codex-clipboard-1f21bba4-248d-46ea-b720-b3025f0c7358.png"
+    },
+    {
+      "room_id": "Room 12",
+      "room_title": "Greece: Minoans and Mycenaeans; The Arthur | Fleischman Gallery",
+      "map_pixel_area": 7200,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 159.3975832383309,
+      "estimated_area_low_m2": 150.27177700348432,
+      "estimated_area_high_m2": 181.06477373558118,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 13",
+      "room_title": "Greece 1050–520 BC",
+      "map_pixel_area": 12285,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 271.9721264004021,
+      "estimated_area_low_m2": 256.4012195121951,
+      "estimated_area_high_m2": 308.9417701863354,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 14",
+      "room_title": "Greek vases",
+      "map_pixel_area": 2346,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 51.93704587182282,
+      "estimated_area_low_m2": 48.96355400696864,
+      "estimated_area_high_m2": 58.9969387755102,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 15",
+      "room_title": "Athens and Lycia",
+      "map_pixel_area": 8004,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 177.19698003327787,
+      "estimated_area_low_m2": 167.05212543554006,
+      "estimated_area_high_m2": 201.28367346938776,
+      "is_anchor": true,
+      "anchor_role": "primary",
+      "anchor_observed_area_m2": 177.7,
+      "anchor_residual_percent": -0.28307257553299436
+    },
+    {
+      "room_id": "Room 16",
+      "room_title": "Greece: Bassai sculptures",
+      "map_pixel_area": 5520,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 122.2048138160537,
+      "estimated_area_low_m2": 115.20836236933798,
+      "estimated_area_high_m2": 138.81632653061226,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 17",
+      "room_title": "Nereid Monument",
+      "map_pixel_area": 13524,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 299.40179384933157,
+      "estimated_area_low_m2": 282.26048780487804,
+      "estimated_area_high_m2": 340.1,
+      "is_anchor": true,
+      "anchor_role": "validation_outlier",
+      "anchor_observed_area_m2": 340.1,
+      "anchor_residual_percent": -11.96654106164906
+    },
+    {
+      "room_id": "Room 18",
+      "room_title": "Greece: Parthenon",
+      "map_pixel_area": 66004,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 1461.2330672309436,
+      "estimated_area_low_m2": 1377.5747735191637,
+      "estimated_area_high_m2": 1659.8610174504586,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 18a",
+      "room_title": "Greece: Parthenon",
+      "map_pixel_area": 7452,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 164.9764986516725,
+      "estimated_area_low_m2": 155.53128919860626,
+      "estimated_area_high_m2": 187.40204081632655,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 18b",
+      "room_title": "Greece: Parthenon",
+      "map_pixel_area": 5796,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 128.31505450685637,
+      "estimated_area_low_m2": 120.96878048780488,
+      "estimated_area_high_m2": 145.75714285714287,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 19",
+      "room_title": "Greece: Athens",
+      "map_pixel_area": 6417,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 142.0630960611624,
+      "estimated_area_low_m2": 133.9297212543554,
+      "estimated_area_high_m2": 161.37397959183673,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 20",
+      "room_title": "Greeks and Lycians 400–325 BC",
+      "map_pixel_area": 8832,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 195.5277021056859,
+      "estimated_area_low_m2": 184.33337979094077,
+      "estimated_area_high_m2": 222.1061224489796,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 21",
+      "room_title": "Mausoleum of Halikarnassos",
+      "map_pixel_area": 23896,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 529.0228679254383,
+      "estimated_area_low_m2": 498.73533101045297,
+      "estimated_area_high_m2": 600.9338657202011,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 22",
+      "room_title": "The world of Alexander",
+      "map_pixel_area": 8240,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 182.42167859497872,
+      "estimated_area_low_m2": 171.97770034843205,
+      "estimated_area_high_m2": 207.21857438627626,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 23",
+      "room_title": "Greek and Roman sculpture",
+      "map_pixel_area": 10609,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 234.8679111910351,
+      "estimated_area_low_m2": 221.42128919860627,
+      "estimated_area_high_m2": 266.7939145223307,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 24",
+      "room_title": "Living and Dying; The Wellcome Trust Gallery",
+      "map_pixel_area": 41860,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 926.7198381050739,
+      "estimated_area_low_m2": 873.6634146341463,
+      "estimated_area_high_m2": 1052.6904761904761,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 26",
+      "room_title": "North America",
+      "map_pixel_area": 10640,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 235.554206341089,
+      "estimated_area_low_m2": 222.06829268292682,
+      "estimated_area_high_m2": 267.5734989648033,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 27",
+      "room_title": "Mexico",
+      "map_pixel_area": 5740,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 127.0752955261138,
+      "estimated_area_low_m2": 119.8,
+      "estimated_area_high_m2": 144.34886128364388,
+      "is_anchor": true,
+      "anchor_role": "primary",
+      "anchor_observed_area_m2": 119.8,
+      "anchor_residual_percent": 6.072867717958097
+    },
+    {
+      "room_id": "Room 29a",
+      "room_title": "India",
+      "map_pixel_area": 13197,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 292.162486943924,
+      "estimated_area_low_m2": 275.43564459930315,
+      "estimated_area_high_m2": 331.8766415261757,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    },
+    {
+      "room_id": "Room 29b",
+      "room_title": "India",
+      "map_pixel_area": 13356,
+      "area_source": "vlm_map_relative_estimate",
+      "effective_area_m2": 295.68251690710383,
+      "estimated_area_low_m2": 278.7541463414634,
+      "estimated_area_high_m2": 335.87515527950313,
+      "is_anchor": false,
+      "anchor_role": null,
+      "anchor_observed_area_m2": null,
+      "anchor_residual_percent": null
+    }
+  ]
+}

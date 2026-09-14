@@ -1,0 +1,64 @@
+{
+  "schema": "st_nav.vlm_gallery_map_regions",
+  "schema_version": 1,
+  "site": "british_museum",
+  "floor": "0",
+  "map_image": "level_0_allocentric.png",
+  "image_width": 1244,
+  "image_height": 1260,
+  "coordinate_system": "pixel_xy_top_left",
+  "annotation_method": "VLM-assisted visual interpretation of the published Level 0 visitor map",
+  "description": "Approximate gallery footprints traced from the dark-grey gallery blocks. Door gaps and printed labels are treated as part of the gallery footprint. These polygons are not architectural survey geometry.",
+  "calibration_anchors": [
+    {"room_id": "Room 1", "observed_area_m2": 1061.4, "role": "primary"},
+    {"room_id": "Room 15", "observed_area_m2": 177.7, "role": "primary"},
+    {"room_id": "Room 27", "observed_area_m2": 119.8, "role": "primary"},
+    {"room_id": "Room 17", "observed_area_m2": 340.1, "role": "validation_outlier"}
+  ],
+  "alternate_map_room_estimates": {
+    "Room 11": {
+      "source_image_filename": "codex-clipboard-1f21bba4-248d-46ea-b720-b3025f0c7358.png",
+      "source_description": "User-supplied alternate British Museum Level 0 map on which Room 11 has a visible footprint.",
+      "image_width": 1583,
+      "image_height": 2649,
+      "coordinate_system": "pixel_xy_top_left",
+      "polygons": [[[766, 1584], [815, 1584], [815, 1623], [766, 1623]]],
+      "calibration_anchors": [
+        {"room_id": "Room 1", "observed_area_m2": 1061.4, "polygons": [[[1327, 955], [1395, 955], [1395, 1466], [1327, 1466]]]},
+        {"room_id": "Room 15", "observed_area_m2": 177.7, "polygons": [[[599, 1349], [657, 1349], [657, 1446], [599, 1446]]]},
+        {"room_id": "Room 27", "observed_area_m2": 119.8, "polygons": [[[1327, 817], [1395, 817], [1395, 876], [1327, 876]]]},
+        {"room_id": "Room 17", "observed_area_m2": 340.1, "polygons": [[[599, 1092], [657, 1092], [657, 1270], [599, 1270]]]}
+      ]
+    }
+  },
+  "rooms": {
+    "Room 1": {"polygons": [[[1088, 271], [1168, 271], [1168, 872], [1088, 872]]]},
+    "Room 2": {"polygons": [[[1088, 884], [1168, 884], [1168, 1024], [1088, 1024]], [[1168, 908], [1202, 908], [1202, 999], [1168, 999]]]},
+    "Room 4": {"polygons": [[[497, 265], [578, 265], [578, 895], [497, 895]]]},
+    "Room 6": {"polygons": [[[427, 908], [578, 908], [578, 1057], [497, 1057], [497, 999], [427, 999]]]},
+    "Room 7": {"polygons": [[[427, 641], [484, 641], [484, 895], [427, 895]]]},
+    "Room 8": {"polygons": [[[427, 526], [484, 526], [484, 629], [427, 629]]]},
+    "Room 9": {"polygons": [[[427, 271], [484, 271], [484, 513], [427, 513]]]},
+    "Room 10": {"polygons": [[[311, 641], [414, 641], [414, 895], [311, 895]]]},
+    "Room 11": {"polygons": [[[439, 1012], [484, 1012], [484, 1057], [439, 1057]]]},
+    "Room 12": {"polygons": [[[279, 1012], [439, 1012], [439, 1057], [279, 1057]]]},
+    "Room 13": {"polygons": [[[279, 908], [414, 908], [414, 999], [279, 999]]]},
+    "Room 14": {"polygons": [[[230, 861], [299, 861], [299, 895], [230, 895]]]},
+    "Room 15": {"polygons": [[[230, 734], [299, 734], [299, 850], [230, 850]]]},
+    "Room 16": {"polygons": [[[230, 641], [299, 641], [299, 721], [230, 721]]]},
+    "Room 17": {"polygons": [[[230, 433], [299, 433], [299, 629], [230, 629]]]},
+    "Room 18": {"polygons": [[[22, 328], [218, 328], [218, 421], [22, 421]], [[80, 421], [160, 421], [160, 734], [80, 734]], [[22, 734], [218, 734], [218, 850], [22, 850]]]},
+    "Room 18a": {"polygons": [[[172, 559], [218, 559], [218, 721], [172, 721]]]},
+    "Room 18b": {"polygons": [[[172, 433], [218, 433], [218, 559], [172, 559]]]},
+    "Room 19": {"polygons": [[[230, 328], [299, 328], [299, 421], [230, 421]]]},
+    "Room 20": {"polygons": [[[230, 189], [299, 189], [299, 317], [230, 317]]]},
+    "Room 21": {"polygons": [[[311, 189], [414, 189], [414, 421], [311, 421]]]},
+    "Room 22": {"polygons": [[[311, 433], [414, 433], [414, 513], [311, 513]]]},
+    "Room 23": {"polygons": [[[311, 526], [414, 526], [414, 629], [311, 629]]]},
+    "Room 24": {"polygons": [[[751, 4], [912, 4], [912, 264], [751, 264]]]},
+    "Room 26": {"polygons": [[[923, 109], [1075, 109], [1075, 179], [923, 179]]]},
+    "Room 27": {"polygons": [[[1086, 109], [1168, 109], [1168, 179], [1086, 179]]]},
+    "Room 29a": {"polygons": [[[579, 105], [662, 105], [662, 264], [579, 264]]]},
+    "Room 29b": {"polygons": [[[662, 105], [746, 105], [746, 264], [662, 264]]]}
+  }
+}

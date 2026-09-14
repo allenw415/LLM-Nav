@@ -22,6 +22,12 @@
 python3 tools/evaluation/localization/eval_localization.py --samples-per-room 5 --seed 0
 ```
 
+依各展廳 panorama 數量比例抽樣：
+
+```bash
+python3 tools/evaluation/localization/eval_localization.py --sampling-mode proportional-galleries --sample-ratio 0.2 --min-samples-per-room 1 --max-samples-per-room 10 --seed 0
+```
+
 重用既有 per-pano output：
 
 ```bash

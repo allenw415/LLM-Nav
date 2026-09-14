@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..common.types import TaskSpec
 
@@ -132,19 +132,45 @@ class InstructionRoutePlanner:
         self.instruction_parser = instruction_parser
         self.spatial_engine = spatial_engine
 
-    def plan(self, instruction: str) -> ParsedRoutePlan:
-        task = self.instruction_parser.parse(instruction)
+    def plan(
+        self,
+        instruction: str,
+        *,
+        start_pano_id: str,
+    ) -> ParsedRoutePlan:
+        start_pano_id = str(start_pano_id or "").strip()
+        if not start_pano_id:
+            raise ValueError("Instruction route planning requires start_pano_id.")
+        parsed_task = self.instruction_parser.parse(instruction)
+        source_room_id = self.spatial_engine.grounding_index.room_for_pano(
+            start_pano_id
+        )
+        if not source_room_id:
+            raise ValueError(
+                f"Start panorama is not grounded to a room: {start_pano_id}"
+            )
+        if source_room_id not in self.spatial_engine.room_graph:
+            raise ValueError(
+                f"Start panorama grounds to an unknown room: "
+                f"{start_pano_id} -> {source_room_id}"
+            )
+
+        task = replace(
+            parsed_task,
+            source_room_id=source_room_id,
+            source_entity=None,
+        )
         target_room_id = task.goal_room_ids[-1] if task.goal_room_ids else None
         shortest_path: list[str] = []
-        if task.source_room_id and target_room_id:
+        if target_room_id:
             shortest_path = self.spatial_engine.shortest_room_route(
-                task.source_room_id,
+                source_room_id,
                 target_room_id,
                 task.waypoint_room_ids,
             )
         return ParsedRoutePlan(
             instruction=instruction,
-            source_room_id=task.source_room_id,
+            source_room_id=source_room_id,
             target_room_id=target_room_id,
             waypoint_room_ids=list(task.waypoint_room_ids),
             shortest_path=shortest_path,

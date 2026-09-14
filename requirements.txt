@@ -1,7 +1,1 @@
-numpy
-torch
-transformers
-faiss-cpu
 Pillow
-huggingface_hub
-safetensors

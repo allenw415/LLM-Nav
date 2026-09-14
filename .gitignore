@@ -12,8 +12,20 @@ __pycache__/
 **/.env.js
 venv/
 renders/
-outputs/
+outputs/*
+!outputs/README.md
+!outputs/experiment_manifest_715.json
+!outputs/thesis_experiments/
+!outputs/thesis_experiments/**
 artifacts/pano_viewer/
 artifacts/pano_visualization/
 dataset/pipelines/pano_graph_visualization/
 dataset/sites/british_museum/normalized/room_grounding_batches/
+
+# Keep document-generation artifacts out of the repository root.
+/*.docx
+/*.pptx
+/*.zip
+/*.deb
+/thesis_drafts/
+*.orig

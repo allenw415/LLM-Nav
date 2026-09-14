@@ -275,23 +275,22 @@ def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
 def build_navigation_parse_instructions() -> str:
     return " ".join(
         [
-            "You are a museum navigation reasoning parser.",
-            "Classify the instruction into exactly one task type.",
-            "First extract the source, ordered waypoints, and ordered goals from the instruction, then classify each entity as gallery or artwork.",
-            "When there are no waypoint entities, choose gallery_goal_navigation or artwork_goal_navigation from the goal entity type; never use an instruction-following task type without waypoints.",
-            "For instruction-following tasks, use artwork_gallery_instruction_following_navigation only when one or more waypoint entities are present and the source, waypoint, and goal entities include both gallery and artwork entities.",
-            "Use gallery_instruction_following_navigation when all source, waypoint, and goal entities are galleries.",
-            "Use artwork_instruction_following_navigation when all source, waypoint, and goal entities are artworks.",
-            "Extract the source, ordered waypoints, and ordered goals from the instruction.",
-            "Preserve entity order from the original instruction.",
-            "Treat explicit room or gallery mentions as gallery entities.",
+            "You are a museum navigation query parser.",
+            "Extract only ordered waypoint entities and ordered goal entities from the user query.",
+            "Classify each extracted entity as gallery or artwork.",
+            "Do not extract or return source entities, source rooms, current locations, or start locations.",
+            "Treat explicit room, gallery, stairs, or lift mentions as gallery entities.",
+            "Also treat a gallery described by its collection, culture, period, or visual theme as a gallery entity.",
             "Treat named objects, sculptures, monuments, reliefs, gates, statues, and artworks as artwork entities.",
-            "Treat entities mentioned after from as source, entities mentioned after passing as waypoints, and entities mentioned after to as goals.",
-            "Infer artwork room ids using only the provided gallery themes.",
-            "Do not invent room ids, entities, or extra steps.",
-            "If the source is implicit or missing, return source_room_id as null and source_entity as null.",
-            "For gallery entities, predicted_room_id must match the mentioned room id and confidence must be 1.0.",
-            "For artwork entities, predicted_room_id must be one allowed room id and confidence must be between 0 and 1.",
+            "Treat entities mentioned after from, starting at, current, or currently in as source context and ignore them.",
+            "Treat entities mentioned after passing, via, through, or by way of as waypoints.",
+            "Treat entities mentioned after to, toward, visit, find, go to, navigate to, or take me to as goals.",
+            "Preserve entity order from the original query.",
+            "Infer gallery and artwork room ids using only the provided gallery themes.",
+            "A thematic gallery description may resolve to any allowed room whose theme is the best semantic match.",
+            "Do not invent room ids, entities, source fields, or extra steps.",
+            "For an explicit Room ID, predicted_room_id must match that ID and confidence must be 1.0.",
+            "For a theme-described gallery or artwork, predicted_room_id must be one allowed room id and confidence must be between 0 and 1.",
             "Return JSON only.",
         ]
     )
@@ -306,33 +305,26 @@ def build_navigation_parse_input(*, instruction: str, room_ids: list[str], theme
             "Gallery themes:",
             theme_lines,
             "",
-            "Task types:",
-            "- gallery_goal_navigation: goal is a gallery, and there are no waypoints.",
-            "- artwork_goal_navigation: goal is an artwork, and there are no waypoints.",
-            "- gallery_instruction_following_navigation: all source, waypoint, and goal entities are galleries, and one or more waypoints are present.",
-            "- artwork_instruction_following_navigation: all source, waypoint, and goal entities are artworks, and one or more waypoints are present.",
-            "- artwork_gallery_instruction_following_navigation: one or more waypoints are present, and source, waypoint, and goal entities include both gallery and artwork entities.",
-            "",
             "Task:",
-            "1. Identify source, waypoint, and goal spans from the wording.",
-            "2. Classify each extracted entity as gallery or artwork.",
-            "3. Determine whether waypoint entities are present.",
-            "4. Apply the task-type definitions exactly.",
-            "5. Ground each entity to one allowed room id or null when required by the schema.",
+            "1. Identify waypoint and goal spans from the wording.",
+            "2. Ignore source/current/start spans.",
+            "3. Classify each extracted entity as gallery or artwork; thematic collection descriptions are galleries.",
+            "4. Ground each entity to one allowed room id using the gallery themes.",
+            "5. Return no source fields.",
             "",
-            f"Instruction: {instruction}",
+            f"Query: {instruction}",
         ]
     )
 
 
 def build_navigation_parse_schema(room_ids: list[str]) -> dict:
     entity_schema = {
-        "type": ["object", "null"],
+        "type": "object",
         "properties": {
             "name": {"type": "string"},
             "entity_type": {"type": "string", "enum": ["gallery", "artwork"]},
             "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
-            "confidence": {"type": "number"},
+            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
         },
         "required": ["name", "entity_type", "predicted_room_id", "confidence"],
         "additionalProperties": False,
@@ -340,13 +332,10 @@ def build_navigation_parse_schema(room_ids: list[str]) -> dict:
     return {
         "type": "object",
         "properties": {
-            "task_type": {"type": "string", "enum": list(NAVIGATION_TASK_TYPES)},
-            "source_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
-            "source_entity": entity_schema,
             "goal_entities": {"type": "array", "items": entity_schema},
             "waypoint_entities": {"type": "array", "items": entity_schema},
         },
-        "required": ["task_type", "source_room_id", "source_entity", "goal_entities", "waypoint_entities"],
+        "required": ["goal_entities", "waypoint_entities"],
         "additionalProperties": False,
     }
 
@@ -440,9 +429,29 @@ def build_spatial_alignment_instructions(*, direct_images: bool = False) -> str:
         base_parts.extend(
             [
                 "When panorama images are provided directly, do not jump straight to a room prediction from one sign or one iconic object.",
-                "First infer the dominant visible theme of each relevant panorama sector.",
-                "Then align at least two sectors to allocentric directions and nearby candidate-room themes before deciding the room.",
+                "First infer the dominant visible theme of every panorama sector.",
+                "The supplied numeric headings are geocentric bearings in one local frame: zero is an unknown frame origin and angles increase clockwise.",
+                "Do not treat a geocentric heading of 0 degrees as map north.",
+                "There is one constant global rotation from the geocentric frame to the allocentric room-map frame.",
+                "Explicitly test the four rotations obtained by assigning view_0 to north, east, south, or west.",
+                "Use the heading differences between views to propagate each tested rotation to every sector.",
+                "Treat every candidate room as a complete spatial hypothesis: that candidate is the current room and its listed directional neighbors explain adjacent-room views.",
+                "Evaluate all candidate hypotheses before choosing predicted_room_id; do not choose a current room first and then retrofit ambiguous adjacent views to its neighbors.",
+                "For each hypothesis, compare current-room cues, directionally aligned neighbor cues, and contradictions.",
+                "An exact room title, exhibit type, or specific visual-cue match outweighs a broad category match.",
+                "Do not map an adjacent view to a neighboring room from category alone when another hypothesis has a directionally consistent neighbor with a more specific visual match.",
+                "Assign each adjacent-room view one best room_hint from the supplied profiles, or null when genuinely uncertain; do not use an A-or-B room identity to create support.",
+                "Treat a specific non-null room_hint as fixed evidence when evaluating candidate hypotheses.",
+                "A candidate's neighbor_support may use only a room explicitly listed as that candidate's neighbor at the aligned allocentric direction.",
+                "If a view's best room_hint is not that candidate's listed neighbor at the aligned direction, record it as a contradiction instead of neighbor support.",
+                "Do not replace a specific room_hint with a visually broader same-category neighbor merely to preserve a preferred current-room hypothesis.",
+                "For every candidate hypothesis, explicitly inspect the panorama sectors aligned with every listed neighbor direction, even when no adjacent room was noticed initially.",
+                "Classify each directional neighbor check as specific_match, broad_match, different_room, not_visible, or uncertain.",
+                "A not_visible or occluded neighbor is neutral rather than a contradiction.",
+                "Multiple specific neighbor matches in different directions are stronger evidence than one iconic current-room object.",
+                "Then align at least two sectors to allocentric directions and the most specific candidate-room or neighboring-room themes before deciding the room.",
                 "Your evidence and alignment trace must explicitly reference sector ids such as view_2 or view_5.",
+                "Return one view_observations entry for every supplied sector, one candidate_hypotheses entry for every candidate, and rank every candidate room exactly once.",
             ]
         )
     base_parts.append("Return JSON only.")
@@ -457,6 +466,7 @@ def build_spatial_alignment_input(
     ego_context_text: str,
     view_ids: list[str],
     direct_images: bool = False,
+    view_headings: list[dict[str, object]] | None = None,
 ) -> str:
     lines = [
         "Candidate room spatial contexts:",
@@ -475,12 +485,56 @@ def build_spatial_alignment_input(
         "5. Scores are relative support only; do not normalize them and do not treat them as probabilities.",
         "6. Briefly summarize the main supporting and conflicting evidence.",
     ]
+    if len(view_ids) == 4:
+        lines.insert(
+            6,
+            "These four sectors are spaced exactly 90 degrees apart; their labels are view ids, not map compass directions.",
+        )
     if direct_images:
+        headings_by_view = {
+            str(record.get("view_id")): float(record["heading_deg"])
+            for record in (view_headings or [])
+            if isinstance(record, dict)
+            and isinstance(record.get("view_id"), str)
+            and isinstance(record.get("heading_deg"), (int, float))
+        }
+        if headings_by_view:
+            lines.extend(
+                [
+                    "",
+                    "Geocentric sector headings (degrees clockwise in an unknown local frame):",
+                    *[
+                        f"- {view_id}: {headings_by_view[view_id]:.6f} degrees"
+                        for view_id in view_ids
+                        if view_id in headings_by_view
+                    ],
+                    "Use one constant rotation for all sectors; do not interpret these values as allocentric compass headings directly.",
+                ]
+            )
         lines.extend(
             [
-                "7. Before choosing the room, determine which sectors provide the strongest directional clues.",
-                "8. Output a sector_alignment trace that maps at least two panorama sectors to allocentric directions and the candidate-room theme or neighbor they best match.",
-                "9. Do not rely only on one room sign if the wider spatial pattern points elsewhere.",
+                "7. Produce one view_observations record for every sector before choosing the room.",
+                "8. For every candidate, build a joint hypothesis in which it is the current room and each adjacent-room view must match one of its listed neighbors at the aligned allocentric direction.",
+                "9. Compare hypotheses before selecting the room. Record current-room support, neighbor support, and contradictions for every candidate; category-only similarity is weak support.",
+                "9a. Choose one best room_hint for each adjacent-room view before scoring candidate hypotheses; use null if the image cannot distinguish the profiles.",
+                "9b. A neighbor_support statement is valid only when that fixed room_hint is a listed neighbor of the hypothesis room at the aligned direction.",
+                "9c. Otherwise put the view in contradictions. Never count a non-neighbor or an A-or-B identity as neighbor support.",
+                "9d. For each hypothesis, output one directional_neighbor_checks item for every listed neighbor, inspecting the view ids nearest that neighbor's allocentric direction.",
+                "9e. Each directional check must contain allocentric_direction, expected_neighbor_room_id, inspected_view_ids, status, observed_room_hint, and rationale.",
+                "9f. Use status specific_match, broad_match, different_room, not_visible, or uncertain. Do not penalize not_visible; reward multiple directionally independent specific_match results.",
+                "10. Test view_0 as north, east, south, and west, propagating each rotation using the numeric heading differences.",
+                "11. Output a sector_alignment trace that maps at least two panorama sectors to allocentric directions and the most specifically matching candidate-room theme or neighbor.",
+                "12. Do not rely only on one room sign or iconic object if the wider spatial pattern points elsewhere.",
+                "13. Return these top-level JSON fields: predicted_room_id, confidence, view_0_allocentric_direction, evidence, room_ranking, summary, sector_alignment, view_observations, and candidate_hypotheses.",
+                "14. Each room_ranking item must contain room_id and numeric score, with every candidate room appearing exactly once.",
+                "15. Each candidate_hypotheses item must contain room_id, numeric score, current_room_support, neighbor_support, and contradictions, with every candidate appearing exactly once.",
+                "16. current_room_support, neighbor_support, and contradictions must be arrays of strings and must name relevant view ids when visual evidence is used.",
+                "16a. Each candidate_hypotheses item must also contain directional_neighbor_checks.",
+                "16b. directional_neighbor_checks must cover every neighbor listed for that candidate exactly once.",
+                "17. Each view_observations item must contain view_id, themes, location_scope, room_hint, and summary; location_scope must be current_room, adjacent_room, mixed, or uncertain.",
+                "18. Each sector_alignment item must contain view_id, allocentric_direction, matched_room_id, matched_theme, and rationale.",
+                "19. matched_room_id and room_hint may name a candidate room, one of its listed neighboring rooms, or null.",
+                "20. confidence must be numeric, evidence and themes must be arrays of strings, and summary fields must be strings.",
             ]
         )
     return "\n".join(lines)
@@ -491,6 +545,9 @@ def build_spatial_alignment_schema(
     *,
     view_ids: list[str] | None = None,
     include_sector_alignment: bool = False,
+    include_view_observations: bool = False,
+    include_candidate_hypotheses: bool = False,
+    context_room_ids: list[str] | None = None,
 ) -> dict:
     room_score_schema = {
         "type": "object",
@@ -522,18 +579,124 @@ def build_spatial_alignment_schema(
         "additionalProperties": False,
     }
     if include_sector_alignment:
+        matched_room_ids = list(context_room_ids or room_ids)
         sector_schema = {
             "type": "object",
             "properties": {
                 "view_id": {"type": "string", "enum": list(view_ids or [])},
                 "allocentric_direction": {"type": "string", "enum": list(ALLOCENTRIC_DIRECTIONS)},
-                "matched_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+                "matched_room_id": {"type": ["string", "null"], "enum": matched_room_ids + [None]},
                 "matched_theme": {"type": "string"},
                 "rationale": {"type": "string"},
             },
             "required": ["view_id", "allocentric_direction", "matched_room_id", "matched_theme", "rationale"],
             "additionalProperties": False,
         }
-        schema["properties"]["sector_alignment"] = {"type": "array", "items": sector_schema}
+        schema["properties"]["sector_alignment"] = {
+            "type": "array",
+            "items": sector_schema,
+            "minItems": 2,
+            "maxItems": len(view_ids or []),
+        }
         schema["required"].append("sector_alignment")
+    if include_view_observations:
+        visible_room_ids = list(context_room_ids or room_ids)
+        view_observation_schema = {
+            "type": "object",
+            "properties": {
+                "view_id": {"type": "string", "enum": list(view_ids or [])},
+                "themes": {"type": "array", "items": {"type": "string"}},
+                "location_scope": {
+                    "type": "string",
+                    "enum": ["current_room", "adjacent_room", "mixed", "uncertain"],
+                },
+                "room_hint": {"type": ["string", "null"], "enum": visible_room_ids + [None]},
+                "summary": {"type": "string"},
+            },
+            "required": ["view_id", "themes", "location_scope", "room_hint", "summary"],
+            "additionalProperties": False,
+        }
+        schema["properties"]["view_observations"] = {
+            "type": "array",
+            "items": view_observation_schema,
+            "minItems": len(view_ids or []),
+            "maxItems": len(view_ids or []),
+        }
+        schema["required"].append("view_observations")
+        schema["properties"]["room_ranking"]["minItems"] = len(room_ids)
+        schema["properties"]["room_ranking"]["maxItems"] = len(room_ids)
+    if include_candidate_hypotheses:
+        hypothesis_schema = {
+            "type": "object",
+            "properties": {
+                "room_id": {"type": "string", "enum": room_ids},
+                "score": {"type": "number"},
+                "current_room_support": {"type": "array", "items": {"type": "string"}},
+                "neighbor_support": {"type": "array", "items": {"type": "string"}},
+                "contradictions": {"type": "array", "items": {"type": "string"}},
+                "directional_neighbor_checks": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "allocentric_direction": {
+                                "type": "string",
+                                "enum": list(ALLOCENTRIC_DIRECTIONS),
+                            },
+                            "expected_neighbor_room_id": {
+                                "type": "string",
+                                "enum": list(context_room_ids or room_ids),
+                            },
+                            "inspected_view_ids": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "enum": list(view_ids or []),
+                                },
+                            },
+                            "status": {
+                                "type": "string",
+                                "enum": [
+                                    "specific_match",
+                                    "broad_match",
+                                    "different_room",
+                                    "not_visible",
+                                    "uncertain",
+                                ],
+                            },
+                            "observed_room_hint": {
+                                "type": ["string", "null"],
+                                "enum": list(context_room_ids or room_ids) + [None],
+                            },
+                            "rationale": {"type": "string"},
+                        },
+                        "required": [
+                            "allocentric_direction",
+                            "expected_neighbor_room_id",
+                            "inspected_view_ids",
+                            "status",
+                            "observed_room_hint",
+                            "rationale",
+                        ],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": [
+                "room_id",
+                "score",
+                "current_room_support",
+                "neighbor_support",
+                "contradictions",
+                "directional_neighbor_checks",
+            ],
+            "additionalProperties": False,
+        }
+        schema["properties"]["candidate_hypotheses"] = {
+            "type": "array",
+            "items": hypothesis_schema,
+            "minItems": len(room_ids),
+            "maxItems": len(room_ids),
+        }
+        schema["required"].append("candidate_hypotheses")
     return schema

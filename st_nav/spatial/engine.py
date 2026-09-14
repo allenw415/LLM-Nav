@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from ..common.types import BeliefState, CandidateAction, EntityDetection, JsonDict, Observation, TaskSpec
 from ..perception.renderer import normalize_heading
 from .grounding import GroundingIndex
@@ -16,10 +18,18 @@ class SpatialEngine:
         pano_graph: dict[str, dict],
         grounding_index: GroundingIndex,
         localizer: EvidenceScoreLocalizer | None = None,
+        heading_alignment_mode: str = "fixed",
+        fixed_heading_offset_deg: float = 30.0,
     ):
+        if heading_alignment_mode not in {"fixed", "initial-spatial"}:
+            raise ValueError(
+                "heading_alignment_mode must be 'fixed' or 'initial-spatial'."
+            )
         self.room_graph = room_graph
         self.pano_graph = pano_graph
         self.grounding_index = grounding_index
+        self.heading_alignment_mode = heading_alignment_mode
+        self.fixed_heading_offset_deg = normalize_heading(fixed_heading_offset_deg)
         self.route_planner = RoutePlanner(room_graph=room_graph)
         self.state_estimator = StateEstimator(
             room_graph=room_graph,
@@ -35,14 +45,79 @@ class SpatialEngine:
         start_room_id: str | None = None,
         start_heading: float = 330.0,
     ) -> BeliefState:
-        return self.state_estimator.initialize(
+        state = self.state_estimator.initialize(
             start_pano_id=start_pano_id,
             start_room_id=start_room_id,
             start_heading=start_heading,
         )
+        state.heading_alignment_mode = self.heading_alignment_mode
+        if self.heading_alignment_mode == "fixed":
+            state.geocentric_to_allocentric_offset_deg = self.fixed_heading_offset_deg
+            state.heading_alignment_status = "fixed"
+        else:
+            state.geocentric_to_allocentric_offset_deg = None
+            state.heading_alignment_status = "pending"
+        return state
+
+    def initialize_heading_alignment(
+        self,
+        state: BeliefState,
+        observation: Observation,
+        *,
+        step_index: int,
+    ) -> bool:
+        """Lock one episode-level heading offset from the first spatial alignment."""
+        if self.heading_alignment_mode == "fixed":
+            return True
+        if state.geocentric_to_allocentric_offset_deg is not None:
+            return True
+
+        spatial_alignment = observation.metadata.get("spatial_alignment")
+        spatial_alignment = spatial_alignment if isinstance(spatial_alignment, dict) else {}
+        raw_offset = spatial_alignment.get("geocentric_to_allocentric_offset_deg")
+        view_0_heading = spatial_alignment.get("view_0_geocentric_heading_deg")
+        view_0_direction = spatial_alignment.get("view_0_allocentric_direction")
+        confidence = spatial_alignment.get("alignment_confidence")
+
+        state.heading_alignment_source_step = int(step_index)
+        state.heading_alignment_view_0_geocentric_heading_deg = (
+            float(view_0_heading) if isinstance(view_0_heading, (int, float)) else None
+        )
+        state.heading_alignment_view_0_allocentric_direction = (
+            view_0_direction if isinstance(view_0_direction, str) else None
+        )
+        state.heading_alignment_confidence = (
+            float(confidence) if isinstance(confidence, (int, float)) else None
+        )
+        if not isinstance(raw_offset, (int, float)):
+            reason = spatial_alignment.get("offset_failure_reason")
+            if not isinstance(reason, str) or not reason:
+                reason = observation.metadata.get("alignment_skipped_reason")
+            state.heading_alignment_status = "failed"
+            state.heading_alignment_failure_reason = (
+                reason if isinstance(reason, str) and reason else "missing_initial_offset"
+            )
+            observation.metadata["initial_heading_alignment_status"] = "failed"
+            observation.metadata["initial_heading_alignment_failure_reason"] = (
+                state.heading_alignment_failure_reason
+            )
+            return False
+
+        state.geocentric_to_allocentric_offset_deg = normalize_heading(float(raw_offset))
+        state.heading_alignment_status = "estimated"
+        state.heading_alignment_failure_reason = None
+        observation.metadata["initial_heading_alignment_status"] = "estimated"
+        observation.metadata["initial_heading_offset_deg"] = (
+            state.geocentric_to_allocentric_offset_deg
+        )
+        observation.metadata["heading_alignment_source_step"] = int(step_index)
+        return True
 
     def update(self, state: BeliefState, observation: Observation) -> BeliefState:
         return self.state_estimator.update(state, observation)
+
+    def update_tracking(self, state: BeliefState, observation: Observation) -> BeliefState:
+        return self.state_estimator.update(state, observation, localize=False)
 
     def annotate_observation_context(self, state: BeliefState, observation: Observation) -> Observation:
         localized_room_id = observation.metadata.get("localized_room_id")
@@ -313,6 +388,12 @@ class SpatialEngine:
         desired_heading = self.route_planner.desired_heading_for_route(state.current_room_id, route)
         subgoal_room_id = self.next_subgoal_room_id(state, route)
         inferred_current_heading = self._infer_current_heading_from_alignment(observation)
+        incoming_heading = (
+            float(state.incoming_travel_heading)
+            if isinstance(state.incoming_travel_heading, (int, float))
+            else None
+        )
+        history_return_heading = self._history_return_heading(state.recent_travel_headings)
         target_relative_heading = None
         target_heading_metadata: JsonDict = {}
         if desired_heading is not None:
@@ -322,15 +403,13 @@ class SpatialEngine:
                 "target_allocentric_direction": self._heading_to_allocentric_direction(desired_heading),
             }
         candidates: list[CandidateAction] = []
-        for neighbor in neighbors:
+        for candidate_index, neighbor in enumerate(neighbors):
             target_pano_id = str(neighbor["target_pano_id"])
-            is_immediate_backtrack = (
-                isinstance(state.previous_pano_id, str)
-                and state.previous_pano_id
-                and target_pano_id == state.previous_pano_id
-            )
             absolute_heading = float(neighbor["geocentric_heading_deg"])
-            allocentric_heading = self._candidate_allocentric_heading(absolute_heading)
+            allocentric_heading = self._candidate_allocentric_heading(
+                absolute_heading,
+                offset_deg=state.geocentric_to_allocentric_offset_deg,
+            )
             inferred_target_room_id, room_transition = self._match_room_transition(
                 state.current_room_id,
                 absolute_heading,
@@ -350,18 +429,12 @@ class SpatialEngine:
 
             score = 0.0
             reason_parts = []
-            if target_pano_id not in state.visited_panos:
-                score += 1.0
-                reason_parts.append("unvisited")
             if target_room_id == subgoal_room_id:
                 score += 3.0
                 reason_parts.append("matches_subgoal")
             elif route_step_index is not None:
                 score += 1.5
                 reason_parts.append("on_route")
-            if target_room_id and target_room_id not in state.visited_rooms:
-                score += 0.25
-                reason_parts.append("leads_to_unvisited_room")
             target_relative_diff = None
             if target_relative_heading is not None and relative_heading is not None:
                 target_relative_diff = self._angular_distance(target_relative_heading, relative_heading)
@@ -373,15 +446,34 @@ class SpatialEngine:
                 score += max(0.0, 1.0 - diff / 180.0)
                 reason_parts.append(f"heading_diff={diff:.1f}")
 
+            turn_error = (
+                self._angular_distance(incoming_heading, absolute_heading)
+                if incoming_heading is not None
+                else None
+            )
+            history_return_error = (
+                self._angular_distance(history_return_heading, absolute_heading)
+                if history_return_heading is not None
+                else None
+            )
+            if turn_error is not None:
+                reason_parts.append(f"turn_error={turn_error:.1f}")
+
             metadata = {
+                "candidate_index": candidate_index,
                 "inferred_current_heading": inferred_current_heading,
                 "allocentric_heading_deg": allocentric_heading,
+                "heading_offset_used_deg": state.geocentric_to_allocentric_offset_deg,
+                "heading_alignment_mode": state.heading_alignment_mode,
                 "desired_allocentric_heading_deg": desired_heading,
                 "target_relative_heading_deg": target_relative_heading,
                 "target_relative_diff_deg": target_relative_diff,
+                "incoming_geocentric_heading_deg": incoming_heading,
+                "turn_error_deg": turn_error,
+                "history_return_heading_deg": history_return_heading,
+                "history_return_error_deg": history_return_error,
                 "grounded_target_room_id": grounded_target_room_id,
                 "inferred_target_room_id": inferred_target_room_id,
-                "is_immediate_backtrack": is_immediate_backtrack,
             }
             if view_contexts:
                 metadata["spatial_context"] = self._candidate_spatial_context(
@@ -410,47 +502,44 @@ class SpatialEngine:
                 )
             )
 
-        non_backtracking_candidates = [
-            candidate
-            for candidate in candidates
-            if not candidate.metadata.get("is_immediate_backtrack")
-        ]
-        if non_backtracking_candidates:
-            candidates = non_backtracking_candidates
-
-        if not candidates and state.junction_stack:
-            target_pano_id = state.junction_stack[-1]
-            candidates.append(
-                CandidateAction(
-                    target_pano_id=target_pano_id,
-                    absolute_heading=state.current_heading,
-                    relative_heading=0.0 if inferred_current_heading is not None else None,
-                    relative_label="front" if inferred_current_heading is not None else None,
-                    target_room_id=None,
-                    route_step_index=None,
-                    score=0.1,
-                    reason="backtrack_to_junction",
-                    metadata={"inferred_current_heading": inferred_current_heading},
-                )
-            )
-
         candidates.sort(
             key=lambda item: (
                 item.metadata.get("target_relative_diff_deg")
                 if isinstance(item.metadata.get("target_relative_diff_deg"), (int, float))
                 else 10**6,
-                -(item.target_room_id == subgoal_room_id),
-                item.route_step_index if item.route_step_index is not None else 10**6,
-                -item.score,
-                item.target_pano_id,
+                item.metadata.get("turn_error_deg")
+                if isinstance(item.metadata.get("turn_error_deg"), (int, float))
+                else 10**6,
+                item.metadata["candidate_index"],
             )
         )
         return candidates
 
     @staticmethod
-    def _candidate_allocentric_heading(geocentric_heading: float) -> float:
-        # British Museum pano headings use a stable +30deg offset from the room-map allocentric frame.
-        return normalize_heading(float(geocentric_heading) + 30.0)
+    def _history_return_heading(recent_travel_headings: list[float]) -> float | None:
+        headings = [
+            normalize_heading(float(heading))
+            for heading in recent_travel_headings[-2:]
+            if isinstance(heading, (int, float))
+        ]
+        if len(headings) < 2:
+            return None
+        east = sum(math.sin(math.radians(heading)) for heading in headings)
+        north = sum(math.cos(math.radians(heading)) for heading in headings)
+        if math.hypot(east, north) < 1e-6:
+            return None
+        displacement_heading = normalize_heading(math.degrees(math.atan2(east, north)))
+        return normalize_heading(displacement_heading + 180.0)
+
+    @staticmethod
+    def _candidate_allocentric_heading(
+        geocentric_heading: float,
+        *,
+        offset_deg: float | None = 30.0,
+    ) -> float | None:
+        if not isinstance(offset_deg, (int, float)):
+            return None
+        return normalize_heading(float(geocentric_heading) + float(offset_deg))
 
     def _candidate_spatial_context(
         self,

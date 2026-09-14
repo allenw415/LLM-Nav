@@ -125,7 +125,7 @@ def main() -> None:
 
 
 def copy_viewer(output_dir: Path) -> None:
-    for name in ("index.html", "app.js", "styles.css"):
+    for name in ("index.html", "trajectory.js", "app.js", "styles.css"):
         shutil.copy2(VIEWER_SOURCE_DIR / name, output_dir / name)
 
 

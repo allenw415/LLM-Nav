@@ -4,6 +4,7 @@ import json
 import os
 import socket
 import time
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,6 +17,18 @@ SUPPORTED_API_KINDS = {"responses", "chat_completions"}
 TRANSIENT_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
 MAX_HTTP_RETRIES = 5
 HTTP_RETRY_BACKOFF_SECONDS = 1.0
+MODEL_TELEMETRY_COUNTER_KEYS = (
+    "logical_call_count",
+    "successful_logical_call_count",
+    "failed_logical_call_count",
+    "image_logical_call_count",
+    "text_logical_call_count",
+    "http_attempt_count",
+    "successful_http_attempt_count",
+    "failed_http_attempt_count",
+    "image_http_attempt_count",
+    "text_http_attempt_count",
+)
 
 
 def resolve_api_kind(api_kind: str | None = None) -> str:
@@ -191,73 +204,120 @@ class ModelResponseClient:
                 HTTP_RETRY_BACKOFF_SECONDS,
             )),
         )
+        self._telemetry = {key: 0 for key in MODEL_TELEMETRY_COUNTER_KEYS}
+        self.last_call_wall_ms: float | None = None
+        self.last_call_succeeded: bool | None = None
 
     def is_configured(self) -> bool:
         return self.response_client is not None or bool(self.api_key) or self.api_base != DEFAULT_OPENAI_API_BASE
 
+    def telemetry_snapshot(self) -> dict[str, int]:
+        """Return cumulative, secret-free request counters for this client."""
+        return dict(self._telemetry)
+
     def create(self, request_body: dict) -> dict:
-        if self.response_client is not None:
-            return self._normalize_payload(self.response_client(request_body))
+        call_started = time.perf_counter()
+        has_images = self._request_contains_images(request_body)
+        self._telemetry["logical_call_count"] += 1
+        self._telemetry["image_logical_call_count" if has_images else "text_logical_call_count"] += 1
+        succeeded = False
+        try:
+            if self.response_client is not None:
+                result = self._normalize_payload(self.response_client(request_body))
+                succeeded = True
+                return result
 
-        if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
-            if not self.api_key:
-                raise RuntimeError("Missing GEMINI_API_KEY, GOOGLE_API_KEY, or ST_NAV_API_KEY for Gemini API provider.")
-            endpoint = self._gemini_endpoint(request_body)
-            payload = self._responses_to_gemini_generate_content_payload(request_body)
-        elif self.provider == "ollama":
-            endpoint = f"{self._ollama_api_base()}/api/chat"
-            payload = self._responses_to_ollama_chat_payload(request_body)
-        elif self.api_kind == "responses":
-            endpoint = f"{self.api_base}/responses"
-            payload = request_body
-        else:
-            endpoint = f"{self.api_base}/chat/completions"
-            payload = self._responses_to_chat_completions_payload(request_body)
+            if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+                if not self.api_key:
+                    raise RuntimeError("Missing GEMINI_API_KEY, GOOGLE_API_KEY, or ST_NAV_API_KEY for Gemini API provider.")
+                endpoint = self._gemini_endpoint(request_body)
+                payload = self._responses_to_gemini_generate_content_payload(request_body)
+            elif self.provider == "ollama":
+                endpoint = f"{self._ollama_api_base()}/api/chat"
+                payload = self._responses_to_ollama_chat_payload(request_body)
+            elif self.api_kind == "responses":
+                endpoint = f"{self.api_base}/responses"
+                payload = request_body
+            else:
+                endpoint = f"{self.api_base}/chat/completions"
+                payload = self._responses_to_chat_completions_payload(request_body)
 
-        headers = {"Content-Type": "application/json"}
-        if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
-            headers["x-goog-api-key"] = self.api_key
-        elif self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+            headers = {"Content-Type": "application/json"}
+            if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+                headers["x-goog-api-key"] = self.api_key
+            elif self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
 
-        request = urllib.request.Request(
-            endpoint,
-            data=json.dumps(payload).encode("utf-8"),
-            headers=headers,
-            method="POST",
-        )
-        for attempt in range(1, self.max_http_retries + 1):
-            try:
-                with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
-                    return self._normalize_payload(json.loads(response.read().decode("utf-8")))
-            except TimeoutError as exc:
-                if attempt < self.max_http_retries:
-                    self._sleep_before_retry(attempt)
-                    continue
-                raise TimeoutError(
-                    f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
-                ) from exc
-            except socket.timeout as exc:
-                if attempt < self.max_http_retries:
-                    self._sleep_before_retry(attempt)
-                    continue
-                raise TimeoutError(
-                    f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
-                ) from exc
-            except urllib.error.HTTPError as exc:
-                body = _read_http_error_body(exc)
-                if exc.code in TRANSIENT_HTTP_STATUS_CODES and attempt < self.max_http_retries:
-                    self._sleep_before_retry(attempt)
-                    continue
-                detail = _format_http_error_detail(body)
-                raise RuntimeError(
-                    f"Model API request failed with HTTP {exc.code} from {endpoint}: {exc.reason}.{detail}"
-                ) from exc
-            except urllib.error.URLError as exc:
-                if attempt < self.max_http_retries:
-                    self._sleep_before_retry(attempt)
-                    continue
-                raise RuntimeError(f"Model API request failed from {endpoint}: {exc.reason}") from exc
+            request = urllib.request.Request(
+                endpoint,
+                data=json.dumps(payload).encode("utf-8"),
+                headers=headers,
+                method="POST",
+            )
+            for attempt in range(1, self.max_http_retries + 1):
+                self._record_http_attempt(has_images=has_images)
+                try:
+                    with urllib.request.urlopen(request, timeout=self.request_timeout) as response:
+                        result = self._normalize_payload(json.loads(response.read().decode("utf-8")))
+                    self._telemetry["successful_http_attempt_count"] += 1
+                    succeeded = True
+                    return result
+                except TimeoutError as exc:
+                    self._telemetry["failed_http_attempt_count"] += 1
+                    if attempt < self.max_http_retries:
+                        self._sleep_before_retry(attempt)
+                        continue
+                    raise TimeoutError(
+                        f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
+                    ) from exc
+                except socket.timeout as exc:
+                    self._telemetry["failed_http_attempt_count"] += 1
+                    if attempt < self.max_http_retries:
+                        self._sleep_before_retry(attempt)
+                        continue
+                    raise TimeoutError(
+                        f"Model API timed out after {self.request_timeout:.0f}s while waiting for {self.api_kind} output."
+                    ) from exc
+                except urllib.error.HTTPError as exc:
+                    self._telemetry["failed_http_attempt_count"] += 1
+                    body = _read_http_error_body(exc)
+                    if exc.code in TRANSIENT_HTTP_STATUS_CODES and attempt < self.max_http_retries:
+                        self._sleep_before_retry(attempt)
+                        continue
+                    detail = _format_http_error_detail(body)
+                    raise RuntimeError(
+                        f"Model API request failed with HTTP {exc.code} from {endpoint}: {exc.reason}.{detail}"
+                    ) from exc
+                except urllib.error.URLError as exc:
+                    self._telemetry["failed_http_attempt_count"] += 1
+                    if attempt < self.max_http_retries:
+                        self._sleep_before_retry(attempt)
+                        continue
+                    raise RuntimeError(f"Model API request failed from {endpoint}: {exc.reason}") from exc
+                except Exception:
+                    self._telemetry["failed_http_attempt_count"] += 1
+                    raise
+        finally:
+            self.last_call_wall_ms = (time.perf_counter() - call_started) * 1000.0
+            self.last_call_succeeded = succeeded
+            self._telemetry[
+                "successful_logical_call_count" if succeeded else "failed_logical_call_count"
+            ] += 1
+
+    def _record_http_attempt(self, *, has_images: bool) -> None:
+        self._telemetry["http_attempt_count"] += 1
+        self._telemetry["image_http_attempt_count" if has_images else "text_http_attempt_count"] += 1
+
+    @staticmethod
+    def _request_contains_images(value: object) -> bool:
+        if isinstance(value, dict):
+            block_type = value.get("type")
+            if isinstance(block_type, str) and block_type in {"input_image", "image_url"}:
+                return True
+            return any(ModelResponseClient._request_contains_images(item) for item in value.values())
+        if isinstance(value, list):
+            return any(ModelResponseClient._request_contains_images(item) for item in value)
+        return False
 
     def _sleep_before_retry(self, attempt: int) -> None:
         time.sleep(self.retry_backoff_seconds * float(attempt))
@@ -399,6 +459,9 @@ class ModelResponseClient:
             generation_config["temperature"] = self.temperature
         elif gemini_schema is not None:
             generation_config["temperature"] = 0
+        max_output_tokens = request_body.get("max_output_tokens")
+        if isinstance(max_output_tokens, int) and max_output_tokens > 0:
+            generation_config["maxOutputTokens"] = max_output_tokens
         if generation_config:
             payload["generationConfig"] = generation_config
         return payload

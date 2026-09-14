@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import time
 from base64 import b64encode
 from pathlib import Path
 from typing import Callable
@@ -65,6 +66,10 @@ class ViewDetector:
         self.last_visual_localization: dict | None = None
         self.last_candidate_room_ids: list[str] = []
         self.last_view_theme_observations: list[dict] = []
+        self.last_visual_cache_hit: bool | None = None
+        self.last_visual_cache_version: int | None = None
+        self.last_visual_timing: dict | None = None
+        self._active_vlm_response_ms = 0.0
         self.model_client = ModelResponseClient(
             provider=settings.provider,
             api_key=self.api_key,
@@ -76,30 +81,89 @@ class ViewDetector:
             response_client=self.response_client,
         )
 
-    def detect(self, manifest_path: str | Path) -> list[ViewDetection]:
+    def detect(
+        self,
+        manifest_path: str | Path,
+        *,
+        force_refresh: bool = False,
+    ) -> list[ViewDetection]:
+        stage_started = time.perf_counter()
         manifest_path = Path(manifest_path)
         self.last_traces = []
         self.last_visual_localization = None
         self.last_candidate_room_ids = []
         self.last_view_theme_observations = []
+        self.last_visual_cache_hit = None
+        self.last_visual_cache_version = None
+        self.last_visual_timing = None
+        self._active_vlm_response_ms = 0.0
         detection_path = manifest_path.with_name(f"{manifest_path.stem}_detections.json")
         trace_path = manifest_path.with_name(f"{manifest_path.stem}_detections_trace.json")
-        if self.use_detection_files and detection_path.exists():
+        if self.use_detection_files and not force_refresh and detection_path.exists():
             manifest = self._load_manifest_for_cache_check(manifest_path)
             if (
                 self._detection_cache_matches_current_settings(detection_path, manifest)
                 or (not self.model_client.is_configured() and not self.enable_view_themes)
             ):
                 self.last_traces = self._load_trace_file(trace_path)
-                return self._load_detection_file(detection_path)
+                detections = self._load_detection_file(detection_path)
+                self.last_visual_cache_hit = True
+                self.last_visual_cache_version = self._read_cache_version(detection_path)
+                total_ms = (time.perf_counter() - stage_started) * 1000.0
+                self.last_visual_timing = {
+                    "program_module_ms": total_ms,
+                    "vlm_response_ms": None,
+                    "stage_total_ms": total_ms,
+                    "cache_hit": True,
+                    "logical_vlm_call_count": 0,
+                }
+                return self._annotate_cache_provenance(detections, detection_path=detection_path)
 
         if not self.model_client.is_configured():
             return []
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         detections = self._detect_manifest(manifest)
-        self._write_detection_file(detection_path, detections)
-        self._write_trace_file(trace_path)
+        self.last_visual_cache_hit = False
+        self.last_visual_cache_version = 3
+        detections = self._annotate_cache_provenance(detections, detection_path=detection_path)
+        if not force_refresh:
+            self._write_detection_file(detection_path, detections)
+            self._write_trace_file(trace_path)
+        total_ms = (time.perf_counter() - stage_started) * 1000.0
+        self.last_visual_timing = {
+            "program_module_ms": max(0.0, total_ms - self._active_vlm_response_ms),
+            "vlm_response_ms": self._active_vlm_response_ms,
+            "stage_total_ms": total_ms,
+            "cache_hit": False,
+            "logical_vlm_call_count": 1 + int(bool(self.enable_view_themes)),
+        }
+        detections = self._annotate_cache_provenance(
+            detections,
+            detection_path=detection_path,
+        )
+        return detections
+
+    @staticmethod
+    def _read_cache_version(detection_path: Path) -> int | None:
+        try:
+            version = json.loads(detection_path.read_text(encoding="utf-8")).get("cache_version")
+        except (OSError, json.JSONDecodeError):
+            return None
+        return int(version) if isinstance(version, int) else None
+
+    def _annotate_cache_provenance(
+        self,
+        detections: list[ViewDetection],
+        *,
+        detection_path: Path,
+    ) -> list[ViewDetection]:
+        for detection in detections:
+            detection.metadata["visual_cache_hit"] = self.last_visual_cache_hit
+            detection.metadata["visual_cache_version"] = self.last_visual_cache_version
+            detection.metadata["visual_cache_path"] = str(detection_path)
+            if isinstance(self.last_visual_timing, dict):
+                detection.metadata["visual_timing"] = dict(self.last_visual_timing)
         return detections
 
     def _load_detection_file(self, detection_path: Path) -> list[ViewDetection]:
@@ -218,7 +282,7 @@ class ViewDetector:
         if not candidates:
             raise RuntimeError("Perception requires room graph and grounding candidates for visual localization.")
         request_body = self._build_visual_request_body(captures, candidates=candidates)
-        payload = self._create_response(request_body)
+        payload = self._create_timed_response(request_body)
         self.last_traces.append(
             {
                 "capture_label": "multiview",
@@ -256,7 +320,7 @@ class ViewDetector:
 
     def _extract_view_themes(self, captures: list[dict]) -> dict:
         request_body = self._build_view_theme_request_body(captures)
-        payload = self._create_response(request_body)
+        payload = self._create_timed_response(request_body)
         self.last_traces.append(
             {
                 "capture_label": "view_themes",
@@ -594,6 +658,13 @@ class ViewDetector:
                 "Try a larger request timeout."
             ) from exc
 
+    def _create_timed_response(self, request_body: dict) -> dict:
+        started = time.perf_counter()
+        try:
+            return self._create_response(request_body)
+        finally:
+            self._active_vlm_response_ms += (time.perf_counter() - started) * 1000.0
+
     @staticmethod
     def _parse_output_payload(payload: dict) -> dict:
         try:
@@ -720,6 +791,14 @@ class MultiViewAggregator:
                 metadata["candidate_room_ids"] = list(view_detection.metadata["candidate_room_ids"])
             if "view_theme_observations" not in metadata and isinstance(view_detection.metadata.get("view_theme_observations"), list):
                 metadata["view_theme_observations"] = list(view_detection.metadata["view_theme_observations"])
+            for key in (
+                "visual_cache_hit",
+                "visual_cache_version",
+                "visual_cache_path",
+                "visual_timing",
+            ):
+                if key not in metadata and key in view_detection.metadata:
+                    metadata[key] = view_detection.metadata[key]
         metadata["inside_entities"] = [
             MultiViewAggregator._entity_to_dict(entity)
             for entity in entities
@@ -799,8 +878,13 @@ class PerceptionPipeline:
     def render_views(self, **kwargs) -> dict:
         return self.renderer.render(**kwargs)
 
-    def detect_views(self, manifest_path: str | Path) -> list[ViewDetection]:
-        return self.detector.detect(manifest_path)
+    def detect_views(
+        self,
+        manifest_path: str | Path,
+        *,
+        force_refresh: bool = False,
+    ) -> list[ViewDetection]:
+        return self.detector.detect(manifest_path, force_refresh=force_refresh)
 
     def aggregate_observation(
         self,
@@ -815,8 +899,14 @@ class PerceptionPipeline:
             view_detections=view_detections,
         )
 
-    def observe_from_manifest(self, manifest_path: str | Path, *, current_heading: float) -> Observation:
-        detections = self.detect_views(manifest_path)
+    def observe_from_manifest(
+        self,
+        manifest_path: str | Path,
+        *,
+        current_heading: float,
+        force_refresh: bool = False,
+    ) -> Observation:
+        detections = self.detect_views(manifest_path, force_refresh=force_refresh)
         return self.aggregate_observation(
             manifest_path,
             current_heading=current_heading,

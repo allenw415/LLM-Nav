@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..common.types import Observation
-from .detector import PerceptionPipeline
+from .detector import PerceptionPipeline, ViewDetector
 
 
 class ManifestPerceptionProvider:
@@ -17,12 +17,49 @@ class ManifestPerceptionProvider:
         *,
         room_graph: dict[str, dict] | None = None,
         grounding_index=None,
+        use_detection_files: bool = True,
     ):
         self.pipeline = PerceptionPipeline(
             pano_graph=pano_graph,
             room_graph=room_graph,
             grounding_index=grounding_index,
+            detector=ViewDetector(
+                room_graph=room_graph,
+                grounding_index=grounding_index,
+                use_detection_files=use_detection_files,
+            ),
         )
 
-    def observe(self, manifest_path: str | Path, *, current_heading: float) -> Observation:
-        return self.pipeline.observe_from_manifest(manifest_path, current_heading=current_heading)
+    def observe(
+        self,
+        manifest_path: str | Path,
+        *,
+        current_heading: float,
+        force_refresh: bool = False,
+    ) -> Observation:
+        return self.pipeline.observe_from_manifest(
+            manifest_path,
+            current_heading=current_heading,
+            force_refresh=force_refresh,
+        )
+
+    def observe_from_manifest(
+        self,
+        manifest_path: str | Path,
+        *,
+        current_heading: float,
+        force_refresh: bool = False,
+    ) -> Observation:
+        return self.pipeline.observe_from_manifest(
+            manifest_path,
+            current_heading=current_heading,
+            force_refresh=force_refresh,
+        )
+
+    def observe_tracking(self, manifest_path: str | Path, *, current_heading: float) -> Observation:
+        """Build an observation without running VLM detection/localization."""
+        return self.pipeline.aggregate_observation(
+            manifest_path,
+            current_heading=current_heading,
+            view_detections=[],
+        )

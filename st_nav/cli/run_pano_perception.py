@@ -35,7 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--vlm-timeout", type=float, default=MODEL_ENV.request_timeout or 180.0)
     parser.add_argument("--render-api-key", default=os.environ.get("GMAPS_API_KEY"))
     parser.add_argument("--render-output-dir", default="renders/pano_perception")
-    parser.add_argument("--heading-mode", choices=["museum", "cardinal", "graph"], default="museum")
+    parser.add_argument(
+        "--heading-mode",
+        choices=["museum", "cardinal", "cardinal4", "graph"],
+        default="museum",
+    )
     parser.add_argument("--pitch", type=float, default=0.0)
     parser.add_argument("--fov", type=int, default=45)
     parser.add_argument("--width", type=int, default=512)

@@ -78,6 +78,125 @@ ST-Nav/
 - `dataset/pipelines/google_streetview/run_control.py`: small CLI entrypoint for
   interactive checks and screenshots
 
+## Single-call Spatial Alignment Experiment
+
+Run the standalone eight-image alignment experiment without changing the
+navigation pipeline:
+
+```bash
+python3 -m st_nav.cli.run_spatial_alignment \
+  --pano-id JK44-iXUvic1mv3GUGMaUQ \
+  --render-output-dir renders/room_grounding_fov90 \
+  --candidate-top-k 5
+```
+
+The command reads the panorama manifest and its sibling
+`*_manifest_detections.json` cache, selects candidates from the cached raw
+room scores, and makes one VLM request containing all eight images and their
+geocentric headings. It does not run perception when the score cache is
+missing. The default diagnostic output is:
+
+```text
+outputs/spatial_alignment/<pano-id>_single_call.json
+```
+
+## Map-grounded Spatial Alignment Experiment
+
+Run the standalone map-grounded experiment with one north-up semantic map and
+eight clockwise panorama views. It reuses cached Top-5 room candidates but does
+not send their scores or ranks to the alignment VLM:
+
+```bash
+python3 -m st_nav.cli.run_map_grounded_spatial_alignment \
+  --pano-id JK44-iXUvic1mv3GUGMaUQ \
+  --render-output-dir renders/room_grounding_fov90 \
+  --candidate-top-k 5 \
+  --repeat 3
+```
+
+The command is independent from navigation and never reruns perception. Its
+default output contains the generated candidate-highlighted map, three run
+records, and an agreement summary under:
+
+```text
+outputs/spatial_alignment_map_grounded/<pano-id>/
+```
+
+Compare the current single-full prompt against the map-grounded prompt on the
+same cached panoramas and candidates with:
+
+```bash
+python3 tools/evaluation/localization/eval_map_grounded_spatial_alignment.py \
+  --samples-per-room 5 \
+  --repeat 3 \
+  --modes single-full map-grounded
+```
+
+The evaluator only scores cases whose render manifest and detection cache
+already exist; missing inputs are recorded as skipped and are not regenerated.
+
+## Map-only Passage Heading Experiment
+
+Run one passage-heading case using only a north-up map plus the current and
+target room IDs:
+
+```bash
+python3 -m st_nav.cli.run_map_grounded_heading \
+  --current-room-id "Room 6" \
+  --target-room-id "Room 7" \
+  --repeat 3
+```
+
+Run the full Level 0 catalog of 76 directed adjacent-room edges, repeated three
+times each (228 VLM calls), with the active `gemini` profile:
+
+```bash
+venv/bin/python tools/evaluation/navigation/eval_map_grounded_heading.py \
+  --repeat 3 \
+  --output-dir outputs/map_grounded_heading/all_level0_directed
+```
+
+To test the same 76 cases with the original unmodified map (no blue/green room
+overlays, C/T markers, or compass sidebar), use a separate output directory:
+
+```bash
+venv/bin/python tools/evaluation/navigation/eval_map_grounded_heading.py \
+  --map-mode plain \
+  --repeat 3 \
+  --output-dir outputs/map_grounded_heading/plain_map_all_level0_directed
+```
+
+In plain mode all cases reuse the same original map image; only the current and
+target room IDs change between requests.
+
+The batch evaluator writes `runs.jsonl`, `case_summaries.jsonl`,
+`review_cases.jsonl`, `summary.json`, and `meeting_summary.md`. Highlighted
+mode also writes 76 generated semantic maps; plain mode creates no per-case map
+copies. Room-graph headings are used only after each response for
+evaluation and are never included in the VLM request. This experiment measures
+room-level passage-side inference; it does not provide an agent position or
+claim to solve position-dependent first-action headings.
+
+## Local Data Retention
+
+The repository keeps runtime code, dataset sources, experiment tooling, pano
+viewer tooling, and the local environment needed to reproduce existing runs.
+Large generated data remain under `outputs/`, `renders/`, and
+`artifacts/pano_viewer/` and are intentionally excluded from Git.
+
+The canonical 715-case navigation dataset and ablations are indexed in
+`outputs/README.md`. Their paths, row counts, byte sizes, and SHA-256 digests
+are recorded in `outputs/experiment_manifest_715.json`. These files cover:
+
+- ground-truth offset with and without trajectory memory;
+- estimated offset with and without trajectory memory;
+- four-view versus eight-view spatial alignment;
+- Visual, Bayesian, and Spatial localization-stage ablations.
+
+Retry snapshots may be removed only when every JSON record is identical to the
+retained canonical record for the same condition and test ID. Results with any
+content difference are retained as experimental history.
+
 ## Notes
 
 - Runtime package exports live in `st_nav/__init__.py`.
