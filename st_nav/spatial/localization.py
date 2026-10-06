@@ -27,6 +27,12 @@ from .grounding import GroundingIndex
 
 DEFAULT_ALIGNMENT_CANDIDATE_RATIO_THRESHOLD = 0.5
 DEFAULT_ALIGNMENT_CANDIDATE_MAX = 5
+SPATIAL_SCHEMA_REPAIR_INSTRUCTIONS = (
+    "Schema repair retry: return exactly one concise JSON object matching the supplied JSON Schema. "
+    "Do not repeat array items. Include every required view or candidate exactly once. "
+    "Use at most two short evidence strings and keep every free-text value under twenty words. "
+    "Do not return markdown, commentary, or text outside the JSON object."
+)
 
 
 def _normalize_scores(scores: dict[str, float]) -> dict[str, float]:
@@ -474,6 +480,9 @@ class SpatialAlignmentRefiner:
         num_ctx: int | None = None,
         response_client: Callable[[dict], dict] | None = None,
         max_http_retries: int | None = None,
+        schema_validation_retries: int = 0,
+        context_max_output_tokens: int | None = None,
+        alignment_max_output_tokens: int | None = None,
     ):
         model_env = resolve_model_environment(
             default_model="gpt-5-mini",
@@ -493,6 +502,17 @@ class SpatialAlignmentRefiner:
             fallback_num_ctx=model_env.num_ctx,
             default_num_ctx=16384,
         )
+        self.schema_validation_retries = max(0, int(schema_validation_retries))
+        self.context_max_output_tokens = (
+            max(1, int(context_max_output_tokens))
+            if context_max_output_tokens is not None
+            else None
+        )
+        self.alignment_max_output_tokens = (
+            max(1, int(alignment_max_output_tokens))
+            if alignment_max_output_tokens is not None
+            else None
+        )
         self.model_client = ModelResponseClient(
             provider=model_env.provider,
             api_key=self.api_key,
@@ -501,6 +521,7 @@ class SpatialAlignmentRefiner:
             request_timeout=self.request_timeout,
             num_ctx=self.num_ctx,
             temperature=model_env.temperature,
+            think=model_env.think,
             response_client=response_client,
             max_http_retries=max_http_retries,
         )
@@ -510,9 +531,14 @@ class SpatialAlignmentRefiner:
         self.last_alignment_response_payload: dict | None = None
         self.last_ego_spatial_context: dict | None = None
         self.last_single_call_schema_mode: str | None = None
+        self.last_context_validation_attempt_count: int | None = None
+        self.last_alignment_validation_attempt_count: int | None = None
 
     def refine(self, *, observation: Observation, candidate_room_ids: list[str]) -> dict:
         stage_started = time.perf_counter()
+        candidate_room_ids = list(dict.fromkeys(candidate_room_ids))
+        self.last_context_validation_attempt_count = None
+        self.last_alignment_validation_attempt_count = None
         if len(candidate_room_ids) < 2:
             return {"applied": False, "alignment_skipped_reason": "insufficient_alignment_candidates"}
         if not self.model_client.is_configured():
@@ -521,16 +547,29 @@ class SpatialAlignmentRefiner:
         if not ordered_views:
             return {"applied": False, "alignment_skipped_reason": "missing_panorama_views"}
 
+        view_ids = [view["view_id"] for view in ordered_views]
         extraction_request = self._build_context_extraction_request_body(
             ordered_views=ordered_views,
             candidate_room_ids=candidate_room_ids,
         )
         self.last_extraction_request_body = self._clone_json(extraction_request)
-        extraction_started = time.perf_counter()
-        extraction_payload = self._create_response(extraction_request)
-        extraction_vlm_ms = (time.perf_counter() - extraction_started) * 1000.0
+        (
+            extraction_payload,
+            extracted,
+            extraction_vlm_ms,
+            extraction_attempts,
+            extraction_request_used,
+        ) = self._create_validated_response(
+            extraction_request,
+            stage_name="spatial context extraction",
+            validator=lambda parsed: self._validate_context_extraction_output(
+                parsed,
+                view_ids=view_ids,
+            ),
+        )
+        self.last_extraction_request_body = self._clone_json(extraction_request_used)
         self.last_extraction_response_payload = self._clone_json(extraction_payload)
-        extracted = self._parse_output_payload(extraction_payload)
+        self.last_context_validation_attempt_count = extraction_attempts
         ego_spatial_context = self._format_ego_spatial_context(extracted, ordered_views)
         self.last_ego_spatial_context = self._clone_json(ego_spatial_context)
 
@@ -542,21 +581,28 @@ class SpatialAlignmentRefiner:
             ordered_views=ordered_views,
         )
         self.last_alignment_request_body = self._clone_json(alignment_request)
-        alignment_started = time.perf_counter()
-        alignment_payload = self._create_response(alignment_request)
-        alignment_vlm_ms = (time.perf_counter() - alignment_started) * 1000.0
+        (
+            alignment_payload,
+            parsed,
+            alignment_vlm_ms,
+            alignment_attempts,
+            alignment_request_used,
+        ) = self._create_validated_response(
+            alignment_request,
+            stage_name="spatial text alignment",
+            validator=lambda output: self._validate_two_stage_alignment_output(
+                output,
+                candidate_room_ids=candidate_room_ids,
+            ),
+        )
+        self.last_alignment_request_body = self._clone_json(alignment_request_used)
         self.last_alignment_response_payload = self._clone_json(alignment_payload)
-        parsed = self._parse_output_payload(alignment_payload)
+        self.last_alignment_validation_attempt_count = alignment_attempts
         alignment_top_k = self._alignment_top_k(parsed, candidate_room_ids)
-        alignment_predicted_room_id = alignment_top_k[0]["room_id"] if alignment_top_k else parsed.get("predicted_room_id")
+        alignment_predicted_room_id = alignment_top_k[0]["room_id"]
         evidence = parsed.get("evidence")
         summary = parsed.get("summary")
-        view_0_direction_raw = parsed.get("view_0_allocentric_direction")
-        view_0_direction = (
-            str(view_0_direction_raw).strip().lower()
-            if isinstance(view_0_direction_raw, str)
-            else None
-        )
+        view_0_direction = str(parsed["view_0_allocentric_direction"]).strip().lower()
         direction_headings = {
             "north": 0.0,
             "east": 90.0,
@@ -564,32 +610,29 @@ class SpatialAlignmentRefiner:
             "west": 270.0,
         }
         view_0_heading = float(ordered_views[0]["heading"])
-        offset_deg = (
-            normalize_heading(direction_headings[view_0_direction] - view_0_heading)
-            if view_0_direction in direction_headings
-            else None
-        )
+        offset_deg = normalize_heading(direction_headings[view_0_direction] - view_0_heading)
         stage_total_ms = (time.perf_counter() - stage_started) * 1000.0
         total_vlm_ms = extraction_vlm_ms + alignment_vlm_ms
+        logical_vlm_call_count = extraction_attempts + alignment_attempts
         spatial_timing = {
             "program_module_ms": max(0.0, stage_total_ms - total_vlm_ms),
             "context_extraction_vlm_ms": extraction_vlm_ms,
             "alignment_vlm_ms": alignment_vlm_ms,
             "vlm_response_ms": total_vlm_ms,
             "stage_total_ms": stage_total_ms,
-            "logical_vlm_call_count": 2,
-            "status": "applied" if offset_deg is not None else "invalid_offset",
+            "logical_vlm_call_count": logical_vlm_call_count,
+            "context_extraction_validation_attempt_count": extraction_attempts,
+            "alignment_validation_attempt_count": alignment_attempts,
+            "status": "applied",
         }
         return {
             "applied": True,
-            "logical_vlm_call_count": 2,
+            "logical_vlm_call_count": logical_vlm_call_count,
             "alignment_top_k": alignment_top_k,
             "alignment_predicted_room_id": alignment_predicted_room_id,
             "alignment_confidence": parsed.get("confidence"),
-            "alignment_evidence": [value for value in evidence if isinstance(value, str) and value][:3]
-            if isinstance(evidence, list)
-            else [],
-            "alignment_summary": summary if isinstance(summary, str) else "",
+            "alignment_evidence": [value for value in evidence if isinstance(value, str) and value][:3],
+            "alignment_summary": summary,
             "spatial_timing": spatial_timing,
             "spatial_alignment": {
                 "mode": "text_from_images",
@@ -598,16 +641,14 @@ class SpatialAlignmentRefiner:
                 "view_0_geocentric_heading_deg": view_0_heading,
                 "view_0_allocentric_direction": view_0_direction,
                 "geocentric_to_allocentric_offset_deg": offset_deg,
-                "offset_failure_reason": (
-                    None if offset_deg is not None else "invalid_view_0_allocentric_direction"
-                ),
+                "offset_failure_reason": None,
                 "alignment_top_k": alignment_top_k,
                 "alignment_predicted_room_id": alignment_predicted_room_id,
                 "alignment_confidence": parsed.get("confidence"),
-                "alignment_evidence": [value for value in evidence if isinstance(value, str) and value][:3]
-                if isinstance(evidence, list)
-                else [],
-                "alignment_summary": summary if isinstance(summary, str) else "",
+                "alignment_evidence": [value for value in evidence if isinstance(value, str) and value][:3],
+                "alignment_summary": summary,
+                "context_extraction_validation_attempt_count": extraction_attempts,
+                "alignment_validation_attempt_count": alignment_attempts,
                 "timing": spatial_timing,
             },
             "ego_spatial_context": ego_spatial_context,
@@ -876,7 +917,7 @@ class SpatialAlignmentRefiner:
                     },
                 ]
             )
-        return {
+        request_body = {
             "model": self.model,
             "instructions": build_spatial_context_extraction_instructions(),
             "input": [{"role": "user", "content": content}],
@@ -890,6 +931,9 @@ class SpatialAlignmentRefiner:
                 }
             },
         }
+        if self.context_max_output_tokens is not None:
+            request_body["max_output_tokens"] = self.context_max_output_tokens
+        return request_body
 
     def _format_ego_spatial_context(self, parsed: dict, ordered_views: list[dict]) -> dict:
         raw_views = parsed.get("views")
@@ -1012,7 +1056,7 @@ class SpatialAlignmentRefiner:
         ego_context_text: str,
         ordered_views: list[dict],
     ) -> dict:
-        return {
+        request_body = {
             "model": self.model,
             "instructions": build_spatial_alignment_instructions(),
             "input": build_spatial_alignment_input(
@@ -1030,6 +1074,168 @@ class SpatialAlignmentRefiner:
                 }
             },
         }
+        if self.alignment_max_output_tokens is not None:
+            request_body["max_output_tokens"] = self.alignment_max_output_tokens
+        return request_body
+
+    def _create_validated_response(
+        self,
+        request_body: dict,
+        *,
+        stage_name: str,
+        validator: Callable[[dict], None],
+    ) -> tuple[dict, dict, float, int, dict]:
+        total_vlm_ms = 0.0
+        last_error: ValueError | None = None
+        for attempt in range(1, self.schema_validation_retries + 2):
+            active_request = (
+                request_body
+                if attempt == 1
+                else self._schema_repair_request_body(
+                    request_body,
+                    stage_name=stage_name,
+                    validation_error=last_error,
+                )
+            )
+            started = time.perf_counter()
+            response_payload = self._create_response(active_request)
+            total_vlm_ms += (time.perf_counter() - started) * 1000.0
+            try:
+                parsed = self._parse_output_payload(response_payload)
+                validator(parsed)
+            except ValueError as error:
+                last_error = error
+                if attempt <= self.schema_validation_retries:
+                    continue
+                raise ValueError(
+                    f"{stage_name} output validation failed after {attempt} attempt(s): {error}"
+                ) from error
+            return response_payload, parsed, total_vlm_ms, attempt, active_request
+        raise AssertionError(f"unreachable validation state: {last_error}")
+
+    @staticmethod
+    def _schema_repair_request_body(
+        request_body: dict,
+        *,
+        stage_name: str,
+        validation_error: ValueError | None = None,
+    ) -> dict:
+        repaired = json.loads(json.dumps(request_body))
+        base_instructions = repaired.get("instructions")
+        repair_parts = [f"{SPATIAL_SCHEMA_REPAIR_INSTRUCTIONS} Stage: {stage_name}."]
+        try:
+            schema = repaired["text"]["format"]["schema"]
+            properties = schema["properties"]
+        except (KeyError, TypeError):
+            properties = {}
+        if isinstance(properties, dict) and "room_ranking" in properties:
+            try:
+                room_ids = properties["room_ranking"]["items"]["properties"]["room_id"]["enum"]
+            except (KeyError, TypeError):
+                room_ids = []
+            if isinstance(room_ids, list) and room_ids:
+                repair_parts.append(
+                    f"room_ranking must have exactly {len(room_ids)} items in this room_id order: "
+                    f"{json.dumps(room_ids, ensure_ascii=False)}."
+                )
+        if isinstance(properties, dict) and "views" in properties:
+            try:
+                view_ids = properties["views"]["items"]["properties"]["view_id"]["enum"]
+            except (KeyError, TypeError):
+                view_ids = []
+            if isinstance(view_ids, list) and view_ids:
+                repair_parts.append(
+                    f"views must have exactly {len(view_ids)} items in this view_id order: "
+                    f"{json.dumps(view_ids, ensure_ascii=False)}."
+                )
+        if validation_error is not None:
+            error_text = str(validation_error)
+            if error_text.startswith("Model returned non-JSON output:"):
+                repair_parts.append(
+                    "The previous response was incomplete or invalid JSON, likely because it was too "
+                    "long. Regenerate it from the start and finish the closing braces."
+                )
+            else:
+                repair_parts.append(
+                    "Previous deterministic validator error: " + error_text[:800]
+                )
+        repair = " ".join(repair_parts)
+        repaired["instructions"] = (
+            f"{base_instructions}\n\n{repair}"
+            if isinstance(base_instructions, str) and base_instructions
+            else repair
+        )
+        if "alignment" in stage_name:
+            current_limit = repaired.get("max_output_tokens")
+            if isinstance(current_limit, int) and current_limit > 0:
+                repaired["max_output_tokens"] = max(1024, current_limit)
+        return repaired
+
+    @staticmethod
+    def _validate_context_extraction_output(parsed: dict, *, view_ids: list[str]) -> None:
+        views = parsed.get("views")
+        if not isinstance(views, list):
+            raise ValueError("views must be an array")
+        returned_view_ids: list[str] = []
+        for record in views:
+            if not isinstance(record, dict):
+                raise ValueError("every views item must be an object")
+            view_id = record.get("view_id")
+            returned_view_ids.append(str(view_id))
+            themes = record.get("themes")
+            if not isinstance(themes, list) or len(themes) > 4:
+                raise ValueError("each themes field must be an array with at most four items")
+            for theme in themes:
+                if (
+                    not isinstance(theme, dict)
+                    or not isinstance(theme.get("label"), str)
+                    or not isinstance(theme.get("confidence"), (int, float))
+                ):
+                    raise ValueError("every theme must contain a string label and numeric confidence")
+            if not isinstance(record.get("summary"), str):
+                raise ValueError("every view summary must be a string")
+        if len(returned_view_ids) != len(view_ids) or set(returned_view_ids) != set(view_ids):
+            raise ValueError("views must contain every supplied panorama view exactly once")
+        if not isinstance(parsed.get("summary"), str):
+            raise ValueError("context summary must be a string")
+
+    @staticmethod
+    def _validate_two_stage_alignment_output(
+        parsed: dict,
+        *,
+        candidate_room_ids: list[str],
+    ) -> None:
+        if parsed.get("predicted_room_id") not in candidate_room_ids:
+            raise ValueError("predicted_room_id must be one candidate room")
+        if not isinstance(parsed.get("confidence"), (int, float)):
+            raise ValueError("confidence must be numeric")
+        if parsed.get("view_0_allocentric_direction") not in ALLOCENTRIC_DIRECTIONS:
+            raise ValueError("view_0_allocentric_direction must be cardinal")
+        evidence = parsed.get("evidence")
+        if (
+            not isinstance(evidence, list)
+            or len(evidence) > 6
+            or any(not isinstance(value, str) for value in evidence)
+        ):
+            raise ValueError("evidence must contain at most six strings")
+        ranking = parsed.get("room_ranking")
+        if not isinstance(ranking, list):
+            raise ValueError("room_ranking must be an array")
+        ranked_room_ids: list[str] = []
+        for record in ranking:
+            if (
+                not isinstance(record, dict)
+                or not isinstance(record.get("score"), (int, float))
+            ):
+                raise ValueError("every room_ranking item must contain room_id and numeric score")
+            ranked_room_ids.append(str(record.get("room_id")))
+        if (
+            len(ranked_room_ids) != len(candidate_room_ids)
+            or set(ranked_room_ids) != set(candidate_room_ids)
+        ):
+            raise ValueError("room_ranking must contain every candidate room exactly once")
+        if not isinstance(parsed.get("summary"), str):
+            raise ValueError("alignment summary must be a string")
 
     @staticmethod
     def _relax_json_schema(value: object) -> object:

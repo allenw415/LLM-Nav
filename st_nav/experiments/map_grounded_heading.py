@@ -459,6 +459,7 @@ class MapGroundedHeadingExperiment:
                 default_num_ctx=16384,
             ),
             temperature=0.0,
+            think=model_env.think,
             response_client=response_client,
             max_http_retries=max_http_retries,
         )

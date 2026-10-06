@@ -191,3 +191,4 @@ class ReasoningInput:
     visible_passages: list[JsonDict] = field(default_factory=list)
     spatial_alignment: JsonDict = field(default_factory=dict)
     view_contexts: list[JsonDict] = field(default_factory=list)
+    views: list[RenderedView] = field(default_factory=list)

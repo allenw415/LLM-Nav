@@ -69,13 +69,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--direction-policy",
-        choices=["geometry", "geometry-edge-visit", "llm"],
+        choices=["geometry", "geometry-edge-visit", "llm", "visual-theme"],
         default="geometry",
         help=(
             "Select plain geometry, opt-in geometry with edge-visit cycle avoidance, "
-            "or LLM reasoning."
+            "LLM reasoning, or visual-theme view selection."
         ),
     )
+    parser.add_argument("--direction-cache-dir")
+    parser.add_argument("--direction-max-output-tokens", type=int)
+    parser.add_argument("--direction-schema-validation-retries", type=int, default=1)
     parser.add_argument("--manifest-map-json")
     parser.add_argument(
         "--no-detection-cache",
@@ -674,6 +677,10 @@ def validate_navigation_args(
         parser.error("--waypoint-room-ids requires --target-room-id.")
     if args.localization_interval < 1:
         parser.error("--localization-interval must be at least 1.")
+    if args.direction_max_output_tokens is not None and args.direction_max_output_tokens < 1:
+        parser.error("--direction-max-output-tokens must be positive.")
+    if args.direction_schema_validation_retries < 0:
+        parser.error("--direction-schema-validation-retries must be non-negative.")
     if args.render_missing and not args.render_api_key:
         parser.error("--render-missing requires --render-api-key or GMAPS_API_KEY.")
 
@@ -707,7 +714,20 @@ def main() -> int:
             u_turn_threshold_deg=args.u_turn_threshold_deg,
             history_return_threshold_deg=args.history_return_threshold_deg,
             localization_interval=args.localization_interval,
+            localization_effective_stage=(
+                "visual" if args.direction_policy == "visual-theme" else "spatial"
+            ),
             direction_policy=args.direction_policy,
+            heading_alignment_mode=(
+                "none" if args.direction_policy == "visual-theme" else "fixed"
+            ),
+            direction_cache_dir=(
+                str(resolve_project_path(args.direction_cache_dir))
+                if args.direction_cache_dir
+                else None
+            ),
+            direction_max_output_tokens=args.direction_max_output_tokens,
+            direction_schema_validation_retries=args.direction_schema_validation_retries,
             use_detection_cache=not args.no_detection_cache,
         ),
     )

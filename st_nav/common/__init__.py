@@ -1,4 +1,16 @@
 from .env import ModelEnvironment, load_dotenv, resolve_model_environment, resolve_task_num_ctx
+from .anthropic_batch import (
+    AnthropicBillingPauseError,
+    AnthropicBatchRequestError,
+    AnthropicMessageBatchClient,
+    PersistentAnthropicBatchBroker,
+    atomic_write_batch_checkpoint,
+    normalize_message_batch_result,
+    prepare_message_batch_request,
+    anthropic_billing_pause_reason,
+    serialized_batch_bytes,
+    split_message_batch_requests,
+)
 from .model_client import ModelResponseClient, extract_output_text, parse_json_output, parse_json_text, resolve_api_kind
 from .prompts import (
     ALLOCENTRIC_DIRECTIONS,
@@ -48,6 +60,10 @@ __all__ = [
     "ENTITY_LOCATION_SCOPES",
     "ModelEnvironment",
     "ModelResponseClient",
+    "AnthropicBatchRequestError",
+    "AnthropicBillingPauseError",
+    "AnthropicMessageBatchClient",
+    "PersistentAnthropicBatchBroker",
     "NAVIGATION_TASK_TYPES",
     "Observation",
     "PanoNode",
@@ -62,6 +78,12 @@ __all__ = [
     "VIEW_DETECTION_KINDS",
     "ViewDetection",
     "extract_output_text",
+    "atomic_write_batch_checkpoint",
+    "normalize_message_batch_result",
+    "prepare_message_batch_request",
+    "anthropic_billing_pause_reason",
+    "serialized_batch_bytes",
+    "split_message_batch_requests",
     "parse_json_output",
     "parse_json_text",
     "build_navigation_parse_input",

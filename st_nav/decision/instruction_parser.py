@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 from typing import Any, Callable
 
 from ..common.env import resolve_model_environment, resolve_task_num_ctx
@@ -17,7 +18,20 @@ from ..common.prompts import (
     build_navigation_parse_schema,
 )
 from ..common.room_profiles import visual_profile_anchor_entities
+from ..common.request_cache import (
+    atomic_write_json,
+    cache_entry_path,
+    canonical_json_sha256,
+    exclusive_cache_lock,
+    model_transport_identity,
+    read_json_object,
+    request_fingerprint,
+)
 from ..common.types import ParsedNavigationEntity, TaskSpec
+
+
+QUERY_PARSER_CACHE_NAMESPACE = "navigation_query_parser"
+QUERY_PARSER_CACHE_VERSION = 1
 
 
 class LLMInstructionParser:
@@ -40,6 +54,7 @@ class LLMInstructionParser:
         num_ctx: int | None = None,
         max_theme_lines: int | None = None,
         response_client: Callable[[dict], dict] | None = None,
+        cache_dir: str | Path | None = None,
     ):
         settings = resolve_model_environment(
             default_model="gpt-5-mini",
@@ -64,8 +79,12 @@ class LLMInstructionParser:
         )
         self.response_client = response_client
         self.max_theme_lines = max_theme_lines
+        self.cache_dir = Path(cache_dir).resolve() if cache_dir is not None else None
         self.last_request_body: dict | None = None
         self.last_response_payload: dict | None = None
+        self.last_cache_hit: bool | None = None
+        self.last_cache_path: str | None = None
+        self.last_cache_fingerprint: str | None = None
         self.model_client = ModelResponseClient(
             provider=settings.provider,
             api_key=self.api_key,
@@ -74,19 +93,107 @@ class LLMInstructionParser:
             request_timeout=self.request_timeout,
             num_ctx=self.num_ctx,
             temperature=settings.temperature,
+            think=settings.think,
             response_client=self.response_client,
         )
 
     def parse(self, instruction: str) -> TaskSpec:
-        if not self.model_client.is_configured():
-            raise RuntimeError("Missing model API configuration for LLM-based instruction parsing.")
-
         request_body = self._build_request_body(instruction)
         self.last_request_body = self._clone_json(request_body)
-        payload = self._create_response(request_body)
-        self.last_response_payload = self._clone_json(payload)
-        parsed = self._parse_output_payload(payload)
-        return self._task_from_llm_parse(instruction, parsed)
+        self.last_cache_hit = None
+        self.last_cache_path = None
+        self.last_cache_fingerprint = None
+
+        if self.cache_dir is None:
+            if not self.model_client.is_configured():
+                raise RuntimeError(
+                    "Missing model API configuration for LLM-based instruction parsing."
+                )
+            payload = self._create_response(request_body)
+            self.last_response_payload = self._clone_json(payload)
+            parsed = self._parse_output_payload(payload)
+            return self._task_from_llm_parse(instruction, parsed)
+
+        transport = model_transport_identity(
+            model=self.model,
+            model_client=self.model_client,
+        )
+        fingerprint = request_fingerprint(
+            namespace=QUERY_PARSER_CACHE_NAMESPACE,
+            cache_version=QUERY_PARSER_CACHE_VERSION,
+            request_body=request_body,
+            transport_identity=transport,
+        )
+        cache_path = cache_entry_path(self.cache_dir, fingerprint)
+        self.last_cache_path = str(cache_path)
+        self.last_cache_fingerprint = fingerprint
+
+        with exclusive_cache_lock(cache_path):
+            cached_payload = self._read_cached_response(
+                cache_path,
+                fingerprint=fingerprint,
+                transport=transport,
+            )
+            if cached_payload is not None:
+                try:
+                    parsed = self._parse_output_payload(cached_payload)
+                    task = self._task_from_llm_parse(instruction, parsed)
+                except (TypeError, ValueError):
+                    cached_payload = None
+                else:
+                    self.last_cache_hit = True
+                    self.last_response_payload = self._clone_json(cached_payload)
+                    self.model_client.last_call_wall_ms = 0.0
+                    self.model_client.last_call_succeeded = True
+                    return task
+
+            if not self.model_client.is_configured():
+                raise RuntimeError(
+                    "Missing model API configuration for LLM-based instruction parsing."
+                )
+            self.last_cache_hit = False
+            payload = self._create_response(request_body)
+            parsed = self._parse_output_payload(payload)
+            task = self._task_from_llm_parse(instruction, parsed)
+            self.last_response_payload = self._clone_json(payload)
+            self.last_cache_hit = False
+            atomic_write_json(
+                cache_path,
+                {
+                    "cache_schema": QUERY_PARSER_CACHE_NAMESPACE,
+                    "cache_version": QUERY_PARSER_CACHE_VERSION,
+                    "fingerprint": fingerprint,
+                    "transport": transport,
+                    "response_sha256": canonical_json_sha256(payload),
+                    "response": self._clone_json(payload),
+                },
+            )
+            return task
+
+    @staticmethod
+    def _read_cached_response(
+        cache_path: Path,
+        *,
+        fingerprint: str,
+        transport: dict[str, object],
+    ) -> dict | None:
+        entry = read_json_object(cache_path)
+        if entry is None:
+            return None
+        if entry.get("cache_schema") != QUERY_PARSER_CACHE_NAMESPACE:
+            return None
+        if entry.get("cache_version") != QUERY_PARSER_CACHE_VERSION:
+            return None
+        if entry.get("fingerprint") != fingerprint:
+            return None
+        if entry.get("transport") != transport:
+            return None
+        response = entry.get("response")
+        if not isinstance(response, dict):
+            return None
+        if entry.get("response_sha256") != canonical_json_sha256(response):
+            return None
+        return response
 
     def _build_request_body(self, instruction: str) -> dict:
         room_ids = list(self.room_graph)

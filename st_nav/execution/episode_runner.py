@@ -404,6 +404,7 @@ class EpisodeRunner:
                 view_contexts=view_contexts,
                 spatial_alignment=observation.metadata.get("spatial_alignment"),
                 subgoal_room_id=subgoal_room_id,
+                views=observation.views,
             )
             policy_total_ms = (time.perf_counter() - module_started) * 1000.0
             policy_client = getattr(self.policy, "model_client", None)
@@ -571,6 +572,7 @@ class EpisodeRunner:
         view_contexts,
         spatial_alignment,
         subgoal_room_id: str | None,
+        views,
     ) -> PolicyOutput:
         reasoning_input = ReasoningInput(
             task=task,
@@ -583,6 +585,7 @@ class EpisodeRunner:
             visible_passages=list(visible_passages or []),
             spatial_alignment=dict(spatial_alignment or {}),
             view_contexts=list(view_contexts or []),
+            views=list(views or []),
         )
         if hasattr(self.policy, "choose_next_action"):
             return self.policy.choose_next_action(reasoning_input)
@@ -1044,6 +1047,9 @@ class EpisodeRunner:
             "visual_cache_hit": metadata.get("visual_cache_hit"),
             "visual_cache_version": metadata.get("visual_cache_version"),
             "visual_cache_path": metadata.get("visual_cache_path"),
+            "visual_cache_fingerprint": metadata.get(
+                "visual_cache_fingerprint"
+            ),
             "visual_room_scores": EpisodeRunner._clone_json(metadata.get("visual_room_scores")),
             "visual_room_belief": EpisodeRunner._clone_json(metadata.get("visual_room_belief")),
             "visual_predicted_room_id": metadata.get("visual_predicted_room_id"),

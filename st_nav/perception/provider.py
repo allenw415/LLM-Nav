@@ -18,15 +18,31 @@ class ManifestPerceptionProvider:
         room_graph: dict[str, dict] | None = None,
         grounding_index=None,
         use_detection_files: bool = True,
+        model: str | None = None,
+        api_key: str | None = None,
+        api_base: str | None = None,
+        api_kind: str | None = None,
+        request_timeout: float | None = None,
+        cache_dir: str | Path | None = None,
+        schema_validation_retries: int = 0,
+        max_output_tokens: int | None = None,
     ):
         self.pipeline = PerceptionPipeline(
             pano_graph=pano_graph,
             room_graph=room_graph,
             grounding_index=grounding_index,
             detector=ViewDetector(
+                model=model,
+                api_key=api_key,
+                api_base=api_base,
+                api_kind=api_kind,
+                request_timeout=request_timeout,
                 room_graph=room_graph,
                 grounding_index=grounding_index,
                 use_detection_files=use_detection_files,
+                cache_dir=cache_dir,
+                schema_validation_retries=schema_validation_retries,
+                max_output_tokens=max_output_tokens,
             ),
         )
 

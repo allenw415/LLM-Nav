@@ -302,6 +302,7 @@ class LLMActionPolicy:
             request_timeout=self.request_timeout,
             num_ctx=settings.num_ctx,
             temperature=settings.temperature,
+            think=settings.think,
             response_client=self.response_client,
         )
         self.fallback_policy = fallback_policy or GreedyActionPolicy()

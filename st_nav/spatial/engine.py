@@ -21,9 +21,9 @@ class SpatialEngine:
         heading_alignment_mode: str = "fixed",
         fixed_heading_offset_deg: float = 30.0,
     ):
-        if heading_alignment_mode not in {"fixed", "initial-spatial"}:
+        if heading_alignment_mode not in {"none", "fixed", "initial-spatial"}:
             raise ValueError(
-                "heading_alignment_mode must be 'fixed' or 'initial-spatial'."
+                "heading_alignment_mode must be 'none', 'fixed', or 'initial-spatial'."
             )
         self.room_graph = room_graph
         self.pano_graph = pano_graph
@@ -54,6 +54,9 @@ class SpatialEngine:
         if self.heading_alignment_mode == "fixed":
             state.geocentric_to_allocentric_offset_deg = self.fixed_heading_offset_deg
             state.heading_alignment_status = "fixed"
+        elif self.heading_alignment_mode == "none":
+            state.geocentric_to_allocentric_offset_deg = None
+            state.heading_alignment_status = "disabled"
         else:
             state.geocentric_to_allocentric_offset_deg = None
             state.heading_alignment_status = "pending"
@@ -67,7 +70,7 @@ class SpatialEngine:
         step_index: int,
     ) -> bool:
         """Lock one episode-level heading offset from the first spatial alignment."""
-        if self.heading_alignment_mode == "fixed":
+        if self.heading_alignment_mode in {"none", "fixed"}:
             return True
         if state.geocentric_to_allocentric_offset_deg is not None:
             return True

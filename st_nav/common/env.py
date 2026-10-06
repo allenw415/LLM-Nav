@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 DEFAULT_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
+DEFAULT_ANTHROPIC_API_BASE = "https://api.anthropic.com/v1"
 
 
 def load_dotenv(dotenv_path: str | Path) -> None:
@@ -39,6 +40,7 @@ class ModelEnvironment:
     request_timeout: float | None = None
     num_ctx: int | None = None
     temperature: float | None = None
+    think: bool | str | None = None
     active_profile: str | None = None
 
 
@@ -65,22 +67,32 @@ def resolve_model_environment(
         return None
 
     provider = lookup("MODEL_PROVIDER")
-    api_key = lookup("API_KEY", "OPENAI_API_KEY")
+    if provider == "anthropic":
+        api_key = lookup("API_KEY", "ANTHROPIC_API_KEY")
+    else:
+        api_key = lookup("API_KEY", "OPENAI_API_KEY")
     if api_key is None and provider in {"gemini", "gemini_api", "google_gemma_api"}:
         api_key = lookup("API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY")
     api_base = lookup("API_BASE")
     if api_base is None and provider in {"gemini", "gemini_api", "google_gemma_api"}:
         api_base = DEFAULT_GEMINI_API_BASE
+    if api_base is None and provider == "anthropic":
+        api_base = DEFAULT_ANTHROPIC_API_BASE
+
+    api_kind = lookup("API_KIND")
+    if api_kind is None and provider == "anthropic":
+        api_kind = "anthropic_messages"
 
     return ModelEnvironment(
         provider=provider,
         model_name=lookup("MODEL_NAME") or default_model,
         api_key=api_key,
         api_base=api_base or default_api_base,
-        api_kind=lookup("API_KIND") or default_api_kind,
+        api_kind=api_kind or default_api_kind,
         request_timeout=_parse_float(lookup("REQUEST_TIMEOUT")),
         num_ctx=_parse_int(lookup("NUM_CTX")),
         temperature=_parse_float(lookup("TEMPERATURE")),
+        think=_parse_think(lookup("THINK")),
         active_profile=active_profile or None,
     )
 
@@ -132,3 +144,16 @@ def _parse_int(value: str | None) -> int | None:
         return int(value)
     except ValueError:
         return None
+
+
+def _parse_think(value: str | None) -> bool | str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "on"}:
+        return True
+    if normalized in {"false", "0", "no", "off"}:
+        return False
+    if normalized in {"low", "medium", "high"}:
+        return normalized
+    return None

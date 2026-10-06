@@ -41,6 +41,33 @@ python3 tools/evaluation/localization/eval_localization.py --samples-per-room 5 
 
 Folder: `tools/evaluation/navigation/`
 
+### Claude Sonnet 5 preflight
+
+Create an Anthropic API key, then store it in the repository `.env` without
+passing it on the command line:
+
+```dotenv
+ANTHROPIC_API_KEY=your-key-here
+```
+
+Validate request conversion locally without making a paid API call:
+
+```bash
+python3 tools/evaluation/navigation/preflight_claude_sonnet5.py --mode dry-run
+```
+
+After the key is configured, validate native structured output with one normal
+Messages request, then validate Message Batches separately:
+
+```bash
+python3 tools/evaluation/navigation/preflight_claude_sonnet5.py --mode messages
+python3 tools/evaluation/navigation/preflight_claude_sonnet5.py --mode batch
+```
+
+The batch preflight stores only secret-free status metadata under
+`outputs/navigation_evaluation/claude_sonnet5_preflight/`. It does not print or
+write the API key.
+
 Synchronize the benchmark dataset and the existing floor-0 render cache. The command is read-only unless `--apply` is present:
 
 ```bash

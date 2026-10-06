@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -14,9 +15,20 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import NavigationPipelineConfig, build_navigation_pipeline, load_dotenv, resolve_model_environment
+from st_nav import (
+    NavigationPipelineConfig,
+    build_navigation_pipeline,
+    load_dotenv,
+    resolve_model_environment,
+    resolve_task_num_ctx,
+)
 from st_nav.cli._common import load_normalized_artifacts
-from st_nav.common.model_client import MODEL_TELEMETRY_COUNTER_KEYS
+from st_nav.common.model_client import MAX_HTTP_RETRIES, MODEL_TELEMETRY_COUNTER_KEYS
+from st_nav.decision.instruction_parser import QUERY_PARSER_CACHE_VERSION
+from st_nav.perception.detector import VISUAL_CACHE_VERSION
+from st_nav.decision.visual_theme_action_policy import (
+    VISUAL_THEME_DIRECTION_CACHE_VERSION,
+)
 from st_nav.evaluation import (
     build_cache_inventory,
     compute_navigation_spl_metrics,
@@ -86,6 +98,19 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--llm-api-kind", default=MODEL_ENV.api_kind)
     parser.add_argument("--llm-api-base", default=MODEL_ENV.api_base)
     parser.add_argument("--llm-timeout", type=float, default=MODEL_ENV.request_timeout or 300.0)
+    parser.add_argument("--max-http-retries", type=int, default=MAX_HTTP_RETRIES)
+    parser.add_argument("--visual-max-output-tokens", type=int)
+    parser.add_argument("--visual-schema-validation-retries", type=int, default=0)
+    parser.add_argument("--direction-max-output-tokens", type=int)
+    parser.add_argument("--direction-schema-validation-retries", type=int, default=1)
+    parser.add_argument("--spatial-schema-validation-retries", type=int, default=0)
+    parser.add_argument("--spatial-context-max-output-tokens", type=int)
+    parser.add_argument("--spatial-alignment-max-output-tokens", type=int)
+    parser.add_argument(
+        "--allow-infrastructure-resume",
+        action="store_true",
+        help="Allow only timeout/retry config changes while resuming preserved results.",
+    )
     parser.add_argument("--localization-interval", type=int, default=3)
     parser.add_argument(
         "--localization-effective-stage",
@@ -99,7 +124,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--start-heading", type=float, default=0.0)
     parser.add_argument(
         "--heading-alignment-mode",
-        choices=["fixed", "initial-spatial"],
+        choices=["none", "fixed", "initial-spatial"],
         default="fixed",
     )
     parser.add_argument("--fixed-heading-offset-deg", type=float, default=30.0)
@@ -110,11 +135,41 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--direction-policy",
-        choices=["geometry", "geometry-edge-visit"],
+        choices=["geometry", "geometry-edge-visit", "visual-theme"],
         default="geometry",
-        help="Use the unchanged geometry baseline or opt into edge-visit cycle avoidance.",
+        help=(
+            "Use geometry, geometry with edge-visit memory, or the visual-theme "
+            "view-selection baseline without trajectory memory."
+        ),
     )
     parser.add_argument("--no-detection-cache", action="store_true")
+    parser.add_argument("--query-cache-dir")
+    parser.add_argument("--visual-cache-dir")
+    parser.add_argument("--direction-cache-dir")
+    parser.add_argument(
+        "--retry-errors",
+        action="store_true",
+        help="Retry existing stop_reason=error records and replace them atomically.",
+    )
+    parser.add_argument(
+        "--retry-stop-reason",
+        action="append",
+        choices=["stop_no_manifest"],
+        default=[],
+        help=(
+            "Retry an existing terminal record with this stop reason and replace it "
+            "atomically. May be repeated."
+        ),
+    )
+    parser.add_argument(
+        "--max-attempts-per-case",
+        type=int,
+        default=3,
+        help=(
+            "Maximum recorded attempts for a case selected by --retry-errors or "
+            "--retry-stop-reason."
+        ),
+    )
     return parser
 
 
@@ -134,8 +189,73 @@ def _atomic_write_json(path: Path, payload: object) -> None:
     os.replace(temporary_path, path)
 
 
+def _atomic_write_jsonl(path: Path, records: list[dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as stream:
+        for record in records:
+            stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        temporary_path = Path(stream.name)
+    os.replace(temporary_path, path)
+
+
 def _dataset_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _infrastructure_resume_compatible(existing: dict, current: dict) -> bool:
+    def normalized(value: dict) -> dict:
+        result = json.loads(json.dumps(value))
+        result.pop("schema_version", None)
+        llm = result.get("llm")
+        if isinstance(llm, dict):
+            llm.pop("timeout", None)
+            llm.pop("max_http_retries", None)
+        result.pop("spatial_alignment_reliability", None)
+        request_cache = result.get("request_cache")
+        if isinstance(request_cache, dict):
+            visual = request_cache.get("visual_localization")
+            if isinstance(visual, dict):
+                visual.pop("schema_validation_retries", None)
+                visual.pop("failure_diagnostics", None)
+        render = result.get("render")
+        if isinstance(render, dict):
+            # A repair run may lazily fill a previously missing render while keeping
+            # every model and navigation setting unchanged.
+            render.pop("render_missing", None)
+        return result
+
+    return normalized(existing) == normalized(current)
+
+
+def _retryable_stop_reasons(args: argparse.Namespace) -> set[str]:
+    reasons = set(getattr(args, "retry_stop_reason", []) or [])
+    if getattr(args, "retry_errors", False):
+        reasons.add("error")
+    return reasons
+
+
+def _record_config_change(path: Path, *, previous: dict, current: dict) -> None:
+    records = load_jsonl(path) if path.is_file() else []
+    records.append(
+        {
+            "schema": "llm_nav_batch_config_change",
+            "schema_version": 1,
+            "changed_at_utc": datetime.now(timezone.utc).isoformat(),
+            "reason": "approved_reliability_adjustment",
+            "previous_config": previous,
+            "current_config": current,
+        }
+    )
+    _atomic_write_jsonl(path, records)
 
 
 def _validate_tests(tests: list[dict], *, floor: str, pano_graph: dict[str, dict]) -> None:
@@ -541,7 +661,26 @@ def _error_result(
 
 
 def _read_existing_results(path: Path) -> list[dict]:
-    return load_jsonl(path) if path.is_file() else []
+    records = load_jsonl(path) if path.is_file() else []
+    seen: set[str] = set()
+    for record in records:
+        test_id = record.get("test_id")
+        if not isinstance(test_id, str) or not test_id:
+            raise ValueError(f"Existing result has no test_id: {path}")
+        if test_id in seen:
+            raise ValueError(f"Duplicate existing result for {test_id}: {path}")
+        seen.add(test_id)
+    return records
+
+
+def _query_cache_metadata(pipeline) -> dict:
+    parser = pipeline.source_resolution_workflow.instruction_parser
+    return {
+        "hit": getattr(parser, "last_cache_hit", None),
+        "version": QUERY_PARSER_CACHE_VERSION,
+        "path": getattr(parser, "last_cache_path", None),
+        "fingerprint": getattr(parser, "last_cache_fingerprint", None),
+    }
 
 
 def _write_summary(path: Path, *, results: list[dict], expected_case_count: int) -> None:
@@ -559,11 +698,33 @@ def main() -> int:
         parser.error("--localization-interval must be at least 1.")
     if args.limit is not None and args.limit < 1:
         parser.error("--limit must be at least 1.")
+    if args.max_attempts_per_case < 1:
+        parser.error("--max-attempts-per-case must be at least 1.")
+    if args.max_http_retries < 1:
+        parser.error("--max-http-retries must be at least 1.")
+    if args.visual_max_output_tokens is not None and args.visual_max_output_tokens < 1:
+        parser.error("--visual-max-output-tokens must be positive.")
+    if args.visual_schema_validation_retries < 0:
+        parser.error("--visual-schema-validation-retries must be non-negative.")
+    if args.direction_max_output_tokens is not None and args.direction_max_output_tokens < 1:
+        parser.error("--direction-max-output-tokens must be positive.")
+    if args.direction_schema_validation_retries < 0:
+        parser.error("--direction-schema-validation-retries must be non-negative.")
+    if args.spatial_schema_validation_retries < 0:
+        parser.error("--spatial-schema-validation-retries must be non-negative.")
+    if args.spatial_context_max_output_tokens is not None and args.spatial_context_max_output_tokens < 1:
+        parser.error("--spatial-context-max-output-tokens must be positive.")
+    if args.spatial_alignment_max_output_tokens is not None and args.spatial_alignment_max_output_tokens < 1:
+        parser.error("--spatial-alignment-max-output-tokens must be positive.")
+    os.environ["ST_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
 
     test_set_path = resolve(args.test_set)
     output_dir = resolve(args.output_dir)
     render_root = resolve(args.render_output_dir)
     artifacts_dir = resolve(args.artifacts_dir)
+    query_cache_dir = resolve(args.query_cache_dir) if args.query_cache_dir else None
+    visual_cache_dir = resolve(args.visual_cache_dir) if args.visual_cache_dir else None
+    direction_cache_dir = resolve(args.direction_cache_dir) if args.direction_cache_dir else None
     tests = load_jsonl(test_set_path)
     if args.test_id:
         requested = set(args.test_id)
@@ -615,7 +776,7 @@ def main() -> int:
     direction_policy = getattr(args, "direction_policy", "geometry")
     config = {
         "schema": "llm_nav_floor0_batch_config",
-        "schema_version": 6,
+        "schema_version": 11,
         "test_set": str(test_set_path),
         "dataset_sha256": _dataset_digest(test_set_path),
         "expected_case_count": len(tests),
@@ -631,8 +792,16 @@ def main() -> int:
             "force_initial_visual_refresh": bool(
                 args.force_initial_visual_refresh
             ),
-            "offset_write_policy": "step_0_once_then_locked",
-            "initial_failure_policy": "stop_without_fixed_offset_fallback",
+            "offset_write_policy": (
+                "disabled"
+                if args.heading_alignment_mode == "none"
+                else "step_0_once_then_locked"
+            ),
+            "initial_failure_policy": (
+                "not_applicable"
+                if args.heading_alignment_mode == "none"
+                else "stop_without_fixed_offset_fallback"
+            ),
         },
         "step_budget_formula": "min(300, max(50, ceil(3 * pano_step_count)))",
         "evaluation_metrics": {
@@ -656,10 +825,77 @@ def main() -> int:
             "candidate_theme_fov": None,
         },
         "llm": {
+            "provider": MODEL_ENV.provider,
             "model": args.llm_model,
             "api_kind": args.llm_api_kind,
             "api_base": args.llm_api_base,
             "timeout": args.llm_timeout,
+            "max_http_retries": args.max_http_retries,
+            "temperature": MODEL_ENV.temperature,
+            "think": MODEL_ENV.think,
+            "num_ctx": {
+                "query_parser": resolve_task_num_ctx(
+                    "parse_instruction",
+                    fallback_num_ctx=MODEL_ENV.num_ctx,
+                    default_num_ctx=8192,
+                ),
+                "visual_localization": MODEL_ENV.num_ctx,
+                "direction_selection": MODEL_ENV.num_ctx,
+                "spatial_alignment": resolve_task_num_ctx(
+                    "localization",
+                    fallback_num_ctx=MODEL_ENV.num_ctx,
+                    default_num_ctx=16384,
+                ),
+            },
+        },
+        "spatial_alignment_reliability": {
+            "schema_validation_retries": args.spatial_schema_validation_retries,
+            "context_max_output_tokens": args.spatial_context_max_output_tokens,
+            "alignment_max_output_tokens": args.spatial_alignment_max_output_tokens,
+            "context_schema": "exactly_one_record_per_view_and_at_most_four_themes",
+            "alignment_schema": "exactly_one_score_per_candidate_and_at_most_six_evidence_items",
+            "timeout_retry_policy": "case_level_only",
+        },
+        "request_cache": {
+            "query_parser": {
+                "enabled": query_cache_dir is not None,
+                "root": str(query_cache_dir) if query_cache_dir is not None else None,
+                "cache_version": QUERY_PARSER_CACHE_VERSION,
+            },
+            "visual_localization": {
+                "enabled": visual_cache_dir is not None and not args.no_detection_cache,
+                "root": str(visual_cache_dir) if visual_cache_dir is not None else None,
+                "cache_version": VISUAL_CACHE_VERSION,
+                "legacy_sibling_cache_reuse": visual_cache_dir is None,
+                "schema_validation_retries": args.visual_schema_validation_retries,
+                "max_output_tokens": args.visual_max_output_tokens,
+                "failure_diagnostics": "separate_atomic_redacted_request_and_raw_response",
+            },
+            "direction_selection": {
+                "enabled": (
+                    direction_policy == "visual-theme"
+                    and direction_cache_dir is not None
+                ),
+                "root": str(direction_cache_dir) if direction_cache_dir is not None else None,
+                "cache_version": VISUAL_THEME_DIRECTION_CACHE_VERSION,
+                "schema_validation_retries": args.direction_schema_validation_retries,
+                "max_output_tokens": args.direction_max_output_tokens,
+                "input_contract": "subgoal_visual_profile_plus_neutral_view_ids_only",
+                "trajectory_memory": (
+                    "disabled" if direction_policy == "visual-theme" else "not_applicable"
+                ),
+            },
+            "fingerprint_inputs": [
+                "request_body",
+                "provider",
+                "api_base",
+                "api_kind",
+                "model",
+                "num_ctx",
+                "temperature",
+                "think",
+            ],
+            "writes": "validated_responses_only_atomic_with_per_key_file_lock",
         },
         "model_call_telemetry": {
             "enabled": True,
@@ -677,7 +913,7 @@ def main() -> int:
             ),
             "spatial_fallback": "bayesian_when_alignment_not_applied",
             "visual_cache_enabled": not args.no_detection_cache,
-            "cache_validation": "schema_and_candidate_room_ids_without_model_prompt_fingerprint",
+            "cache_validation": "request_and_transport_sha256_plus_validated_schema",
         },
     }
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -685,17 +921,47 @@ def main() -> int:
     if config_path.is_file():
         existing_config = json.loads(config_path.read_text(encoding="utf-8"))
         if existing_config != config:
-            raise RuntimeError(
-                f"Existing config differs from this run: {config_path}. Use a new --output-dir."
-            )
+            if (
+                args.allow_infrastructure_resume
+                and _infrastructure_resume_compatible(existing_config, config)
+            ):
+                _record_config_change(
+                    output_dir / "config_history.jsonl",
+                    previous=existing_config,
+                    current=config,
+                )
+                _atomic_write_json(config_path, config)
+            else:
+                raise RuntimeError(
+                    f"Existing config differs from this run: {config_path}. Use a new --output-dir."
+                )
     else:
         _atomic_write_json(config_path, config)
 
     results_path = output_dir / "results.jsonl"
+    attempts_path = output_dir / "attempts.jsonl"
     summary_path = output_dir / "summary.json"
     existing_results = _read_existing_results(results_path)
-    completed_ids = {record.get("test_id") for record in existing_results}
-    pending_tests = [test for test in tests if test["test_id"] not in completed_ids]
+    existing_by_id = {record["test_id"]: record for record in existing_results}
+    retryable_stop_reasons = _retryable_stop_reasons(args)
+    selected_ids = {test["test_id"] for test in tests}
+    unexpected_ids = set(existing_by_id) - selected_ids
+    if unexpected_ids:
+        raise RuntimeError(
+            f"Existing results contain IDs outside this shard: {sorted(unexpected_ids)}"
+        )
+    pending_tests = []
+    for test in tests:
+        existing = existing_by_id.get(test["test_id"])
+        if existing is None:
+            pending_tests.append(test)
+            continue
+        previous_attempt = int(existing.get("attempt_number") or 1)
+        if (
+            existing.get("stop_reason") in retryable_stop_reasons
+            and previous_attempt < args.max_attempts_per_case
+        ):
+            pending_tests.append(test)
     if args.limit is not None:
         pending_tests = pending_tests[: args.limit]
 
@@ -718,6 +984,18 @@ def main() -> int:
             fixed_heading_offset_deg=args.fixed_heading_offset_deg,
             force_initial_visual_refresh=bool(args.force_initial_visual_refresh),
             use_detection_cache=not args.no_detection_cache,
+            query_cache_dir=(str(query_cache_dir) if query_cache_dir is not None else None),
+            visual_cache_dir=(str(visual_cache_dir) if visual_cache_dir is not None else None),
+            visual_max_output_tokens=args.visual_max_output_tokens,
+            visual_schema_validation_retries=args.visual_schema_validation_retries,
+            direction_cache_dir=(
+                str(direction_cache_dir) if direction_cache_dir is not None else None
+            ),
+            direction_max_output_tokens=args.direction_max_output_tokens,
+            direction_schema_validation_retries=args.direction_schema_validation_retries,
+            spatial_schema_validation_retries=args.spatial_schema_validation_retries,
+            spatial_context_max_output_tokens=args.spatial_context_max_output_tokens,
+            spatial_alignment_max_output_tokens=args.spatial_alignment_max_output_tokens,
             renderer_seed=args.seed,
             render_metadata_preflight=True,
         ),
@@ -726,12 +1004,17 @@ def main() -> int:
     model_clients = _pipeline_model_clients(pipeline)
 
     all_results = list(existing_results)
-    with results_path.open("a", encoding="utf-8") as result_stream:
+    result_indexes = {
+        record["test_id"]: index for index, record in enumerate(all_results)
+    }
+    with attempts_path.open("a", encoding="utf-8") as attempt_stream:
         for position, test in enumerate(pending_tests, start=1):
             print(
                 f"[start {position}/{len(pending_tests)}] {test['test_id']}",
                 flush=True,
             )
+            prior_record = existing_by_id.get(test["test_id"])
+            attempt_number = int(prior_record.get("attempt_number") or 1) + 1 if prior_record else 1
             step_budget = compute_step_budget(test["pano_step_count"])
             events = BatchProgress()
             model_calls_before = _model_telemetry_snapshot(model_clients)
@@ -776,10 +1059,28 @@ def main() -> int:
                     events=events,
                     model_calls=_model_telemetry_delta(model_clients, model_calls_before),
                 )
-            result_stream.write(json.dumps(record, ensure_ascii=False) + "\n")
-            result_stream.flush()
-            os.fsync(result_stream.fileno())
-            all_results.append(record)
+            record["attempt_number"] = attempt_number
+            record["infrastructure"] = {
+                "llm_timeout_seconds": args.llm_timeout,
+                "max_http_retries": args.max_http_retries,
+            }
+            record["reliability"] = {
+                "visual_schema_validation_retries": args.visual_schema_validation_retries,
+                "direction_schema_validation_retries": args.direction_schema_validation_retries,
+            }
+            record["query_cache"] = _query_cache_metadata(pipeline)
+            attempt_stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+            attempt_stream.flush()
+            os.fsync(attempt_stream.fileno())
+
+            existing_index = result_indexes.get(record["test_id"])
+            if existing_index is None:
+                result_indexes[record["test_id"]] = len(all_results)
+                all_results.append(record)
+            else:
+                all_results[existing_index] = record
+            existing_by_id[record["test_id"]] = record
+            _atomic_write_jsonl(results_path, all_results)
             _write_summary(
                 summary_path,
                 results=all_results,
@@ -787,7 +1088,8 @@ def main() -> int:
             )
             print(
                 f"[{position}/{len(pending_tests)}] {record['test_id']} "
-                f"success={record['success']} steps={record['movement_steps']}/{step_budget} "
+                f"attempt={attempt_number} success={record['success']} "
+                f"steps={record['movement_steps']}/{step_budget} "
                 f"new_images={record['render']['new_image_requests']}",
                 flush=True,
             )

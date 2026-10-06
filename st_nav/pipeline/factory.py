@@ -8,6 +8,7 @@ from ..decision import (
     GreedyActionPolicy,
     LLMActionPolicy,
     LLMInstructionParser,
+    VisualThemeActionPolicy,
 )
 from ..execution import EpisodeRunner
 from ..perception import ManifestPerceptionProvider, PanoramaRenderer
@@ -42,6 +43,16 @@ class NavigationPipelineConfig:
     force_initial_visual_refresh: bool = False
     stop_on_initial_alignment_failure: bool = True
     use_detection_cache: bool = True
+    query_cache_dir: str | None = None
+    visual_cache_dir: str | None = None
+    visual_max_output_tokens: int | None = None
+    visual_schema_validation_retries: int = 0
+    direction_cache_dir: str | None = None
+    direction_max_output_tokens: int | None = None
+    direction_schema_validation_retries: int = 1
+    spatial_schema_validation_retries: int = 0
+    spatial_context_max_output_tokens: int | None = None
+    spatial_alignment_max_output_tokens: int | None = None
     renderer_seed: int | None = None
     render_metadata_preflight: bool = True
 
@@ -55,18 +66,46 @@ def build_navigation_pipeline(
     config: NavigationPipelineConfig | None = None,
 ) -> NavigationPipeline:
     config = config or NavigationPipelineConfig()
-    if config.direction_policy not in {"geometry", "geometry-edge-visit", "llm"}:
+    if config.direction_policy not in {
+        "geometry",
+        "geometry-edge-visit",
+        "llm",
+        "visual-theme",
+    }:
         raise ValueError(
-            "direction_policy must be 'geometry', 'geometry-edge-visit', or 'llm'."
+            "direction_policy must be 'geometry', 'geometry-edge-visit', 'llm', or 'visual-theme'."
         )
-    if config.heading_alignment_mode not in {"fixed", "initial-spatial"}:
+    if config.heading_alignment_mode not in {"none", "fixed", "initial-spatial"}:
         raise ValueError(
-            "heading_alignment_mode must be 'fixed' or 'initial-spatial'."
+            "heading_alignment_mode must be 'none', 'fixed', or 'initial-spatial'."
         )
     if config.localization_effective_stage not in {"visual", "bayesian", "spatial"}:
         raise ValueError(
             "localization_effective_stage must be 'visual', 'bayesian', or 'spatial'."
         )
+    if config.direction_policy == "visual-theme":
+        if config.heading_alignment_mode != "none":
+            raise ValueError(
+                "visual-theme direction_policy requires heading_alignment_mode='none'."
+            )
+        if config.localization_effective_stage != "visual":
+            raise ValueError(
+                "visual-theme direction_policy requires localization_effective_stage='visual'."
+            )
+    if config.visual_schema_validation_retries < 0:
+        raise ValueError("visual_schema_validation_retries must be non-negative.")
+    if config.direction_schema_validation_retries < 0:
+        raise ValueError("direction_schema_validation_retries must be non-negative.")
+    if config.spatial_schema_validation_retries < 0:
+        raise ValueError("spatial_schema_validation_retries must be non-negative.")
+    for name, value in (
+        ("visual_max_output_tokens", config.visual_max_output_tokens),
+        ("direction_max_output_tokens", config.direction_max_output_tokens),
+        ("spatial_context_max_output_tokens", config.spatial_context_max_output_tokens),
+        ("spatial_alignment_max_output_tokens", config.spatial_alignment_max_output_tokens),
+    ):
+        if value is not None and value < 1:
+            raise ValueError(f"{name} must be positive when set.")
     grounding_index = GroundingIndex(
         grounding_payload or {},
         pano_to_room=pano_room_grounding or {},
@@ -78,6 +117,7 @@ def build_navigation_pipeline(
         api_base=config.llm_api_base,
         api_kind=config.llm_api_kind,
         request_timeout=config.llm_timeout,
+        cache_dir=config.query_cache_dir,
     )
     spatial_engine = SpatialEngine(
         room_graph=room_graph,
@@ -101,7 +141,7 @@ def build_navigation_pipeline(
             u_turn_threshold_deg=config.u_turn_threshold_deg,
             history_return_threshold_deg=config.history_return_threshold_deg,
         )
-    else:
+    elif config.direction_policy == "llm":
         direction_policy = LLMActionPolicy(
             model=config.llm_model,
             api_key=config.llm_api_key,
@@ -112,6 +152,20 @@ def build_navigation_pipeline(
                 u_turn_threshold_deg=config.u_turn_threshold_deg,
                 history_return_threshold_deg=config.history_return_threshold_deg,
             ),
+        )
+    else:
+        direction_policy = VisualThemeActionPolicy(
+            room_graph=room_graph,
+            model=config.llm_model,
+            api_key=config.llm_api_key,
+            api_base=config.llm_api_base,
+            api_kind=config.llm_api_kind,
+            request_timeout=config.llm_timeout,
+            cache_dir=config.direction_cache_dir,
+            schema_validation_retries=config.direction_schema_validation_retries,
+            max_output_tokens=config.direction_max_output_tokens,
+            u_turn_threshold_deg=config.u_turn_threshold_deg,
+            history_return_threshold_deg=config.history_return_threshold_deg,
         )
     return NavigationPipeline(
         source_resolution_workflow=SourceResolutionWorkflow(
@@ -124,6 +178,14 @@ def build_navigation_pipeline(
                 room_graph=room_graph,
                 grounding_index=grounding_index,
                 use_detection_files=config.use_detection_cache,
+                model=config.llm_model,
+                api_key=config.llm_api_key,
+                api_base=config.llm_api_base,
+                api_kind=config.llm_api_kind,
+                request_timeout=config.llm_timeout,
+                cache_dir=config.visual_cache_dir,
+                schema_validation_retries=config.visual_schema_validation_retries,
+                max_output_tokens=config.visual_max_output_tokens,
             ),
             spatial_engine=spatial_engine,
             policy=direction_policy,
@@ -167,5 +229,8 @@ def build_evidence_score_localizer(
             api_base=config.llm_api_base,
             api_kind=config.llm_api_kind,
             request_timeout=config.llm_timeout,
+            schema_validation_retries=config.spatial_schema_validation_retries,
+            context_max_output_tokens=config.spatial_context_max_output_tokens,
+            alignment_max_output_tokens=config.spatial_alignment_max_output_tokens,
         ),
     )

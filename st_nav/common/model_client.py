@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import socket
@@ -13,7 +14,10 @@ from typing import Callable
 
 DEFAULT_OPENAI_API_BASE = "https://api.openai.com/v1"
 DEFAULT_GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-SUPPORTED_API_KINDS = {"responses", "chat_completions"}
+DEFAULT_ANTHROPIC_API_BASE = "https://api.anthropic.com/v1"
+DEFAULT_ANTHROPIC_MAX_TOKENS = 4096
+ANTHROPIC_VERSION = "2023-06-01"
+SUPPORTED_API_KINDS = {"responses", "chat_completions", "anthropic_messages"}
 TRANSIENT_HTTP_STATUS_CODES = {429, 500, 502, 503, 504}
 MAX_HTTP_RETRIES = 5
 HTTP_RETRY_BACKOFF_SECONDS = 1.0
@@ -53,6 +57,10 @@ def extract_output_text(payload: dict) -> str | None:
     candidate_text = _extract_gemini_candidate_text(payload)
     if isinstance(candidate_text, str) and candidate_text.strip():
         return candidate_text
+
+    anthropic_text = _extract_anthropic_content_text(payload)
+    if isinstance(anthropic_text, str) and anthropic_text.strip():
+        return anthropic_text
 
     fragments: list[str] = []
     for item in payload.get("output", []):
@@ -184,6 +192,7 @@ class ModelResponseClient:
         request_timeout: float = 30.0,
         num_ctx: int | None = None,
         temperature: float | None = None,
+        think: bool | str | None = None,
         response_client: Callable[[dict], dict] | None = None,
         max_http_retries: int | None = None,
         retry_backoff_seconds: float | None = None,
@@ -195,6 +204,7 @@ class ModelResponseClient:
         self.request_timeout = request_timeout
         self.num_ctx = num_ctx
         self.temperature = temperature
+        self.think = think
         self.response_client = response_client
         self.max_http_retries = max(1, int(max_http_retries or _parse_int_env("ST_NAV_MAX_HTTP_RETRIES", MAX_HTTP_RETRIES)))
         self.retry_backoff_seconds = max(
@@ -227,7 +237,12 @@ class ModelResponseClient:
                 succeeded = True
                 return result
 
-            if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+            if self.provider == "anthropic" or self.api_kind == "anthropic_messages":
+                if not self.api_key:
+                    raise RuntimeError("Missing ANTHROPIC_API_KEY or ST_NAV_API_KEY for Anthropic provider.")
+                endpoint = f"{self.api_base}/messages"
+                payload = self._responses_to_anthropic_messages_payload(request_body)
+            elif self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
                 if not self.api_key:
                     raise RuntimeError("Missing GEMINI_API_KEY, GOOGLE_API_KEY, or ST_NAV_API_KEY for Gemini API provider.")
                 endpoint = self._gemini_endpoint(request_body)
@@ -243,7 +258,13 @@ class ModelResponseClient:
                 payload = self._responses_to_chat_completions_payload(request_body)
 
             headers = {"Content-Type": "application/json"}
-            if self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
+            if self.provider == "anthropic" or self.api_kind == "anthropic_messages":
+                headers["x-api-key"] = self.api_key
+                headers["anthropic-version"] = ANTHROPIC_VERSION
+                workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+                if workspace_id:
+                    headers["anthropic-workspace-id"] = workspace_id
+            elif self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
                 headers["x-goog-api-key"] = self.api_key
             elif self.api_key:
                 headers["Authorization"] = f"Bearer {self.api_key}"
@@ -386,6 +407,58 @@ class ModelResponseClient:
 
         return payload
 
+    @staticmethod
+    def _responses_to_anthropic_messages_payload(
+        request_body: dict,
+        *,
+        default_max_tokens: int = DEFAULT_ANTHROPIC_MAX_TOKENS,
+    ) -> dict:
+        messages: list[dict] = []
+        for item in ModelResponseClient._iter_input_messages(request_body.get("input")):
+            role = item.get("role")
+            if role not in {"user", "assistant"}:
+                role = "user"
+            messages.append(
+                {
+                    "role": role,
+                    "content": ModelResponseClient._convert_content_blocks_for_anthropic(
+                        item.get("content")
+                    ),
+                }
+            )
+
+        max_output_tokens = request_body.get("max_output_tokens")
+        if not isinstance(max_output_tokens, int) or max_output_tokens <= 0:
+            max_output_tokens = int(default_max_tokens)
+
+        payload: dict[str, object] = {
+            "model": request_body.get("model"),
+            "max_tokens": max_output_tokens,
+            "messages": messages,
+        }
+        instructions = request_body.get("instructions")
+        if isinstance(instructions, str) and instructions.strip():
+            payload["system"] = instructions
+
+        output_config: dict[str, object] = {}
+        reasoning = request_body.get("reasoning")
+        if isinstance(reasoning, dict):
+            effort = reasoning.get("effort")
+            if effort in {"low", "medium", "high", "xhigh", "max"}:
+                output_config["effort"] = effort
+
+        response_schema = ModelResponseClient._anthropic_response_schema_from_request_body(
+            request_body
+        )
+        if response_schema is not None:
+            output_config["format"] = {
+                "type": "json_schema",
+                "schema": response_schema,
+            }
+        if output_config:
+            payload["output_config"] = output_config
+        return payload
+
     def _responses_to_ollama_chat_payload(self, request_body: dict) -> dict:
         messages: list[dict] = []
         instructions = request_body.get("instructions")
@@ -410,6 +483,8 @@ class ModelResponseClient:
             "messages": messages,
             "stream": False,
         }
+        if self.think is not None:
+            payload["think"] = self.think
 
         ollama_format = self._ollama_format_from_request_body(request_body)
         if ollama_format is not None:
@@ -424,6 +499,9 @@ class ModelResponseClient:
             options["num_ctx"] = self.num_ctx
         elif ollama_format is not None:
             options["num_ctx"] = 4096
+        max_output_tokens = request_body.get("max_output_tokens")
+        if isinstance(max_output_tokens, int) and max_output_tokens > 0:
+            options["num_predict"] = max_output_tokens
         if options:
             payload["options"] = options
         return payload
@@ -490,6 +568,38 @@ class ModelResponseClient:
                     if isinstance(detail, str) and detail:
                         image_payload["detail"] = detail
                     converted.append({"type": "image_url", "image_url": image_payload})
+        return converted
+
+    @staticmethod
+    def _convert_content_blocks_for_anthropic(content: object) -> object:
+        if isinstance(content, str):
+            return content
+        if not isinstance(content, list):
+            return content
+
+        converted: list[dict] = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "input_text":
+                value = block.get("text")
+                if isinstance(value, str):
+                    converted.append({"type": "text", "text": value})
+            elif block_type == "input_image":
+                image_url = block.get("image_url")
+                if isinstance(image_url, str) and image_url:
+                    media_type, data = ModelResponseClient._decode_data_url(image_url)
+                    converted.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": data,
+                            },
+                        }
+                    )
         return converted
 
     @staticmethod
@@ -594,6 +704,138 @@ class ModelResponseClient:
         return None
 
     @staticmethod
+    def _anthropic_response_schema_from_request_body(request_body: dict) -> dict | None:
+        """Return a Claude structured-output compatible copy of the schema.
+
+        Claude's raw JSON-schema endpoint supports a smaller constraint set than
+        the Responses-compatible schema used throughout this repository.  Keep
+        the original schema intact for local validation, while simplifying only
+        the copy sent to Anthropic.
+        """
+
+        schema = ModelResponseClient._gemini_response_schema_from_request_body(
+            request_body
+        )
+        if schema is None:
+            return None
+        return ModelResponseClient._transform_schema_for_anthropic(schema)
+
+    @staticmethod
+    def _transform_schema_for_anthropic(schema: dict) -> dict:
+        unsupported_constraints = {
+            "minimum",
+            "maximum",
+            "exclusiveMinimum",
+            "exclusiveMaximum",
+            "multipleOf",
+            "minLength",
+            "maxLength",
+            "maxItems",
+            "uniqueItems",
+            "contains",
+            "minContains",
+            "maxContains",
+        }
+        supported_string_formats = {
+            "date-time",
+            "time",
+            "date",
+            "duration",
+            "email",
+            "hostname",
+            "uri",
+            "ipv4",
+            "ipv6",
+            "uuid",
+        }
+
+        def enum_value_matches_type(value: object, type_name: str) -> bool:
+            if type_name == "null":
+                return value is None
+            if type_name == "boolean":
+                return isinstance(value, bool)
+            if type_name == "integer":
+                return isinstance(value, int) and not isinstance(value, bool)
+            if type_name == "number":
+                return isinstance(value, (int, float)) and not isinstance(value, bool)
+            if type_name == "string":
+                return isinstance(value, str)
+            if type_name == "array":
+                return isinstance(value, list)
+            if type_name == "object":
+                return isinstance(value, dict)
+            return False
+
+        def transform(node: object) -> object:
+            if isinstance(node, list):
+                return [transform(item) for item in node]
+            if not isinstance(node, dict):
+                return node
+
+            transformed: dict[str, object] = {}
+            moved_constraints: list[str] = []
+            original_types = node.get("type")
+
+            for key, value in node.items():
+                if key in unsupported_constraints:
+                    moved_constraints.append(f"{key}: {value}")
+                    continue
+                if key == "minItems" and value not in {0, 1}:
+                    moved_constraints.append(f"{key}: {value}")
+                    continue
+                if key == "format" and value not in supported_string_formats:
+                    moved_constraints.append(f"{key}: {value}")
+                    continue
+                transformed[key] = transform(value)
+
+            # The Claude API currently rejects a single enum attached to a
+            # nullable type array because each enum value is checked against
+            # every declared type.  Split it into type-specific anyOf branches.
+            if isinstance(original_types, list):
+                transformed.pop("type", None)
+                original_enum = node.get("enum")
+                transformed.pop("enum", None)
+                branches: list[dict[str, object]] = []
+                for type_name in original_types:
+                    if not isinstance(type_name, str):
+                        continue
+                    branch: dict[str, object] = {"type": type_name}
+                    if isinstance(original_enum, list):
+                        matching_values = [
+                            value
+                            for value in original_enum
+                            if enum_value_matches_type(value, type_name)
+                        ]
+                        if not matching_values:
+                            continue
+                        branch["enum"] = transform(matching_values)
+                    branches.append(branch)
+                if branches:
+                    transformed["anyOf"] = branches
+
+            if original_types == "object" or (
+                isinstance(original_types, list) and "object" in original_types
+            ):
+                transformed["additionalProperties"] = False
+
+            if moved_constraints:
+                constraint_note = "{" + ", ".join(moved_constraints) + "}"
+                existing_description = transformed.get("description")
+                if isinstance(existing_description, str) and existing_description.strip():
+                    transformed["description"] = (
+                        f"{existing_description.rstrip()} {constraint_note}"
+                    )
+                else:
+                    transformed["description"] = constraint_note
+
+            return transformed
+
+        transformed = transform(schema)
+        if not isinstance(transformed, dict):  # pragma: no cover - schema is a dict
+            raise TypeError("Anthropic schema transformation did not return an object.")
+        return transformed
+
+    @staticmethod
     def _data_url_payload(image_url: str) -> str:
         marker = ";base64,"
         if marker in image_url:
@@ -606,8 +848,26 @@ class ModelResponseClient:
         marker = ";base64,"
         if image_url.startswith(prefix) and marker in image_url:
             header, data = image_url[len(prefix):].split(marker, 1)
-            return header, data
-        return "image/png", image_url
+            return ModelResponseClient._sniff_image_media_type(data, fallback=header), data
+        return ModelResponseClient._sniff_image_media_type(image_url, fallback="image/png"), image_url
+
+    @staticmethod
+    def _sniff_image_media_type(data: str, *, fallback: str) -> str:
+        try:
+            prefix = data[:64]
+            prefix += "=" * (-len(prefix) % 4)
+            decoded = base64.b64decode(prefix, validate=False)
+        except (ValueError, TypeError):
+            return fallback
+        if decoded.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if decoded.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if decoded.startswith((b"GIF87a", b"GIF89a")):
+            return "image/gif"
+        if decoded.startswith(b"RIFF") and decoded[8:12] == b"WEBP":
+            return "image/webp"
+        return fallback
 
 
 def _extract_gemini_candidate_text(payload: dict) -> str | None:
@@ -627,6 +887,22 @@ def _extract_gemini_candidate_text(payload: dict) -> str | None:
             text = part.get("text")
             if isinstance(text, str):
                 fragments.append(text)
+    if fragments:
+        return "".join(fragments)
+    return None
+
+
+def _extract_anthropic_content_text(payload: dict) -> str | None:
+    fragments: list[str] = []
+    content = payload.get("content")
+    if not isinstance(content, list):
+        return None
+    for block in content:
+        if not isinstance(block, dict) or block.get("type") != "text":
+            continue
+        value = block.get("text")
+        if isinstance(value, str):
+            fragments.append(value)
     if fragments:
         return "".join(fragments)
     return None

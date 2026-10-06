@@ -102,7 +102,7 @@ def build_view_theme_extraction_schema(view_ids: list[str]) -> dict:
                         "room_ids": {"type": "array", "items": {"type": "string"}},
                         "canonical_theme": {"type": "string"},
                         "confidence": {"type": "number"},
-                        "reason": {"type": "string"},
+                        "reason": {"type": "string", "maxLength": 160},
                     },
                     "required": ["room_ids", "canonical_theme", "confidence", "reason"],
                     "additionalProperties": False,
@@ -110,7 +110,7 @@ def build_view_theme_extraction_schema(view_ids: list[str]) -> dict:
             },
             "current_or_adjacent": {"type": "string", "enum": ["current", "adjacent", "both", "ambiguous"]},
             "spatial_boundary_evidence": {"type": "array", "items": {"type": "string"}},
-            "reason": {"type": "string"},
+            "reason": {"type": "string", "maxLength": 160},
         },
         "required": [
             "view_id",
@@ -144,6 +144,8 @@ def build_visual_detection_localization_instructions() -> str:
             "You are given multiple overlapping views from the same panorama and a closed list of candidate rooms.",
             "Reason internally before answering, but return only the requested JSON.",
             "First identify visible museum-relevant entities across all views.",
+            "Merge repeated sightings of the same entity across views into one entity with combined source_views.",
+            "Return at most eight distinct entities, prioritizing the most discriminative visible evidence.",
             "Classify each entity as inside when it belongs to the current gallery, outside when it is only visible through a doorway, corridor, or adjacent-gallery opening, and unknown when the scope is visually ambiguous.",
             "Keep outside entities in the entity list, but use inside entities as the primary evidence for localization.",
             "Use candidate room titles, aliases, categories, and anchor entities as gallery theme descriptions.",
@@ -160,6 +162,8 @@ def build_visual_detection_localization_instructions() -> str:
             "If multiple rooms share the same visible entities, give them similar scores and do not force a single winner.",
             "If the image lacks unique landmarks or legible direct room labels, the top candidate should not be much higher than similar nearby rooms.",
             "A broad Assyrian theme match should not by itself distinguish Room 10 from Rooms 7, 8, and 9.",
+            "Keep each room score reason to at most twelve words.",
+            "Return at most six short evidence_entities and keep the summary under forty words.",
             "Do not invent room ids outside the candidate list.",
             "Return JSON only.",
         ]
@@ -212,7 +216,7 @@ def build_visual_detection_localization_input(
             *candidate_lines,
             "",
             "Task:",
-            "1. Identify directly visible museum-relevant entities across all views.",
+            "1. Identify at most eight distinct museum-relevant entities across all views, merging repeated sightings.",
             "2. Assign location_scope=inside for entities in the current gallery, outside for entities visible only through adjacent openings, and unknown when uncertain.",
             "3. For every candidate room, classify evidence_type before scoring.",
             "4. Use inside entities and current-gallery visual themes to assign an independent evidence score from 0 to 10 for every candidate room.",
@@ -223,16 +227,24 @@ def build_visual_detection_localization_input(
     return "\n".join(lines)
 
 
-def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
+def build_visual_detection_localization_schema(
+    room_ids: list[str],
+    *,
+    include_bounds: bool = True,
+) -> dict:
     entity_schema = {
         "type": "object",
         "properties": {
-            "name": {"type": "string"},
+            "name": {
+                "type": "string",
+                **({"maxLength": 120} if include_bounds else {}),
+            },
             "kind": {"type": "string", "enum": list(VIEW_DETECTION_KINDS)},
             "confidence": {"type": "number"},
             "source_views": {
                 "type": "array",
                 "items": {"type": "string"},
+                **({"maxItems": 8} if include_bounds else {}),
             },
             "location_scope": {"type": "string", "enum": list(ENTITY_LOCATION_SCOPES)},
         },
@@ -245,7 +257,10 @@ def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
             "room_id": {"type": "string", "enum": room_ids},
             "evidence_type": {"type": "string", "enum": list(ROOM_EVIDENCE_TYPES)},
             "score": {"type": "number"},
-            "reason": {"type": "string"},
+            "reason": {
+                "type": "string",
+                **({"maxLength": 160} if include_bounds else {}),
+            },
         },
         "required": ["room_id", "evidence_type", "score", "reason"],
         "additionalProperties": False,
@@ -254,9 +269,27 @@ def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
         "type": "object",
         "properties": {
             "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
-            "room_scores": {"type": "array", "items": room_score_schema},
-            "evidence_entities": {"type": "array", "items": {"type": "string"}},
-            "summary": {"type": "string"},
+            "room_scores": {
+                "type": "array",
+                "items": room_score_schema,
+                **(
+                    {"minItems": len(room_ids), "maxItems": len(room_ids)}
+                    if include_bounds
+                    else {}
+                ),
+            },
+            "evidence_entities": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    **({"maxLength": 120} if include_bounds else {}),
+                },
+                **({"maxItems": 6} if include_bounds else {}),
+            },
+            "summary": {
+                "type": "string",
+                **({"maxLength": 240} if include_bounds else {}),
+            },
         },
         "required": ["predicted_room_id", "room_scores", "evidence_entities", "summary"],
         "additionalProperties": False,
@@ -264,10 +297,70 @@ def build_visual_detection_localization_schema(room_ids: list[str]) -> dict:
     return {
         "type": "object",
         "properties": {
-            "entities": {"type": "array", "items": entity_schema},
+            "entities": {
+                "type": "array",
+                "items": entity_schema,
+                **({"maxItems": 8} if include_bounds else {}),
+            },
             "visual_localization": visual_localization_schema,
         },
         "required": ["entities", "visual_localization"],
+        "additionalProperties": False,
+    }
+
+
+def build_visual_theme_direction_instructions() -> str:
+    return " ".join(
+        [
+            "You select one visual direction for museum indoor navigation.",
+            "You are given eight or fewer overlapping panorama views and only the visual theme of the next subgoal gallery.",
+            "Choose the single view whose visible scene most plausibly leads toward or reveals that theme.",
+            "Use visible exhibits, architecture, signs, doorways, and adjacent-gallery glimpses.",
+            "Do not infer a room id, map direction, compass direction, heading, or spatial alignment.",
+            "If no view clearly matches, still choose the most plausible view and lower confidence.",
+            "Return exactly one selected_view_id and one short visual_evidence sentence.",
+            "Return JSON only.",
+        ]
+    )
+
+
+def build_visual_theme_direction_input(*, view_ids: list[str], subgoal_theme: dict) -> str:
+    visual_cues = [
+        value
+        for value in subgoal_theme.get("visual_cues", [])
+        if isinstance(value, str) and value
+    ][:4]
+    lines = [
+        "Select one panorama view as the next movement direction.",
+        "The views are ordered clockwise, but no compass headings or map directions are provided.",
+        f"Available view ids: {', '.join(view_ids)}.",
+        "",
+        "Subgoal visual theme:",
+        f"- theme_name: {subgoal_theme.get('title') or 'unknown'}",
+        f"- category: {subgoal_theme.get('category') or 'unknown'}",
+        f"- short_description: {subgoal_theme.get('short_description') or 'unknown'}",
+    ]
+    if visual_cues:
+        lines.append("- visual_cues: " + "; ".join(visual_cues))
+    lines.extend(
+        [
+            "",
+            "Judge only from the supplied images and this visual theme.",
+            "Return exactly one of the available view ids.",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def build_visual_theme_direction_schema(view_ids: list[str]) -> dict:
+    return {
+        "type": "object",
+        "properties": {
+            "selected_view_id": {"type": "string", "enum": view_ids},
+            "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
+            "visual_evidence": {"type": "string", "maxLength": 240},
+        },
+        "required": ["selected_view_id", "confidence", "visual_evidence"],
         "additionalProperties": False,
     }
 
@@ -321,7 +414,7 @@ def build_navigation_parse_schema(room_ids: list[str]) -> dict:
     entity_schema = {
         "type": "object",
         "properties": {
-            "name": {"type": "string"},
+            "name": {"type": "string", "maxLength": 120},
             "entity_type": {"type": "string", "enum": ["gallery", "artwork"]},
             "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
             "confidence": {"type": "number", "minimum": 0.0, "maximum": 1.0},
@@ -396,7 +489,11 @@ def build_spatial_context_extraction_schema(view_ids: list[str]) -> dict:
         "type": "object",
         "properties": {
             "view_id": {"type": "string", "enum": view_ids},
-            "themes": {"type": "array", "items": theme_schema},
+            "themes": {
+                "type": "array",
+                "items": theme_schema,
+                "maxItems": 4,
+            },
             "summary": {"type": "string"},
         },
         "required": ["view_id", "themes", "summary"],
@@ -405,7 +502,12 @@ def build_spatial_context_extraction_schema(view_ids: list[str]) -> dict:
     return {
         "type": "object",
         "properties": {
-            "views": {"type": "array", "items": view_schema},
+            "views": {
+                "type": "array",
+                "items": view_schema,
+                "minItems": len(view_ids),
+                "maxItems": len(view_ids),
+            },
             "summary": {"type": "string"},
         },
         "required": ["views", "summary"],
@@ -424,6 +526,7 @@ def build_spatial_alignment_instructions(*, direct_images: bool = False) -> str:
         "Do not choose a room only because one visible theme matches; prefer the candidate whose room profile and neighboring-room layout jointly explain the sector pattern.",
         "Infer which allocentric direction the first panorama sector view_0 most likely corresponds to.",
         "Use only the provided candidate rooms.",
+        "Keep the JSON compact: use at most three evidence strings, keep each evidence string under twenty words, and keep the summary under twenty words.",
     ]
     if direct_images:
         base_parts.extend(
@@ -561,11 +664,20 @@ def build_spatial_alignment_schema(
     schema = {
         "type": "object",
         "properties": {
-            "predicted_room_id": {"type": ["string", "null"], "enum": room_ids + [None]},
+            "predicted_room_id": {"type": "string", "enum": room_ids},
             "confidence": {"type": "number"},
-            "view_0_allocentric_direction": {"type": ["string", "null"], "enum": list(ALLOCENTRIC_DIRECTIONS) + [None]},
-            "evidence": {"type": "array", "items": {"type": "string"}},
-            "room_ranking": {"type": "array", "items": room_score_schema},
+            "view_0_allocentric_direction": {"type": "string", "enum": list(ALLOCENTRIC_DIRECTIONS)},
+            "evidence": {
+                "type": "array",
+                "items": {"type": "string"},
+                "maxItems": 6,
+            },
+            "room_ranking": {
+                "type": "array",
+                "items": room_score_schema,
+                "minItems": len(room_ids),
+                "maxItems": len(room_ids),
+            },
             "summary": {"type": "string"},
         },
         "required": [

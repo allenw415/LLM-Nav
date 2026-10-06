@@ -196,6 +196,66 @@ class InitialHeadingAlignmentTest(unittest.TestCase):
         self.assertEqual(result["spatial_timing"]["logical_vlm_call_count"], 2)
         self.assertGreaterEqual(result["spatial_timing"]["vlm_response_ms"], 0.0)
 
+    def test_two_stage_refiner_retries_schema_failures_with_output_caps(self) -> None:
+        valid_extraction = {
+            "views": [
+                {"view_id": "view_0", "themes": [], "summary": "gallery view"}
+            ],
+            "summary": "context extracted",
+        }
+        valid_alignment = {
+            "predicted_room_id": "Room 1",
+            "confidence": 0.9,
+            "view_0_allocentric_direction": "north",
+            "evidence": ["map and view agree"],
+            "room_ranking": [
+                {"room_id": "Room 1", "score": 0.9},
+                {"room_id": "Room 2", "score": 0.1},
+            ],
+            "summary": "aligned",
+        }
+        responses = [
+            {"output_text": json.dumps({"views": [], "summary": "incomplete"})},
+            {"output_text": json.dumps(valid_extraction)},
+            {"output_text": json.dumps({"predicted_room_id": "Room 1"})},
+            {"output_text": json.dumps(valid_alignment)},
+        ]
+        requests: list[dict] = []
+
+        def response_client(request: dict) -> dict:
+            requests.append(request)
+            return responses.pop(0)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            image_path = Path(tmpdir) / "view.png"
+            image_path.write_bytes(b"fake-image")
+            refiner = SpatialAlignmentRefiner(
+                room_graph=self.room_graph,
+                grounding_index=self.grounding,
+                response_client=response_client,
+                schema_validation_retries=1,
+                context_max_output_tokens=2048,
+                alignment_max_output_tokens=768,
+            )
+            result = refiner.refine(
+                observation=Observation(
+                    pano_id="pano-1",
+                    views=[RenderedView(label="north", heading=330.0, path=str(image_path))],
+                    metadata={"floor": "0"},
+                ),
+                candidate_room_ids=["Room 1", "Room 2"],
+            )
+
+        self.assertEqual(len(requests), 4)
+        self.assertEqual([request["max_output_tokens"] for request in requests], [2048, 2048, 768, 1024])
+        self.assertIn("Schema repair retry", requests[1]["instructions"])
+        self.assertIn("Schema repair retry", requests[3]["instructions"])
+        self.assertIn('room_id order: ["Room 1", "Room 2"]', requests[3]["instructions"])
+        self.assertIn("Previous deterministic validator error", requests[3]["instructions"])
+        self.assertEqual(result["logical_vlm_call_count"], 4)
+        self.assertEqual(result["spatial_timing"]["context_extraction_validation_attempt_count"], 2)
+        self.assertEqual(result["spatial_timing"]["alignment_validation_attempt_count"], 2)
+
     def test_two_stage_refiner_uses_four_cardinal_images_and_can_predict_zero_offset(self) -> None:
         responses = [
             {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
+import math
 import mimetypes
 import time
 from base64 import b64encode
@@ -11,6 +13,8 @@ from ..common.env import resolve_model_environment
 from ..common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 from ..common.prompts import (
     ENTITY_LOCATION_SCOPES,
+    ROOM_EVIDENCE_TYPES,
+    VIEW_DETECTION_KINDS,
     build_view_theme_extraction_input,
     build_view_theme_extraction_instructions,
     build_view_theme_extraction_schema,
@@ -19,9 +23,41 @@ from ..common.prompts import (
     build_visual_detection_localization_schema,
 )
 from ..common.room_profiles import room_candidate_payload
+from ..common.request_cache import (
+    atomic_write_json,
+    cache_entry_path,
+    canonical_json_sha256,
+    exclusive_cache_lock,
+    model_transport_identity,
+    read_json_object,
+    request_fingerprint,
+)
 from ..common.scoring import evidence_scores_to_distribution, normalize_positive_scores
 from ..common.types import EntityDetection, Observation, RenderedView, ViewDetection
 from .renderer import PanoramaRenderer, normalize_heading
+
+
+VISUAL_CACHE_NAMESPACE = "visual_localization"
+VISUAL_CACHE_VERSION = 6
+LEGACY_VISUAL_SCHEMA_REPAIR_INSTRUCTIONS = (
+    "Schema repair retry: return exactly one JSON object matching the supplied JSON Schema. "
+    "The top-level object must contain entities and visual_localization. "
+    "visual_localization must contain predicted_room_id, room_scores, evidence_entities, and summary. "
+    "room_scores must contain every candidate room exactly once. "
+    "Return at most 24 distinct entities, combine duplicate observations, and stay concise. "
+    "Do not return markdown, commentary, or any text outside the JSON object."
+)
+VISUAL_SCHEMA_REPAIR_INSTRUCTIONS = (
+    "Schema repair retry: return exactly one concise JSON object matching the supplied JSON Schema. "
+    "The top-level object must contain entities and visual_localization. "
+    "visual_localization must contain predicted_room_id, room_scores, evidence_entities, and summary. "
+    "Treat the required room-id checklist below as a copy task: emit the ids in that exact order, "
+    "once each, without substituting a similar id or repeating a high-scoring room. "
+    "Keep the score and evidence previously inferred for each room, but use score 0 when no evidence exists. "
+    "Return at most eight distinct entities, combine duplicate observations, and stay concise. "
+    "Do not return markdown, commentary, or any text outside the JSON object."
+)
+VISUAL_SCHEMA_REPAIR_STRATEGY_VERSION = 2
 
 
 class ViewDetector:
@@ -46,6 +82,9 @@ class ViewDetector:
         enable_view_themes: bool = False,
         room_graph: dict[str, dict] | None = None,
         grounding_index=None,
+        cache_dir: str | Path | None = None,
+        schema_validation_retries: int = 0,
+        max_output_tokens: int | None = None,
     ):
         settings = resolve_model_environment(
             default_model="gpt-5-mini",
@@ -62,14 +101,23 @@ class ViewDetector:
         self.enable_view_themes = enable_view_themes
         self.room_graph = room_graph
         self.grounding_index = grounding_index
+        self.cache_dir = Path(cache_dir).resolve() if cache_dir is not None else None
+        self.schema_validation_retries = max(0, int(schema_validation_retries))
+        self.max_output_tokens = (
+            max(1, int(max_output_tokens)) if max_output_tokens is not None else None
+        )
         self.last_traces: list[dict] = []
         self.last_visual_localization: dict | None = None
         self.last_candidate_room_ids: list[str] = []
         self.last_view_theme_observations: list[dict] = []
         self.last_visual_cache_hit: bool | None = None
         self.last_visual_cache_version: int | None = None
+        self.last_visual_cache_fingerprint: str | None = None
         self.last_visual_timing: dict | None = None
+        self.last_visual_validation_attempt_count: int | None = None
+        self.last_visual_failure_trace_path: str | None = None
         self._active_vlm_response_ms = 0.0
+        self._active_visual_logical_call_count = 0
         self.model_client = ModelResponseClient(
             provider=settings.provider,
             api_key=self.api_key,
@@ -78,6 +126,7 @@ class ViewDetector:
             request_timeout=self.request_timeout,
             num_ctx=settings.num_ctx,
             temperature=settings.temperature,
+            think=settings.think,
             response_client=self.response_client,
         )
 
@@ -95,8 +144,20 @@ class ViewDetector:
         self.last_view_theme_observations = []
         self.last_visual_cache_hit = None
         self.last_visual_cache_version = None
+        self.last_visual_cache_fingerprint = None
         self.last_visual_timing = None
+        self.last_visual_validation_attempt_count = None
+        self.last_visual_failure_trace_path = None
         self._active_vlm_response_ms = 0.0
+        self._active_visual_logical_call_count = 0
+
+        if self.cache_dir is not None and self.use_detection_files:
+            return self._detect_with_fingerprinted_cache(
+                manifest_path,
+                force_refresh=force_refresh,
+                stage_started=stage_started,
+            )
+
         detection_path = manifest_path.with_name(f"{manifest_path.stem}_detections.json")
         trace_path = manifest_path.with_name(f"{manifest_path.stem}_detections_trace.json")
         if self.use_detection_files and not force_refresh and detection_path.exists():
@@ -136,13 +197,321 @@ class ViewDetector:
             "vlm_response_ms": self._active_vlm_response_ms,
             "stage_total_ms": total_ms,
             "cache_hit": False,
-            "logical_vlm_call_count": 1 + int(bool(self.enable_view_themes)),
+            "logical_vlm_call_count": self._active_visual_logical_call_count,
         }
         detections = self._annotate_cache_provenance(
             detections,
             detection_path=detection_path,
         )
         return detections
+
+    def _detect_with_fingerprinted_cache(
+        self,
+        manifest_path: Path,
+        *,
+        force_refresh: bool,
+        stage_started: float,
+    ) -> list[ViewDetection]:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        captures = [
+            capture
+            for capture in manifest.get("captures", [])
+            if isinstance(capture, dict)
+            and isinstance(capture.get("path"), str)
+            and capture.get("path")
+        ]
+        if not captures:
+            return []
+        candidate_room_ids = self._candidate_room_ids(manifest)
+        candidates = self._candidate_records(candidate_room_ids)
+        if not candidates:
+            raise RuntimeError(
+                "Perception requires room graph and grounding candidates for visual localization."
+            )
+        primary_request = self._build_visual_request_body(
+            captures,
+            candidates=candidates,
+        )
+        primary_only_descriptor = {"visual_detection_localization": primary_request}
+        if self.enable_view_themes:
+            primary_only_descriptor["view_theme_extraction"] = self._build_view_theme_request_body(
+                captures
+            )
+        request_descriptor = self._clone_json(primary_only_descriptor)
+        if self.schema_validation_retries:
+            repair_request = self._build_visual_schema_repair_request_body(
+                primary_request,
+                candidate_room_ids=candidate_room_ids,
+            )
+            request_descriptor["schema_validation_retry_policy"] = {
+                "max_retries": self.schema_validation_retries,
+                "strategy_version": VISUAL_SCHEMA_REPAIR_STRATEGY_VERSION,
+                "request_derivation": (
+                    "same input, schema, and options; replace instructions with the exact "
+                    "candidate checklist and deterministic validation feedback"
+                ),
+                "repair_instructions": repair_request["instructions"],
+            }
+        transport = model_transport_identity(
+            model=self.model,
+            model_client=self.model_client,
+        )
+        fingerprint = request_fingerprint(
+            namespace=VISUAL_CACHE_NAMESPACE,
+            cache_version=VISUAL_CACHE_VERSION,
+            request_body=request_descriptor,
+            transport_identity=transport,
+        )
+        cache_group = str(manifest.get("pano_id") or manifest_path.stem)
+        cache_path = cache_entry_path(
+            self.cache_dir,
+            fingerprint,
+            group=cache_group,
+        )
+        migration_cache_entries: list[tuple[str, Path]] = []
+        if self.schema_validation_retries:
+            legacy_retry_descriptor = self._clone_json(primary_only_descriptor)
+            legacy_repair_request = self._build_legacy_visual_schema_repair_request_body(
+                primary_request
+            )
+            legacy_retry_descriptor["schema_validation_retry_policy"] = {
+                "max_retries": self.schema_validation_retries,
+                "request_derivation": "same input, schema, and options; replace instructions",
+                "repair_instructions": legacy_repair_request["instructions"],
+            }
+            legacy_unbounded_descriptor = self._clone_json(primary_only_descriptor)
+            legacy_unbounded_descriptor["visual_detection_localization"] = (
+                self._legacy_unbounded_visual_request_body(primary_request)
+            )
+            seen_fingerprints = {fingerprint}
+            for migration_descriptor in (
+                legacy_retry_descriptor,
+                primary_only_descriptor,
+                legacy_unbounded_descriptor,
+            ):
+                migration_fingerprint = request_fingerprint(
+                    namespace=VISUAL_CACHE_NAMESPACE,
+                    cache_version=VISUAL_CACHE_VERSION,
+                    request_body=migration_descriptor,
+                    transport_identity=transport,
+                )
+                if migration_fingerprint in seen_fingerprints:
+                    continue
+                seen_fingerprints.add(migration_fingerprint)
+                migration_cache_entries.append(
+                    (
+                        migration_fingerprint,
+                        cache_entry_path(
+                            self.cache_dir,
+                            migration_fingerprint,
+                            group=cache_group,
+                        ),
+                    )
+                )
+        self.last_visual_cache_fingerprint = fingerprint
+
+        if force_refresh:
+            if not self.model_client.is_configured():
+                return []
+            return self._run_fingerprinted_cache_miss(
+                manifest,
+                cache_path=cache_path,
+                fingerprint=fingerprint,
+                transport=transport,
+                stage_started=stage_started,
+                write_cache=False,
+            )
+
+        with exclusive_cache_lock(cache_path):
+            cached = self._read_fingerprinted_detection(
+                cache_path,
+                fingerprint=fingerprint,
+                transport=transport,
+                candidate_room_ids=candidate_room_ids,
+            )
+            if cached is not None:
+                detection_payload, traces = cached
+                self.last_traces = traces
+                detections = self._load_detection_payload(detection_payload)
+                self.last_visual_cache_hit = True
+                self.last_visual_cache_version = VISUAL_CACHE_VERSION
+                total_ms = (time.perf_counter() - stage_started) * 1000.0
+                self.last_visual_timing = {
+                    "program_module_ms": total_ms,
+                    "vlm_response_ms": 0.0,
+                    "stage_total_ms": total_ms,
+                    "cache_hit": True,
+                    "logical_vlm_call_count": 0,
+                }
+                return self._annotate_cache_provenance(
+                    detections,
+                    detection_path=cache_path,
+                )
+
+            for migration_fingerprint, migration_cache_path in migration_cache_entries:
+                migration_cached = self._read_fingerprinted_detection(
+                    migration_cache_path,
+                    fingerprint=migration_fingerprint,
+                    transport=transport,
+                    candidate_room_ids=candidate_room_ids,
+                )
+                if migration_cached is None:
+                    continue
+                detection_payload, traces = migration_cached
+                self.last_traces = traces
+                self.last_visual_cache_hit = True
+                self.last_visual_cache_version = VISUAL_CACHE_VERSION
+                self.last_visual_validation_attempt_count = 0
+                self._write_fingerprinted_detection(
+                    cache_path,
+                    fingerprint=fingerprint,
+                    transport=transport,
+                    detection_payload=detection_payload,
+                    traces=traces,
+                    extra={"migrated_from_fingerprint": migration_fingerprint},
+                )
+                detections = self._load_detection_payload(detection_payload)
+                total_ms = (time.perf_counter() - stage_started) * 1000.0
+                self.last_visual_timing = {
+                    "program_module_ms": total_ms,
+                    "vlm_response_ms": 0.0,
+                    "stage_total_ms": total_ms,
+                    "cache_hit": True,
+                    "logical_vlm_call_count": 0,
+                }
+                return self._annotate_cache_provenance(
+                    detections,
+                    detection_path=cache_path,
+                )
+
+            if not self.model_client.is_configured():
+                return []
+            return self._run_fingerprinted_cache_miss(
+                manifest,
+                cache_path=cache_path,
+                fingerprint=fingerprint,
+                transport=transport,
+                stage_started=stage_started,
+                write_cache=True,
+            )
+
+    def _failure_trace_path(self, cache_path: Path) -> Path:
+        if self.cache_dir is None:
+            return cache_path.with_name(f"{cache_path.stem}.failures.json")
+        relative = cache_path.relative_to(self.cache_dir)
+        return (
+            self.cache_dir
+            / "_failures"
+            / relative.parent
+            / f"{relative.stem}.json"
+        )
+
+    @staticmethod
+    def _write_fingerprinted_detection(
+        cache_path: Path,
+        *,
+        fingerprint: str,
+        transport: dict[str, object],
+        detection_payload: dict,
+        traces: list[dict],
+        extra: dict | None = None,
+    ) -> None:
+        entry = {
+            "cache_schema": VISUAL_CACHE_NAMESPACE,
+            "cache_version": VISUAL_CACHE_VERSION,
+            "fingerprint": fingerprint,
+            "transport": transport,
+            "detection_sha256": canonical_json_sha256(detection_payload),
+            "detection": detection_payload,
+            "traces": traces,
+        }
+        if extra:
+            entry.update(extra)
+        atomic_write_json(cache_path, entry)
+
+    def _run_fingerprinted_cache_miss(
+        self,
+        manifest: dict,
+        *,
+        cache_path: Path,
+        fingerprint: str,
+        transport: dict[str, object],
+        stage_started: float,
+        write_cache: bool,
+    ) -> list[ViewDetection]:
+        self.last_visual_cache_hit = False
+        detections = self._detect_manifest(
+            manifest,
+            failure_trace_path=self._failure_trace_path(cache_path),
+            logical_fingerprint=fingerprint,
+        )
+        self.last_visual_cache_version = VISUAL_CACHE_VERSION
+        total_ms = (time.perf_counter() - stage_started) * 1000.0
+        self.last_visual_timing = {
+            "program_module_ms": max(0.0, total_ms - self._active_vlm_response_ms),
+            "vlm_response_ms": self._active_vlm_response_ms,
+            "stage_total_ms": total_ms,
+            "cache_hit": False,
+            "logical_vlm_call_count": self._active_visual_logical_call_count,
+        }
+        detections = self._annotate_cache_provenance(
+            detections,
+            detection_path=cache_path,
+        )
+        if write_cache:
+            detection_payload = self._detection_payload(
+                detections,
+                cache_version=VISUAL_CACHE_VERSION,
+            )
+            self._write_fingerprinted_detection(
+                cache_path,
+                fingerprint=fingerprint,
+                transport=transport,
+                detection_payload=detection_payload,
+                traces=self._clone_json(self.last_traces),
+                extra={
+                    "schema_validation_retries": self.schema_validation_retries,
+                    "validation_attempt_count": self.last_visual_validation_attempt_count,
+                },
+            )
+        return detections
+
+    @staticmethod
+    def _read_fingerprinted_detection(
+        cache_path: Path,
+        *,
+        fingerprint: str,
+        transport: dict[str, object],
+        candidate_room_ids: list[str],
+    ) -> tuple[dict, list[dict]] | None:
+        entry = read_json_object(cache_path)
+        if entry is None:
+            return None
+        if entry.get("cache_schema") != VISUAL_CACHE_NAMESPACE:
+            return None
+        if entry.get("cache_version") != VISUAL_CACHE_VERSION:
+            return None
+        if entry.get("fingerprint") != fingerprint:
+            return None
+        if entry.get("transport") != transport:
+            return None
+        detection = entry.get("detection")
+        if not isinstance(detection, dict):
+            return None
+        if entry.get("detection_sha256") != canonical_json_sha256(detection):
+            return None
+        if detection.get("cache_version") != VISUAL_CACHE_VERSION:
+            return None
+        if detection.get("candidate_room_ids") != candidate_room_ids:
+            return None
+        if not isinstance(detection.get("entities"), list):
+            return None
+        if not isinstance(detection.get("visual_localization"), dict):
+            return None
+        traces = entry.get("traces")
+        if not isinstance(traces, list):
+            traces = []
+        return detection, [trace for trace in traces if isinstance(trace, dict)]
 
     @staticmethod
     def _read_cache_version(detection_path: Path) -> int | None:
@@ -162,12 +531,24 @@ class ViewDetector:
             detection.metadata["visual_cache_hit"] = self.last_visual_cache_hit
             detection.metadata["visual_cache_version"] = self.last_visual_cache_version
             detection.metadata["visual_cache_path"] = str(detection_path)
+            detection.metadata["visual_cache_fingerprint"] = (
+                self.last_visual_cache_fingerprint
+            )
+            detection.metadata["visual_validation_attempt_count"] = (
+                self.last_visual_validation_attempt_count
+            )
+            detection.metadata["visual_failure_trace_path"] = (
+                self.last_visual_failure_trace_path
+            )
             if isinstance(self.last_visual_timing, dict):
                 detection.metadata["visual_timing"] = dict(self.last_visual_timing)
         return detections
 
     def _load_detection_file(self, detection_path: Path) -> list[ViewDetection]:
         payload = json.loads(detection_path.read_text(encoding="utf-8"))
+        return self._load_detection_payload(payload)
+
+    def _load_detection_payload(self, payload: dict) -> list[ViewDetection]:
         metadata = self._metadata_from_detection_payload(payload)
         self.last_visual_localization = metadata.get("visual_localization")
         self.last_candidate_room_ids = list(metadata.get("candidate_room_ids", []))
@@ -219,6 +600,17 @@ class ViewDetector:
         return payload if isinstance(payload, dict) else None
 
     def _write_detection_file(self, detection_path: Path, view_detections: list[ViewDetection]) -> None:
+        atomic_write_json(
+            detection_path,
+            self._detection_payload(view_detections, cache_version=3),
+        )
+
+    def _detection_payload(
+        self,
+        view_detections: list[ViewDetection],
+        *,
+        cache_version: int,
+    ) -> dict:
         records: list[dict] = []
         metadata = self._merged_detection_metadata(view_detections)
         for view_detection in view_detections:
@@ -240,20 +632,52 @@ class ViewDetector:
                         record[key] = value
                 records.append(record)
 
-        payload = {"cache_version": 3, "entities": records}
+        payload = {"cache_version": cache_version, "entities": records}
         if metadata.get("candidate_room_ids"):
             payload["candidate_room_ids"] = list(metadata["candidate_room_ids"])
         if isinstance(metadata.get("visual_localization"), dict):
             payload["visual_localization"] = dict(metadata["visual_localization"])
         if isinstance(metadata.get("view_theme_observations"), list):
             payload["view_theme_observations"] = list(metadata["view_theme_observations"])
-        detection_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
+
+    def _record_visual_failure(
+        self,
+        path: Path,
+        *,
+        logical_fingerprint: str | None,
+        validation_attempt: int,
+        error: ValueError,
+        request_body: dict,
+        response_payload: dict,
+    ) -> None:
+        existing = read_json_object(path) or {
+            "schema": "visual_localization_failure_diagnostics",
+            "schema_version": 1,
+            "logical_fingerprint": logical_fingerprint,
+            "failures": [],
+        }
+        failures = existing.get("failures")
+        if not isinstance(failures, list):
+            failures = []
+        failures.append(
+            {
+                "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+                "validation_attempt": validation_attempt,
+                "error_type": type(error).__name__,
+                "error_message": str(error),
+                "request_sha256": canonical_json_sha256(request_body),
+                "request": self._redact_request_body(request_body),
+                "response_sha256": canonical_json_sha256(response_payload),
+                "response": self._clone_json(response_payload),
+            }
+        )
+        existing["failures"] = failures
+        atomic_write_json(path, existing)
+        self.last_visual_failure_trace_path = str(path)
 
     def _write_trace_file(self, trace_path: Path) -> None:
-        trace_path.write_text(
-            json.dumps({"requests_and_responses": self.last_traces}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        atomic_write_json(trace_path, {"requests_and_responses": self.last_traces})
 
     @staticmethod
     def _load_trace_file(trace_path: Path) -> list[dict]:
@@ -268,7 +692,13 @@ class ViewDetector:
             return []
         return [trace for trace in traces if isinstance(trace, dict)]
 
-    def _detect_manifest(self, manifest: dict) -> list[ViewDetection]:
+    def _detect_manifest(
+        self,
+        manifest: dict,
+        *,
+        failure_trace_path: Path | None = None,
+        logical_fingerprint: str | None = None,
+    ) -> list[ViewDetection]:
         captures = [
             capture
             for capture in manifest.get("captures", [])
@@ -281,17 +711,66 @@ class ViewDetector:
         candidates = self._candidate_records(candidate_room_ids)
         if not candidates:
             raise RuntimeError("Perception requires room graph and grounding candidates for visual localization.")
-        request_body = self._build_visual_request_body(captures, candidates=candidates)
-        payload = self._create_timed_response(request_body)
-        self.last_traces.append(
-            {
+        primary_request = self._build_visual_request_body(captures, candidates=candidates)
+        parsed = None
+        previous_validation_error: ValueError | None = None
+        for validation_attempt in range(1, self.schema_validation_retries + 2):
+            request_body = (
+                primary_request
+                if validation_attempt == 1
+                else self._build_visual_schema_repair_request_body(
+                    primary_request,
+                    candidate_room_ids=candidate_room_ids,
+                    validation_error=previous_validation_error,
+                )
+            )
+            payload = self._create_timed_response(request_body)
+            trace = {
                 "capture_label": "multiview",
                 "capture_labels": [str(capture.get("label", "unknown")) for capture in captures],
+                "validation_attempt": validation_attempt,
                 "request": self._redact_request_body(request_body),
                 "response": self._clone_json(payload),
             }
+            try:
+                candidate = self._parse_output_payload(payload)
+                if self.cache_dir is not None:
+                    self._validate_fingerprinted_visual_output(
+                        candidate,
+                        candidate_room_ids=candidate_room_ids,
+                    )
+            except ValueError as error:
+                previous_validation_error = error
+                self.last_visual_validation_attempt_count = validation_attempt
+                if failure_trace_path is not None:
+                    self._record_visual_failure(
+                        failure_trace_path,
+                        logical_fingerprint=logical_fingerprint,
+                        validation_attempt=validation_attempt,
+                        error=error,
+                        request_body=request_body,
+                        response_payload=payload,
+                    )
+                if validation_attempt > self.schema_validation_retries:
+                    raise
+                continue
+            parsed = candidate
+            self.last_visual_validation_attempt_count = validation_attempt
+            self.last_traces.append(trace)
+            break
+        if parsed is None:
+            raise RuntimeError("Visual localization validation ended without a result.")
+        if not isinstance(parsed.get("entities"), list):
+            raise ValueError("Visual localization output is missing entities.")
+        visual_payload = parsed.get("visual_localization")
+        has_scores = isinstance(visual_payload, dict) and (
+            isinstance(visual_payload.get("room_scores"), list)
+            or isinstance(visual_payload.get("room_distribution"), list)
         )
-        parsed = self._parse_output_payload(payload)
+        if not has_scores:
+            raise ValueError(
+                "Visual localization output is missing room_scores or room_distribution."
+            )
         entities: list[EntityDetection] = []
         for record in parsed.get("entities", []):
             if not isinstance(record, dict):
@@ -357,7 +836,12 @@ class ViewDetector:
                 ]
             )
         room_ids = [str(candidate["room_id"]) for candidate in candidates]
-        return {
+        response_schema = build_visual_detection_localization_schema(
+            room_ids,
+            include_bounds=self.model_client.provider
+            not in {"gemini", "gemini_api", "google_gemma_api"},
+        )
+        request_body = {
             "model": self.model,
             "instructions": build_visual_detection_localization_instructions(),
             "input": [
@@ -372,10 +856,84 @@ class ViewDetector:
                     "type": "json_schema",
                     "name": "visual_detection_localization",
                     "strict": True,
-                    "schema": build_visual_detection_localization_schema(room_ids),
+                    "schema": response_schema,
                 }
             },
         }
+        if self.max_output_tokens is not None:
+            request_body["max_output_tokens"] = self.max_output_tokens
+        return request_body
+
+    @staticmethod
+    def _visual_candidate_room_ids_from_request(primary_request: dict) -> list[str]:
+        try:
+            values = primary_request["text"]["format"]["schema"]["properties"][
+                "visual_localization"
+            ]["properties"]["room_scores"]["items"]["properties"]["room_id"]["enum"]
+        except (KeyError, TypeError):
+            return []
+        if not isinstance(values, list):
+            return []
+        return [value for value in values if isinstance(value, str) and value]
+
+    def _build_visual_schema_repair_request_body(
+        self,
+        primary_request: dict,
+        *,
+        candidate_room_ids: list[str] | None = None,
+        validation_error: ValueError | None = None,
+    ) -> dict:
+        repaired = self._clone_json(primary_request)
+        base_instructions = repaired.get("instructions")
+        repair_parts = [VISUAL_SCHEMA_REPAIR_INSTRUCTIONS]
+        candidate_room_ids = candidate_room_ids or self._visual_candidate_room_ids_from_request(
+            primary_request
+        )
+        if candidate_room_ids:
+            repair_parts.append(
+                f"room_scores must contain exactly {len(candidate_room_ids)} items. "
+                "Required room_id sequence: "
+                f"{json.dumps(candidate_room_ids, ensure_ascii=False)}."
+            )
+        if validation_error is not None:
+            repair_parts.append(
+                "Previous deterministic validator error: "
+                f"{str(validation_error)[:1000]}"
+            )
+        repair = " ".join(repair_parts)
+        repaired["instructions"] = (
+            f"{base_instructions}\n\n{repair}"
+            if isinstance(base_instructions, str) and base_instructions
+            else repair
+        )
+        return repaired
+
+    def _build_legacy_visual_schema_repair_request_body(self, primary_request: dict) -> dict:
+        repaired = self._clone_json(primary_request)
+        base_instructions = repaired.get("instructions")
+        repaired["instructions"] = (
+            f"{base_instructions}\n\n{LEGACY_VISUAL_SCHEMA_REPAIR_INSTRUCTIONS}"
+            if isinstance(base_instructions, str) and base_instructions
+            else LEGACY_VISUAL_SCHEMA_REPAIR_INSTRUCTIONS
+        )
+        return repaired
+
+    def _legacy_unbounded_visual_request_body(self, primary_request: dict) -> dict:
+        legacy = self._clone_json(primary_request)
+        try:
+            schema = legacy["text"]["format"]["schema"]
+            entity_array = schema["properties"]["entities"]
+            entity_array.pop("maxItems", None)
+            entity_array["items"]["properties"]["source_views"].pop("maxItems", None)
+            localization = schema["properties"]["visual_localization"]["properties"]
+            localization["room_scores"].pop("minItems", None)
+            localization["room_scores"].pop("maxItems", None)
+            localization["evidence_entities"].pop("maxItems", None)
+        except (KeyError, TypeError):
+            # Gemini uses a deliberately compact transport schema; there is no
+            # older bounded schema variant to migrate in that case.
+            return legacy
+        return legacy
 
     def _build_view_theme_request_body(self, captures: list[dict]) -> dict:
         content = [{"type": "input_text", "text": build_view_theme_extraction_input(captures)}]
@@ -588,6 +1146,95 @@ class ViewDetector:
         return normalized
 
     @staticmethod
+    def _validate_fingerprinted_visual_output(
+        parsed: dict,
+        *,
+        candidate_room_ids: list[str],
+    ) -> None:
+        entities = parsed.get("entities")
+        visual = parsed.get("visual_localization")
+        if not isinstance(entities, list) or len(entities) > 8 or not isinstance(visual, dict):
+            raise ValueError("Visual output does not match the required object schema.")
+        for entity in entities:
+            if not isinstance(entity, dict):
+                raise ValueError("Visual entity must be an object.")
+            confidence = entity.get("confidence")
+            if (
+                not isinstance(entity.get("name"), str)
+                or len(entity["name"]) > 120
+                or entity.get("kind") not in VIEW_DETECTION_KINDS
+                or isinstance(confidence, bool)
+                or not isinstance(confidence, (int, float))
+                or not math.isfinite(float(confidence))
+                or not isinstance(entity.get("source_views"), list)
+                or len(entity["source_views"]) > 8
+                or entity.get("location_scope") not in ENTITY_LOCATION_SCOPES
+            ):
+                raise ValueError("Visual entity does not match the required schema.")
+        predicted = visual.get("predicted_room_id")
+        if predicted is not None and predicted not in candidate_room_ids:
+            raise ValueError("Visual output predicted an unknown room.")
+        scores = visual.get("room_scores")
+        if not isinstance(scores, list):
+            raise ValueError("Fingerprinted visual output requires room_scores.")
+        score_ids: list[str] = []
+        invalid_score_fields: list[str] = []
+        for index, score in enumerate(scores):
+            if not isinstance(score, dict):
+                invalid_score_fields.append(f"index {index} is not an object")
+                continue
+            value = score.get("score")
+            room_id = score.get("room_id")
+            if isinstance(room_id, str):
+                score_ids.append(room_id)
+            if (
+                score.get("evidence_type") not in ROOM_EVIDENCE_TYPES
+                or isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(float(value))
+                or not isinstance(score.get("reason"), str)
+                or len(score["reason"]) > 160
+            ):
+                invalid_score_fields.append(f"index {index} ({room_id!r}) has invalid fields")
+        candidate_set = set(candidate_room_ids)
+        seen_ids: set[str] = set()
+        duplicate_ids: list[str] = []
+        for room_id in score_ids:
+            if room_id in seen_ids and room_id not in duplicate_ids:
+                duplicate_ids.append(room_id)
+            seen_ids.add(room_id)
+        missing_ids = [room_id for room_id in candidate_room_ids if room_id not in seen_ids]
+        unknown_ids = sorted({room_id for room_id in score_ids if room_id not in candidate_set})
+        if (
+            len(scores) != len(candidate_room_ids)
+            or missing_ids
+            or duplicate_ids
+            or unknown_ids
+        ):
+            raise ValueError(
+                "Visual room_scores ID mismatch: "
+                f"expected_count={len(candidate_room_ids)}, actual_count={len(scores)}, "
+                f"missing={json.dumps(missing_ids, ensure_ascii=False)}, "
+                f"duplicates={json.dumps(duplicate_ids, ensure_ascii=False)}, "
+                f"unknown={json.dumps(unknown_ids, ensure_ascii=False)}."
+            )
+        if invalid_score_fields:
+            raise ValueError(
+                "Visual room_scores contain invalid fields: "
+                + "; ".join(invalid_score_fields[:8])
+            )
+        evidence_entities = visual.get("evidence_entities")
+        if (
+            not isinstance(evidence_entities, list)
+            or len(evidence_entities) > 6
+            or any(not isinstance(value, str) or len(value) > 120 for value in evidence_entities)
+        ):
+            raise ValueError("Visual output has invalid evidence_entities.")
+        summary = visual.get("summary")
+        if not isinstance(summary, str) or len(summary) > 240:
+            raise ValueError("Visual output has an invalid summary.")
+
+    @staticmethod
     def _normalize_visual_localization(visual_localization: dict, *, candidate_room_ids: list[str]) -> dict:
         candidate_set = set(candidate_room_ids)
         raw_scores_by_room = {room_id: 0.0 for room_id in candidate_room_ids}
@@ -659,6 +1306,7 @@ class ViewDetector:
             ) from exc
 
     def _create_timed_response(self, request_body: dict) -> dict:
+        self._active_visual_logical_call_count += 1
         started = time.perf_counter()
         try:
             return self._create_response(request_body)
@@ -667,10 +1315,7 @@ class ViewDetector:
 
     @staticmethod
     def _parse_output_payload(payload: dict) -> dict:
-        try:
-            return parse_json_output(payload)
-        except ValueError:
-            return {"entities": []}
+        return parse_json_output(payload)
 
     @staticmethod
     def _clone_json(payload: dict) -> dict:
@@ -795,6 +1440,7 @@ class MultiViewAggregator:
                 "visual_cache_hit",
                 "visual_cache_version",
                 "visual_cache_path",
+                "visual_cache_fingerprint",
                 "visual_timing",
             ):
                 if key not in metadata and key in view_detection.metadata:

@@ -311,6 +311,7 @@ class STNavTests(unittest.TestCase):
             "ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT": os.environ.get("ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT"),
             "ST_NAV_PROFILE_OLLAMA_NUM_CTX": os.environ.get("ST_NAV_PROFILE_OLLAMA_NUM_CTX"),
             "ST_NAV_PROFILE_OLLAMA_TEMPERATURE": os.environ.get("ST_NAV_PROFILE_OLLAMA_TEMPERATURE"),
+            "ST_NAV_PROFILE_OLLAMA_THINK": os.environ.get("ST_NAV_PROFILE_OLLAMA_THINK"),
         }
         try:
             os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
@@ -323,6 +324,7 @@ class STNavTests(unittest.TestCase):
             os.environ.pop("ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT", None)
             os.environ["ST_NAV_PROFILE_OLLAMA_NUM_CTX"] = "4096"
             os.environ["ST_NAV_PROFILE_OLLAMA_TEMPERATURE"] = "0"
+            os.environ["ST_NAV_PROFILE_OLLAMA_THINK"] = "true"
 
             resolved = resolve_model_environment(
                 default_model="gpt-5-mini",
@@ -341,6 +343,7 @@ class STNavTests(unittest.TestCase):
                     request_timeout=None,
                     num_ctx=4096,
                     temperature=0.0,
+                    think=True,
                     active_profile="ollama",
                 ),
             )
@@ -386,9 +389,11 @@ class STNavTests(unittest.TestCase):
             provider="ollama",
             api_base="http://127.0.0.1:11434/v1",
             api_kind="chat_completions",
+            think=True,
         )
         request_body = {
             "model": "gemma4:26b",
+            "max_output_tokens": 2048,
             "instructions": "Return JSON only.",
             "input": [
                 {
@@ -426,7 +431,9 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(payload["messages"][1]["content"], "Describe this image.")
         self.assertEqual(payload["messages"][1]["images"], ["AAA"])
         self.assertEqual(payload["format"]["required"], ["answer"])
+        self.assertIs(payload["think"], True)
         self.assertEqual(payload["options"]["num_ctx"], 4096)
+        self.assertEqual(payload["options"]["num_predict"], 2048)
         self.assertEqual(payload["options"]["temperature"], 0)
 
     def test_model_response_client_preserves_string_input_for_ollama_chat(self) -> None:
@@ -3697,7 +3704,12 @@ class STNavTests(unittest.TestCase):
         self.assertIn("Do not guess a room theme from weak, cropped, or partial evidence", instructions)
 
         schema = build_spatial_context_extraction_schema(["view_0"])
-        theme_properties = schema["properties"]["views"]["items"]["properties"]["themes"]["items"]["properties"]
+        views_schema = schema["properties"]["views"]
+        themes_schema = views_schema["items"]["properties"]["themes"]
+        theme_properties = themes_schema["items"]["properties"]
+        self.assertEqual(views_schema["minItems"], 1)
+        self.assertEqual(views_schema["maxItems"], 1)
+        self.assertEqual(themes_schema["maxItems"], 4)
         self.assertIn("label", theme_properties)
         self.assertNotIn("matched_theme", theme_properties)
 
