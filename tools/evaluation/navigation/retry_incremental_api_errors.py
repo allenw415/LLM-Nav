@@ -30,7 +30,7 @@ STAGES = {"per10": (1, 249), "per20": (250, 485), "per30": (486, 715)}
 MILESTONE_MAXIMUMS = {"per10": 249, "per20": 485, "per30": 715}
 CONDITIONS = (
     ("without_trajectory", "geometry", "active_profile"),
-    ("with_trajectory", "geometry-edge-visit", "ST_NAV_WITH_TRAJECTORY_API_KEY"),
+    ("with_trajectory", "geometry-edge-visit", "SA_NAV_WITH_TRAJECTORY_API_KEY"),
 )
 
 
@@ -203,8 +203,8 @@ def command(
 
 
 def active_profile_key() -> tuple[str, str]:
-    profile = os.environ.get("ST_NAV_ACTIVE_PROFILE", "gemini").strip().upper()
-    variable = f"ST_NAV_PROFILE_{profile}_API_KEY"
+    profile = os.environ.get("SA_NAV_ACTIVE_PROFILE", "gemini").strip().upper()
+    variable = f"SA_NAV_PROFILE_{profile}_API_KEY"
     value = os.environ.get(variable)
     if not value:
         raise RuntimeError(f"Missing active-profile API key variable: {variable}")
@@ -219,7 +219,7 @@ def condition_environment(key_source: str) -> tuple[dict[str, str], str]:
     secondary = os.environ.get(key_source)
     if not secondary:
         raise RuntimeError(f"Missing {key_source} in .env")
-    environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = secondary
+    environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = secondary
     return environment, key_source
 
 
@@ -325,9 +325,9 @@ def main() -> int:
         sys.path.insert(0, str(PROJECT_ROOT))
     load_env(PROJECT_ROOT / ".env")
     _, active_key_value = active_profile_key()
-    secondary_key_value = os.environ.get("ST_NAV_WITH_TRAJECTORY_API_KEY")
+    secondary_key_value = os.environ.get("SA_NAV_WITH_TRAJECTORY_API_KEY")
     if not secondary_key_value:
-        raise RuntimeError("Missing ST_NAV_WITH_TRAJECTORY_API_KEY in .env")
+        raise RuntimeError("Missing SA_NAV_WITH_TRAJECTORY_API_KEY in .env")
     if active_key_value == secondary_key_value:
         raise RuntimeError("Without/With trajectory API keys must be distinct for this retry")
 
@@ -416,7 +416,7 @@ def main() -> int:
             print(f"{condition}: no API-error cases", flush=True)
             continue
         environment, _ = condition_environment(key_source)
-        environment["ST_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
+        environment["SA_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
         process = subprocess.Popen(
             command(ids, condition_retry_dir, direction_policy, args.llm_timeout),
             cwd=PROJECT_ROOT,

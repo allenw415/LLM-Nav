@@ -13,13 +13,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
-from st_nav.cli._common import load_json, render_json, resolve_project_path  # noqa: E402
-from st_nav.cli.run_map_grounded_heading import angular_error_deg, stable_majority  # noqa: E402
-from st_nav.cli.run_spatial_alignment import request_diagnostics, response_diagnostics  # noqa: E402
-from st_nav.common.env import DEFAULT_GEMINI_API_BASE  # noqa: E402
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.experiments.map_grounded_heading import (  # noqa: E402
+from sa_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
+from sa_nav.cli._common import load_json, render_json, resolve_project_path  # noqa: E402
+from sa_nav.cli.run_map_grounded_heading import angular_error_deg, stable_majority  # noqa: E402
+from sa_nav.cli.run_spatial_alignment import request_diagnostics, response_diagnostics  # noqa: E402
+from sa_nav.common.env import DEFAULT_GEMINI_API_BASE  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.experiments.map_grounded_heading import (  # noqa: E402
     DIRECTION_TO_HEADING,
     MAP_MODES,
     MapGroundedHeadingExperiment,
@@ -27,7 +27,7 @@ from st_nav.experiments.map_grounded_heading import (  # noqa: E402
     render_passage_heading_map,
     validate_heading_map_regions,
 )
-from st_nav.perception.renderer import sanitize_name  # noqa: E402
+from sa_nav.perception.renderer import sanitize_name  # noqa: E402
 
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -474,7 +474,7 @@ def evaluate(args: argparse.Namespace) -> dict:
         for repeat_index in range(1, args.repeat + 1):
             started = time.perf_counter()
             record: dict = {
-                "schema": "st_nav.map_grounded_heading_run",
+                "schema": "sa_nav.map_grounded_heading_run",
                 "schema_version": 1,
                 "status": "error",
                 **case,
@@ -548,7 +548,7 @@ def evaluate(args: argparse.Namespace) -> dict:
         low_confidence_threshold=args.low_confidence_threshold,
     )
     payload = {
-        "schema": "st_nav.map_grounded_heading_evaluation",
+        "schema": "sa_nav.map_grounded_heading_evaluation",
         "schema_version": 1,
         "config": {
             "artifacts_dir": str(artifacts_dir),

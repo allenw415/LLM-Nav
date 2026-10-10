@@ -6,7 +6,7 @@ from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_normalized_
 
 ensure_project_root_on_path()
 
-from st_nav import LLMInstructionParser, load_dotenv, resolve_model_environment, resolve_task_num_ctx
+from sa_nav import LLMInstructionParser, load_dotenv, resolve_model_environment, resolve_task_num_ctx
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(

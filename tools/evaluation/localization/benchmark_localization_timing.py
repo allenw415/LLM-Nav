@@ -33,7 +33,7 @@ from eval_map_grounded_spatial_alignment import (  # noqa: E402
     bayesian_top5,
     source_change_category,
 )
-from st_nav import (  # noqa: E402
+from sa_nav import (  # noqa: E402
     EvidenceScoreLocalizer,
     GroundingIndex,
     PerceptionPipeline,
@@ -42,9 +42,9 @@ from st_nav import (  # noqa: E402
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.cli._common import load_json, load_normalized_artifacts, render_json  # noqa: E402
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.experiments.map_grounded_alignment import (  # noqa: E402
+from sa_nav.cli._common import load_json, load_normalized_artifacts, render_json  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.experiments.map_grounded_alignment import (  # noqa: E402
     MapGroundedSpatialAlignmentExperiment,
 )
 
@@ -250,7 +250,7 @@ def build_summary(
 ) -> dict[str, Any]:
     completed = [record for record in records if record.get("status") == "completed"]
     return {
-        "schema": "st_nav.localization_timing_benchmark",
+        "schema": "sa_nav.localization_timing_benchmark",
         "schema_version": 1,
         "config": config,
         "selected_count": len(selected_cases),

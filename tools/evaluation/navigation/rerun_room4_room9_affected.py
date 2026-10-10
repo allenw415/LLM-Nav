@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.evaluation.navigation_batch import load_jsonl
+from sa_nav.evaluation.navigation_batch import load_jsonl
 from tools.evaluation.navigation.report_navigation_grid import (
     build_experiment_summary,
     build_meeting_markdown,
@@ -557,7 +557,7 @@ def main() -> int:
         _atomic_write_text(
             corrected_output_dir / "meeting_summary.md",
             build_meeting_markdown(
-                title="LLM-Nav Floor 0 Corrected 485 Navigation Evaluation",
+                title="SA-Nav Floor 0 Corrected 485 Navigation Evaluation",
                 summary=summary,
             ),
         )

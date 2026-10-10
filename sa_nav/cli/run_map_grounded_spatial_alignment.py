@@ -11,8 +11,8 @@ from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_json, rende
 
 ensure_project_root_on_path()
 
-from st_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
-from st_nav.cli.run_spatial_alignment import (  # noqa: E402
+from sa_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
+from sa_nav.cli.run_spatial_alignment import (  # noqa: E402
     angular_error_deg,
     expected_orientation_from_manifest,
     expected_room_from_grounding,
@@ -22,13 +22,13 @@ from st_nav.cli.run_spatial_alignment import (  # noqa: E402
     response_diagnostics,
     select_candidate_rooms,
 )
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.experiments.map_grounded_alignment import (  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.experiments.map_grounded_alignment import (  # noqa: E402
     MapGroundedSpatialAlignmentExperiment,
     render_semantic_map,
     validate_map_regions,
 )
-from st_nav.perception.renderer import sanitize_name  # noqa: E402
+from sa_nav.perception.renderer import sanitize_name  # noqa: E402
 
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -201,7 +201,7 @@ def run_experiment(args: argparse.Namespace) -> dict:
     for repeat_index in range(1, args.repeat + 1):
         started_at = time.perf_counter()
         run_payload: dict = {
-            "schema": "st_nav.map_grounded_spatial_alignment",
+            "schema": "sa_nav.map_grounded_spatial_alignment",
             "schema_version": 1,
             "status": "error",
             "mode": "map_grounded_direct_images_single_call",
@@ -265,7 +265,7 @@ def run_experiment(args: argparse.Namespace) -> dict:
         runs.append(run_payload)
 
     summary = {
-        "schema": "st_nav.map_grounded_spatial_alignment_summary",
+        "schema": "sa_nav.map_grounded_spatial_alignment_summary",
         "schema_version": 1,
         "pano_id": args.pano_id,
         "mode": "map_grounded_direct_images_single_call",

@@ -13,8 +13,8 @@ from collections import deque
 from pathlib import Path
 from typing import Callable
 
-from st_nav.common.env import resolve_model_environment
-from st_nav.common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
+from sa_nav.common.env import resolve_model_environment
+from sa_nav.common.model_client import DEFAULT_OPENAI_API_BASE, ModelResponseClient, parse_json_output, resolve_api_kind
 
 CARDINAL_CAPTURE_LABELS = ("north", "east", "south", "west")
 

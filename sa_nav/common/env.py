@@ -51,14 +51,14 @@ def resolve_model_environment(
     default_api_kind: str | None = None,
     profile: str | None = None,
 ) -> ModelEnvironment:
-    active_profile = (profile or os.environ.get("ST_NAV_ACTIVE_PROFILE") or os.environ.get("ST_NAV_PROFILE") or "").strip()
+    active_profile = (profile or os.environ.get("SA_NAV_ACTIVE_PROFILE") or os.environ.get("SA_NAV_PROFILE") or "").strip()
 
     def lookup(name: str, *legacy_names: str) -> str | None:
         candidates: list[str] = []
         if active_profile:
             normalized_profile = _normalize_profile_name(active_profile)
-            candidates.append(f"ST_NAV_PROFILE_{normalized_profile}_{name}")
-        candidates.append(f"ST_NAV_{name}")
+            candidates.append(f"SA_NAV_PROFILE_{normalized_profile}_{name}")
+        candidates.append(f"SA_NAV_{name}")
         candidates.extend(legacy_names)
         for candidate in candidates:
             value = os.environ.get(candidate)
@@ -110,7 +110,7 @@ def resolve_task_num_ctx(
 
     normalized_task_name = _normalize_profile_name(task_name)
     if normalized_task_name:
-        task_value = _parse_int(os.environ.get(f"ST_NAV_{normalized_task_name}_NUM_CTX"))
+        task_value = _parse_int(os.environ.get(f"SA_NAV_{normalized_task_name}_NUM_CTX"))
         if task_value is not None:
             return task_value
 

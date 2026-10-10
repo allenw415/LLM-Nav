@@ -7,24 +7,24 @@ import tempfile
 import unittest
 from unittest import mock
 
-from st_nav.common.types import (
+from sa_nav.common.types import (
     CandidateAction,
     ReasoningInput,
     RenderedView,
     TaskSpec,
 )
-from st_nav.decision import EdgeVisitActionPolicy, GreedyActionPolicy, VisualThemeActionPolicy
-from st_nav.pipeline import NavigationPipelineConfig, build_navigation_pipeline
-from st_nav.spatial import GroundingIndex, SpatialEngine
+from sa_nav.decision import EdgeVisitActionPolicy, GreedyActionPolicy, VisualThemeActionPolicy
+from sa_nav.pipeline import NavigationPipelineConfig, build_navigation_pipeline
+from sa_nav.spatial import GroundingIndex, SpatialEngine
 
 
 MODEL_ENV = {
-    "ST_NAV_MODEL_PROVIDER": "gemini",
-    "ST_NAV_API_KEY": "test-key",
-    "ST_NAV_API_BASE": "https://generativelanguage.googleapis.com/v1beta",
-    "ST_NAV_API_KIND": "responses",
-    "ST_NAV_MODEL_NAME": "gemma-4-31b-it",
-    "ST_NAV_TEMPERATURE": "0",
+    "SA_NAV_MODEL_PROVIDER": "gemini",
+    "SA_NAV_API_KEY": "test-key",
+    "SA_NAV_API_BASE": "https://generativelanguage.googleapis.com/v1beta",
+    "SA_NAV_API_KIND": "responses",
+    "SA_NAV_MODEL_NAME": "gemma-4-31b-it",
+    "SA_NAV_TEMPERATURE": "0",
 }
 
 

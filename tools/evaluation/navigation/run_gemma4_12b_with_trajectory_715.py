@@ -17,8 +17,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.evaluation import summarize_batch_results
-from st_nav.evaluation.navigation_batch import load_jsonl
+from sa_nav.evaluation import summarize_batch_results
+from sa_nav.evaluation.navigation_batch import load_jsonl
 
 
 EVALUATOR = PROJECT_ROOT / "tools/evaluation/navigation/evaluate_navigation_batch.py"
@@ -149,7 +149,7 @@ def _sha256(path: Path) -> str:
 
 
 def _source_tree_sha256() -> str:
-    roots = [PROJECT_ROOT / "st_nav", PROJECT_ROOT / "tools/evaluation/navigation"]
+    roots = [PROJECT_ROOT / "sa_nav", PROJECT_ROOT / "tools/evaluation/navigation"]
     paths = sorted(
         path
         for root in roots

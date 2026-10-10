@@ -11,9 +11,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx
-from st_nav.cli._common import PROJECT_ROOT, load_normalized_artifacts, resolve_project_path
-from st_nav.decision.instruction_parser import LLMInstructionParser
+from sa_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx
+from sa_nav.cli._common import PROJECT_ROOT, load_normalized_artifacts, resolve_project_path
+from sa_nav.decision.instruction_parser import LLMInstructionParser
 
 load_dotenv(PROJECT_ROOT / ".env")
 
@@ -324,7 +324,7 @@ def main() -> int:
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S %z"),
         "case_count": len(cases),
         "config": {
-            "active_profile": os.environ.get("ST_NAV_ACTIVE_PROFILE") or os.environ.get("ST_NAV_PROFILE"),
+            "active_profile": os.environ.get("SA_NAV_ACTIVE_PROFILE") or os.environ.get("SA_NAV_PROFILE"),
             "artifacts_dir": args.artifacts_dir,
             "model": parser.model,
             "api_base": parser.api_base,

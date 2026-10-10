@@ -252,8 +252,8 @@ def main() -> int:
             process_exit_codes[condition_name] = 0
             continue
         environment = os.environ.copy()
-        environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition_name]
-        environment["ST_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
+        environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition_name]
+        environment["SA_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
         process = subprocess.Popen(
             retry_command(
                 test_ids=ids,

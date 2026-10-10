@@ -12,14 +12,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import (  # noqa: E402
+from sa_nav import (  # noqa: E402
     AnthropicMessageBatchClient,
     ModelResponseClient,
     atomic_write_batch_checkpoint,
     parse_json_output,
     prepare_message_batch_request,
 )
-from st_nav.common.env import load_dotenv  # noqa: E402
+from sa_nav.common.env import load_dotenv  # noqa: E402
 
 
 MODEL_NAME = "claude-sonnet-5"
@@ -78,7 +78,7 @@ def build_request_body() -> dict:
 
 def resolve_anthropic_api_key() -> str | None:
     for name in (
-        "ST_NAV_PROFILE_CLAUDE_API_KEY",
+        "SA_NAV_PROFILE_CLAUDE_API_KEY",
         "ANTHROPIC_API_KEY",
     ):
         value = os.environ.get(name)
@@ -206,7 +206,7 @@ def main() -> int:
     api_key = resolve_anthropic_api_key()
     if not api_key:
         raise RuntimeError(
-            "Missing ANTHROPIC_API_KEY or ST_NAV_PROFILE_CLAUDE_API_KEY. "
+            "Missing ANTHROPIC_API_KEY or SA_NAV_PROFILE_CLAUDE_API_KEY. "
             "Store the key in .env; do not pass it on the command line."
         )
 

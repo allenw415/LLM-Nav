@@ -36,7 +36,7 @@ MODEL_TELEMETRY_COUNTER_KEYS = (
 
 
 def resolve_api_kind(api_kind: str | None = None) -> str:
-    value = (api_kind or os.environ.get("ST_NAV_API_KIND") or "responses").strip().lower()
+    value = (api_kind or os.environ.get("SA_NAV_API_KIND") or "responses").strip().lower()
     if value not in SUPPORTED_API_KINDS:
         supported = ", ".join(sorted(SUPPORTED_API_KINDS))
         raise ValueError(f"Unsupported API kind: {value}. Expected one of: {supported}.")
@@ -206,11 +206,11 @@ class ModelResponseClient:
         self.temperature = temperature
         self.think = think
         self.response_client = response_client
-        self.max_http_retries = max(1, int(max_http_retries or _parse_int_env("ST_NAV_MAX_HTTP_RETRIES", MAX_HTTP_RETRIES)))
+        self.max_http_retries = max(1, int(max_http_retries or _parse_int_env("SA_NAV_MAX_HTTP_RETRIES", MAX_HTTP_RETRIES)))
         self.retry_backoff_seconds = max(
             0.0,
             float(retry_backoff_seconds if retry_backoff_seconds is not None else _parse_float_env(
-                "ST_NAV_HTTP_RETRY_BACKOFF_SECONDS",
+                "SA_NAV_HTTP_RETRY_BACKOFF_SECONDS",
                 HTTP_RETRY_BACKOFF_SECONDS,
             )),
         )
@@ -239,12 +239,12 @@ class ModelResponseClient:
 
             if self.provider == "anthropic" or self.api_kind == "anthropic_messages":
                 if not self.api_key:
-                    raise RuntimeError("Missing ANTHROPIC_API_KEY or ST_NAV_API_KEY for Anthropic provider.")
+                    raise RuntimeError("Missing ANTHROPIC_API_KEY or SA_NAV_API_KEY for Anthropic provider.")
                 endpoint = f"{self.api_base}/messages"
                 payload = self._responses_to_anthropic_messages_payload(request_body)
             elif self.provider in {"gemini", "gemini_api", "google_gemma_api"}:
                 if not self.api_key:
-                    raise RuntimeError("Missing GEMINI_API_KEY, GOOGLE_API_KEY, or ST_NAV_API_KEY for Gemini API provider.")
+                    raise RuntimeError("Missing GEMINI_API_KEY, GOOGLE_API_KEY, or SA_NAV_API_KEY for Gemini API provider.")
                 endpoint = self._gemini_endpoint(request_body)
                 payload = self._responses_to_gemini_generate_content_payload(request_body)
             elif self.provider == "ollama":

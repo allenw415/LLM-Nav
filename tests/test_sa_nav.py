@@ -13,7 +13,7 @@ import urllib.error
 from unittest import mock
 from pathlib import Path
 
-from st_nav import (
+from sa_nav import (
     BeliefState,
     CandidateAction,
     EvidenceScoreLocalizer,
@@ -53,13 +53,13 @@ from st_nav import (
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.cli.run_navigation import (
+from sa_nav.cli.run_navigation import (
     build_pano_viewer_episode,
     build_parser as build_navigation_cli_parser,
     validate_navigation_args,
 )
-from st_nav.common.room_profiles import room_candidate_payload
-from st_nav_data.normalize import (
+from sa_nav.common.room_profiles import room_candidate_payload
+from sa_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
     BRITISH_MUSEUM_EXCLUDED_EDGES,
     BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS,
@@ -68,7 +68,7 @@ from st_nav_data.normalize import (
     normalize_pano_graph,
     normalize_room_graph,
 )
-from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+from sa_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 
 
 def build_test_grounding(room_graph: dict, pano_room_grounding: dict | None = None) -> dict:
@@ -281,50 +281,50 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(extract_output_text(payload), '{"answer":"ok"}')
 
     def test_load_dotenv_lets_later_file_values_override_earlier_file_values(self) -> None:
-        original = os.environ.pop("ST_NAV_API_KIND", None)
+        original = os.environ.pop("SA_NAV_API_KIND", None)
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 dotenv_path = Path(tmpdir) / ".env"
                 dotenv_path.write_text(
-                    "ST_NAV_API_KIND=responses\nST_NAV_API_KIND=chat_completions\n",
+                    "SA_NAV_API_KIND=responses\nSA_NAV_API_KIND=chat_completions\n",
                     encoding="utf-8",
                 )
 
                 load_dotenv(dotenv_path)
 
-            self.assertEqual(os.environ.get("ST_NAV_API_KIND"), "chat_completions")
+            self.assertEqual(os.environ.get("SA_NAV_API_KIND"), "chat_completions")
         finally:
             if original is None:
-                os.environ.pop("ST_NAV_API_KIND", None)
+                os.environ.pop("SA_NAV_API_KIND", None)
             else:
-                os.environ["ST_NAV_API_KIND"] = original
+                os.environ["SA_NAV_API_KIND"] = original
 
     def test_resolve_model_environment_can_use_active_profile(self) -> None:
         managed_keys = {
-            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
-            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
-            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
-            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
-            "ST_NAV_REQUEST_TIMEOUT": os.environ.get("ST_NAV_REQUEST_TIMEOUT"),
-            "ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT": os.environ.get("ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT"),
-            "ST_NAV_PROFILE_OLLAMA_NUM_CTX": os.environ.get("ST_NAV_PROFILE_OLLAMA_NUM_CTX"),
-            "ST_NAV_PROFILE_OLLAMA_TEMPERATURE": os.environ.get("ST_NAV_PROFILE_OLLAMA_TEMPERATURE"),
-            "ST_NAV_PROFILE_OLLAMA_THINK": os.environ.get("ST_NAV_PROFILE_OLLAMA_THINK"),
+            "SA_NAV_ACTIVE_PROFILE": os.environ.get("SA_NAV_ACTIVE_PROFILE"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "SA_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_BASE"),
+            "SA_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KEY"),
+            "SA_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KIND"),
+            "SA_NAV_REQUEST_TIMEOUT": os.environ.get("SA_NAV_REQUEST_TIMEOUT"),
+            "SA_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT": os.environ.get("SA_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT"),
+            "SA_NAV_PROFILE_OLLAMA_NUM_CTX": os.environ.get("SA_NAV_PROFILE_OLLAMA_NUM_CTX"),
+            "SA_NAV_PROFILE_OLLAMA_TEMPERATURE": os.environ.get("SA_NAV_PROFILE_OLLAMA_TEMPERATURE"),
+            "SA_NAV_PROFILE_OLLAMA_THINK": os.environ.get("SA_NAV_PROFILE_OLLAMA_THINK"),
         }
         try:
-            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
-            os.environ.pop("ST_NAV_REQUEST_TIMEOUT", None)
-            os.environ.pop("ST_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT", None)
-            os.environ["ST_NAV_PROFILE_OLLAMA_NUM_CTX"] = "4096"
-            os.environ["ST_NAV_PROFILE_OLLAMA_TEMPERATURE"] = "0"
-            os.environ["ST_NAV_PROFILE_OLLAMA_THINK"] = "true"
+            os.environ["SA_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ.pop("SA_NAV_REQUEST_TIMEOUT", None)
+            os.environ.pop("SA_NAV_PROFILE_OLLAMA_REQUEST_TIMEOUT", None)
+            os.environ["SA_NAV_PROFILE_OLLAMA_NUM_CTX"] = "4096"
+            os.environ["SA_NAV_PROFILE_OLLAMA_TEMPERATURE"] = "0"
+            os.environ["SA_NAV_PROFILE_OLLAMA_THINK"] = "true"
 
             resolved = resolve_model_environment(
                 default_model="gpt-5-mini",
@@ -356,16 +356,16 @@ class STNavTests(unittest.TestCase):
 
     def test_resolve_model_environment_can_use_gemini_api_key_fallback(self) -> None:
         managed_keys = {
-            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
-            "ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER"),
-            "ST_NAV_PROFILE_GEMINI_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_GEMINI_MODEL_NAME"),
-            "ST_NAV_PROFILE_GEMINI_API_KEY": os.environ.get("ST_NAV_PROFILE_GEMINI_API_KEY"),
+            "SA_NAV_ACTIVE_PROFILE": os.environ.get("SA_NAV_ACTIVE_PROFILE"),
+            "SA_NAV_PROFILE_GEMINI_MODEL_PROVIDER": os.environ.get("SA_NAV_PROFILE_GEMINI_MODEL_PROVIDER"),
+            "SA_NAV_PROFILE_GEMINI_MODEL_NAME": os.environ.get("SA_NAV_PROFILE_GEMINI_MODEL_NAME"),
+            "SA_NAV_PROFILE_GEMINI_API_KEY": os.environ.get("SA_NAV_PROFILE_GEMINI_API_KEY"),
         }
         try:
-            os.environ["ST_NAV_ACTIVE_PROFILE"] = "gemini"
-            os.environ["ST_NAV_PROFILE_GEMINI_MODEL_PROVIDER"] = "gemini"
-            os.environ["ST_NAV_PROFILE_GEMINI_MODEL_NAME"] = "gemma-4-26b-a4b-it"
-            os.environ["ST_NAV_PROFILE_GEMINI_API_KEY"] = "gemini-test-key"
+            os.environ["SA_NAV_ACTIVE_PROFILE"] = "gemini"
+            os.environ["SA_NAV_PROFILE_GEMINI_MODEL_PROVIDER"] = "gemini"
+            os.environ["SA_NAV_PROFILE_GEMINI_MODEL_NAME"] = "gemma-4-26b-a4b-it"
+            os.environ["SA_NAV_PROFILE_GEMINI_API_KEY"] = "gemini-test-key"
 
             resolved = resolve_model_environment(
                 default_model="gpt-5-mini",
@@ -559,9 +559,9 @@ class STNavTests(unittest.TestCase):
                 return b'{"output_text":"{\\"answer\\":\\"ok\\"}"}'
 
         with (
-            mock.patch("st_nav.common.model_client.time.sleep") as sleep_mock,
+            mock.patch("sa_nav.common.model_client.time.sleep") as sleep_mock,
             mock.patch(
-                "st_nav.common.model_client.urllib.request.urlopen",
+                "sa_nav.common.model_client.urllib.request.urlopen",
                 side_effect=[transient_error, FakeResponse()],
             ) as urlopen_mock,
         ):
@@ -634,7 +634,7 @@ class STNavTests(unittest.TestCase):
             )
 
         with mock.patch(
-            "st_nav.common.model_client.urllib.request.urlopen",
+            "sa_nav.common.model_client.urllib.request.urlopen",
             side_effect=build_request_error(),
         ):
             with self.assertRaisesRegex(RuntimeError, "HTTP 400"):
@@ -642,7 +642,7 @@ class STNavTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "bad schema"):
             with mock.patch(
-                "st_nav.common.model_client.urllib.request.urlopen",
+                "sa_nav.common.model_client.urllib.request.urlopen",
                 side_effect=build_request_error(),
             ):
                 client.create(request_body)
@@ -1330,7 +1330,7 @@ class STNavTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parser.parse("Go to a gallery.")
 
-    def test_navigation_cli_rejects_instruction_only_and_mixed_modes(self) -> None:
+    def tesa_navigation_cli_rejects_instruction_only_and_mixed_modes(self) -> None:
         parser = build_navigation_cli_parser()
         valid_queries = [
             ["--instruction", "Go to Room 23", "--start-pano-id", "pano-8"],
@@ -1366,7 +1366,7 @@ class STNavTests(unittest.TestCase):
             ):
                 validate_navigation_args(parser, parser.parse_args(arguments))
 
-    def test_navigation_pipeline_rejects_missing_or_mixed_sources(self) -> None:
+    def tesa_navigation_pipeline_rejects_missing_or_mixed_sources(self) -> None:
         pipeline = NavigationPipeline(
             source_resolution_workflow=mock.Mock(),
             episode_runner=mock.Mock(),
@@ -1628,7 +1628,7 @@ class STNavTests(unittest.TestCase):
         self.assertIn("anchors=Assyria: Nimrud, Middle East", visual_input)
 
     def test_normalized_artifact_loader_prefers_visual_profile_room_graph(self) -> None:
-        from st_nav.cli._common import load_normalized_artifacts
+        from sa_nav.cli._common import load_normalized_artifacts
 
         with tempfile.TemporaryDirectory() as tmpdir:
             artifacts_dir = Path(tmpdir)
@@ -5103,7 +5103,7 @@ class STNavTests(unittest.TestCase):
             ],
         )
 
-    def test_navigation_output_builds_pano_viewer_episode(self) -> None:
+    def tesa_navigation_output_builds_pano_viewer_episode(self) -> None:
         navigation_payload = {
             "source": {"source_pano_id": "A"},
             "task": {
@@ -5159,7 +5159,7 @@ class STNavTests(unittest.TestCase):
 
         episode = build_pano_viewer_episode(navigation_payload, step_budget=15)
 
-        self.assertEqual(episode["schema"], "st_nav_navigation_episode")
+        self.assertEqual(episode["schema"], "sa_nav_navigation_episode")
         self.assertEqual(episode["pano_path"], ["A", "B", "C"])
         self.assertEqual(episode["final_pano_id"], "C")
         self.assertEqual(episode["completed_waypoints"], ["Room 2"])
@@ -5257,7 +5257,7 @@ class STNavTests(unittest.TestCase):
             )
         )
 
-    def test_navigation_pipeline_runs_source_resolution_then_episode_runner(self) -> None:
+    def tesa_navigation_pipeline_runs_source_resolution_then_episode_runner(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
@@ -5321,7 +5321,7 @@ class STNavTests(unittest.TestCase):
         self.assertEqual(runner.last_call["start_room_id"], "Room 8")
         self.assertEqual(runner.last_call["step_budget"], 3)
 
-    def test_navigation_pipeline_accepts_explicit_start_pano_and_target_room(self) -> None:
+    def tesa_navigation_pipeline_accepts_explicit_start_pano_and_target_room(self) -> None:
         room_graph = normalize_room_graph(self.explicit_map)
         grounding = build_test_grounding(room_graph)
         grounding["Room 8"]["pano_ids"] = ["pano-8"]
@@ -5483,9 +5483,9 @@ class STNavTests(unittest.TestCase):
 
 
     def test_resolve_task_num_ctx_prefers_explicit_then_task_env_then_fallback(self) -> None:
-        original = os.environ.get("ST_NAV_PARSE_INSTRUCTION_NUM_CTX")
+        original = os.environ.get("SA_NAV_PARSE_INSTRUCTION_NUM_CTX")
         try:
-            os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
+            os.environ["SA_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
             self.assertEqual(
                 resolve_task_num_ctx(
                     "parse_instruction",
@@ -5503,7 +5503,7 @@ class STNavTests(unittest.TestCase):
                 ),
                 1024,
             )
-            os.environ.pop("ST_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
+            os.environ.pop("SA_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
             self.assertEqual(
                 resolve_task_num_ctx(
                     "parse_instruction",
@@ -5518,28 +5518,28 @@ class STNavTests(unittest.TestCase):
             )
         finally:
             if original is None:
-                os.environ.pop("ST_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
+                os.environ.pop("SA_NAV_PARSE_INSTRUCTION_NUM_CTX", None)
             else:
-                os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = original
+                os.environ["SA_NAV_PARSE_INSTRUCTION_NUM_CTX"] = original
 
     def test_instruction_parser_uses_task_specific_num_ctx_with_explicit_override(self) -> None:
         managed_keys = {
-            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
-            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
-            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
-            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
-            "ST_NAV_PARSE_INSTRUCTION_NUM_CTX": os.environ.get("ST_NAV_PARSE_INSTRUCTION_NUM_CTX"),
+            "SA_NAV_ACTIVE_PROFILE": os.environ.get("SA_NAV_ACTIVE_PROFILE"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "SA_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_BASE"),
+            "SA_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KEY"),
+            "SA_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KIND"),
+            "SA_NAV_PARSE_INSTRUCTION_NUM_CTX": os.environ.get("SA_NAV_PARSE_INSTRUCTION_NUM_CTX"),
         }
         try:
-            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
-            os.environ["ST_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
+            os.environ["SA_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ["SA_NAV_PARSE_INSTRUCTION_NUM_CTX"] = "2048"
 
             room_graph = normalize_room_graph(self.explicit_map)
             parser = LLMInstructionParser(room_graph=room_graph)
@@ -5564,22 +5564,22 @@ class STNavTests(unittest.TestCase):
 
     def test_spatial_alignment_refiner_uses_task_specific_num_ctx_with_explicit_override(self) -> None:
         managed_keys = {
-            "ST_NAV_ACTIVE_PROFILE": os.environ.get("ST_NAV_ACTIVE_PROFILE"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
-            "ST_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("ST_NAV_PROFILE_OLLAMA_MODEL_NAME"),
-            "ST_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_BASE"),
-            "ST_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KEY"),
-            "ST_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("ST_NAV_PROFILE_OLLAMA_API_KIND"),
-            "ST_NAV_LOCALIZATION_NUM_CTX": os.environ.get("ST_NAV_LOCALIZATION_NUM_CTX"),
+            "SA_NAV_ACTIVE_PROFILE": os.environ.get("SA_NAV_ACTIVE_PROFILE"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"),
+            "SA_NAV_PROFILE_OLLAMA_MODEL_NAME": os.environ.get("SA_NAV_PROFILE_OLLAMA_MODEL_NAME"),
+            "SA_NAV_PROFILE_OLLAMA_API_BASE": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_BASE"),
+            "SA_NAV_PROFILE_OLLAMA_API_KEY": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KEY"),
+            "SA_NAV_PROFILE_OLLAMA_API_KIND": os.environ.get("SA_NAV_PROFILE_OLLAMA_API_KIND"),
+            "SA_NAV_LOCALIZATION_NUM_CTX": os.environ.get("SA_NAV_LOCALIZATION_NUM_CTX"),
         }
         try:
-            os.environ["ST_NAV_ACTIVE_PROFILE"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
-            os.environ["ST_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
-            os.environ["ST_NAV_LOCALIZATION_NUM_CTX"] = "16384"
+            os.environ["SA_NAV_ACTIVE_PROFILE"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_PROVIDER"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_MODEL_NAME"] = "gemma4:26b"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_BASE"] = "http://127.0.0.1:11434/v1"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KEY"] = "ollama"
+            os.environ["SA_NAV_PROFILE_OLLAMA_API_KIND"] = "chat_completions"
+            os.environ["SA_NAV_LOCALIZATION_NUM_CTX"] = "16384"
 
             room_graph = normalize_room_graph(self.explicit_map)
             grounding = build_test_grounding(room_graph)

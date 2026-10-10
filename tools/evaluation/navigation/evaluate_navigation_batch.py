@@ -15,21 +15,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import (
+from sa_nav import (
     NavigationPipelineConfig,
     build_navigation_pipeline,
     load_dotenv,
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.cli._common import load_normalized_artifacts
-from st_nav.common.model_client import MAX_HTTP_RETRIES, MODEL_TELEMETRY_COUNTER_KEYS
-from st_nav.decision.instruction_parser import QUERY_PARSER_CACHE_VERSION
-from st_nav.perception.detector import VISUAL_CACHE_VERSION
-from st_nav.decision.visual_theme_action_policy import (
+from sa_nav.cli._common import load_normalized_artifacts
+from sa_nav.common.model_client import MAX_HTTP_RETRIES, MODEL_TELEMETRY_COUNTER_KEYS
+from sa_nav.decision.instruction_parser import QUERY_PARSER_CACHE_VERSION
+from sa_nav.perception.detector import VISUAL_CACHE_VERSION
+from sa_nav.decision.visual_theme_action_policy import (
     VISUAL_THEME_DIRECTION_CACHE_VERSION,
 )
-from st_nav.evaluation import (
+from sa_nav.evaluation import (
     build_cache_inventory,
     compute_navigation_spl_metrics,
     compute_step_budget,
@@ -37,7 +37,7 @@ from st_nav.evaluation import (
     pano_path_distance_m,
     summarize_batch_results,
 )
-from st_nav.evaluation.navigation_batch import load_jsonl
+from sa_nav.evaluation.navigation_batch import load_jsonl
 
 
 DEFAULT_TEST_SET = (
@@ -66,7 +66,7 @@ def resolve(path: str | Path) -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the floor-0 LLM-Nav benchmark sequentially with a shared render cache."
+        description="Run the floor-0 SA-Nav benchmark sequentially with a shared render cache."
     )
     parser.add_argument("--test-set", default=DEFAULT_TEST_SET)
     parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
@@ -716,7 +716,7 @@ def main() -> int:
         parser.error("--spatial-context-max-output-tokens must be positive.")
     if args.spatial_alignment_max_output_tokens is not None and args.spatial_alignment_max_output_tokens < 1:
         parser.error("--spatial-alignment-max-output-tokens must be positive.")
-    os.environ["ST_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
+    os.environ["SA_NAV_MAX_HTTP_RETRIES"] = str(args.max_http_retries)
 
     test_set_path = resolve(args.test_set)
     output_dir = resolve(args.output_dir)

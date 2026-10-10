@@ -3,7 +3,8 @@
 set -u
 set -o pipefail
 
-PROJECT_ROOT="/home/allenw4/LLM-Nav"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd -- "$SCRIPT_DIR/../../.." && pwd)"
 RETRY_TOOL="$PROJECT_ROOT/tools/evaluation/navigation/retry_incremental_api_errors.py"
 SOURCE_ROOT="$PROJECT_ROOT/outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_incremental_10_20_30/milestones/per30"
 RETRY_PARENT="$PROJECT_ROOT/outputs/navigation_evaluation/floor0_semantic_targets_topology_constrained/room_count_2to6_ratio_1p0_2p0_per30_sparse715/initial_offset_incremental_10_20_30/retries/milestone_per30_715_api_errors"
@@ -72,7 +73,7 @@ count_errors() {
   jq -s '[.[] | select(.error != null)] | length' "$1"
 }
 
-printf 'campaign_id=%s\ncampaign_pid=%s\nstarted_at=%s\nmax_rounds=%s\nround_delay_seconds=%s\ncondition_execution=serial\nllm_timeout_seconds=600\nmax_http_retries=1\nwithout_key_source=ST_NAV_PROFILE_GEMINI_API_KEY\nwith_key_source=ST_NAV_WITH_TRAJECTORY_API_KEY\nkeys_are_distinct=validated_by_each_round\n' \
+printf 'campaign_id=%s\ncampaign_pid=%s\nstarted_at=%s\nmax_rounds=%s\nround_delay_seconds=%s\ncondition_execution=serial\nllm_timeout_seconds=600\nmax_http_retries=1\nwithout_key_source=SA_NAV_PROFILE_GEMINI_API_KEY\nwith_key_source=SA_NAV_WITH_TRAJECTORY_API_KEY\nkeys_are_distinct=validated_by_each_round\n' \
   "$CAMPAIGN_ID" "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$MAX_ROUNDS" "$ROUND_DELAY_SECONDS" > "$CAMPAIGN_LOG"
 initial_without_errors="$(count_errors "$SOURCE_ROOT/without_trajectory/results.jsonl")"
 initial_with_errors="$(count_errors "$SOURCE_ROOT/with_trajectory/results.jsonl")"

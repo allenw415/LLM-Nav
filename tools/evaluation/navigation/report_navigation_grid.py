@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.evaluation.navigation_batch import (
+from sa_nav.evaluation.navigation_batch import (
     compute_navigation_spl_metrics,
     load_jsonl,
     pano_path_distance_m,
@@ -625,7 +625,7 @@ def main() -> int:
     _atomic_write_text(
         extension_output_dir / "meeting_summary.md",
         build_meeting_markdown(
-            title=f"LLM-Nav Floor 0 Extension {len(extension_records)} Navigation Evaluation",
+            title=f"SA-Nav Floor 0 Extension {len(extension_records)} Navigation Evaluation",
             summary=extension_summary,
         ),
     )
@@ -635,7 +635,7 @@ def main() -> int:
     _atomic_write_text(
         combined_output_dir / "meeting_summary.md",
         build_meeting_markdown(
-            title=f"LLM-Nav Floor 0 Combined {len(combined_records)} Navigation Evaluation",
+            title=f"SA-Nav Floor 0 Combined {len(combined_records)} Navigation Evaluation",
             summary=combined_summary,
             comparison=comparison,
             legacy_vlm_audit=legacy_vlm_audit,

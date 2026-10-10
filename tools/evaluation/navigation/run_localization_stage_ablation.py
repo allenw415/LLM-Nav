@@ -37,12 +37,12 @@ CONDITIONS = (
     {
         "name": "visual",
         "effective_stage": "visual",
-        "api_key_source": "ST_NAV_PROFILE_GEMINI_API_KEY",
+        "api_key_source": "SA_NAV_PROFILE_GEMINI_API_KEY",
     },
     {
         "name": "bayesian",
         "effective_stage": "bayesian",
-        "api_key_source": "ST_NAV_WITH_TRAJECTORY_API_KEY",
+        "api_key_source": "SA_NAV_WITH_TRAJECTORY_API_KEY",
     },
 )
 
@@ -77,8 +77,8 @@ def load_jsonl(path: Path) -> list[dict]:
 
 
 def validate_environment() -> dict[str, str]:
-    if os.environ.get("ST_NAV_ACTIVE_PROFILE", "").strip().lower() != "gemini":
-        raise RuntimeError("This campaign requires ST_NAV_ACTIVE_PROFILE=gemini.")
+    if os.environ.get("SA_NAV_ACTIVE_PROFILE", "").strip().lower() != "gemini":
+        raise RuntimeError("This campaign requires SA_NAV_ACTIVE_PROFILE=gemini.")
     keys: dict[str, str] = {}
     for condition in CONDITIONS:
         source = condition["api_key_source"]
@@ -237,7 +237,7 @@ def run_conditions(keys: dict[str, str]) -> None:
         log_stream.write(f"\n[{utc_now()}] campaign launcher start\n")
         log_stream.flush()
         environment = os.environ.copy()
-        environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition["name"]]
+        environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition["name"]]
         process = subprocess.Popen(
             evaluation_command(
                 output_dir=condition_root,

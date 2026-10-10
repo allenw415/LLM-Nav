@@ -24,7 +24,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import (  # noqa: E402
+from sa_nav import (  # noqa: E402
     GroundingIndex,
     Observation,
     RenderedView,
@@ -33,9 +33,9 @@ from st_nav import (  # noqa: E402
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.cli._common import load_json, load_normalized_artifacts, render_json  # noqa: E402
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.perception.renderer import normalize_heading  # noqa: E402
+from sa_nav.cli._common import load_json, load_normalized_artifacts, render_json  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.perception.renderer import normalize_heading  # noqa: E402
 
 
 DEFAULT_BASE = PROJECT_ROOT / "outputs/localization_timing/representative12_20260818"
@@ -231,7 +231,7 @@ def build_summary(
         full_module = float(cumulative_bayesian["mean_module_seconds"]) + float(refinement["mean_module_seconds"])
         full_vlm = float(visual["mean_vlm_seconds"]) + float(refinement["mean_vlm_seconds"])
     return {
-        "schema": "st_nav.runtime_spatial_refinement_timing_benchmark",
+        "schema": "sa_nav.runtime_spatial_refinement_timing_benchmark",
         "schema_version": 1,
         "config": config,
         "selected_count": len(records),

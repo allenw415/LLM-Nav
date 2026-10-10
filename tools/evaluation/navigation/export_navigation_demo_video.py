@@ -23,7 +23,7 @@ from tools.evaluation.navigation.export_batch_trajectories_for_pano_viewer impor
     write_json,
 )
 from tools.pano_viewer.server import build_panorama_frame_manifest
-from st_nav_data.pano_visualization import build_visualization_payload
+from sa_nav_data.pano_visualization import build_visualization_payload
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]

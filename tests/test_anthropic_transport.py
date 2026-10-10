@@ -9,7 +9,7 @@ import threading
 import unittest
 from unittest import mock
 
-from st_nav import (
+from sa_nav import (
     AnthropicMessageBatchClient,
     ModelResponseClient,
     PersistentAnthropicBatchBroker,
@@ -22,7 +22,7 @@ from st_nav import (
     serialized_batch_bytes,
     split_message_batch_requests,
 )
-from st_nav.common.anthropic_batch_gateway import AnthropicBatchGatewayHTTPServer
+from sa_nav.common.anthropic_batch_gateway import AnthropicBatchGatewayHTTPServer
 
 
 class FakeHTTPResponse:
@@ -104,13 +104,13 @@ class AnthropicTransportTests(unittest.TestCase):
         managed = {
             name: os.environ.get(name)
             for name in (
-                "ST_NAV_ACTIVE_PROFILE",
-                "ST_NAV_PROFILE_CLAUDE_MODEL_PROVIDER",
-                "ST_NAV_PROFILE_CLAUDE_MODEL_NAME",
-                "ST_NAV_PROFILE_CLAUDE_API_KEY",
-                "ST_NAV_PROFILE_CLAUDE_API_BASE",
-                "ST_NAV_PROFILE_CLAUDE_API_KIND",
-                "ST_NAV_API_KEY",
+                "SA_NAV_ACTIVE_PROFILE",
+                "SA_NAV_PROFILE_CLAUDE_MODEL_PROVIDER",
+                "SA_NAV_PROFILE_CLAUDE_MODEL_NAME",
+                "SA_NAV_PROFILE_CLAUDE_API_KEY",
+                "SA_NAV_PROFILE_CLAUDE_API_BASE",
+                "SA_NAV_PROFILE_CLAUDE_API_KIND",
+                "SA_NAV_API_KEY",
                 "OPENAI_API_KEY",
                 "ANTHROPIC_API_KEY",
             )
@@ -118,9 +118,9 @@ class AnthropicTransportTests(unittest.TestCase):
         try:
             for name in managed:
                 os.environ.pop(name, None)
-            os.environ["ST_NAV_ACTIVE_PROFILE"] = "claude"
-            os.environ["ST_NAV_PROFILE_CLAUDE_MODEL_PROVIDER"] = "anthropic"
-            os.environ["ST_NAV_PROFILE_CLAUDE_MODEL_NAME"] = "claude-sonnet-5"
+            os.environ["SA_NAV_ACTIVE_PROFILE"] = "claude"
+            os.environ["SA_NAV_PROFILE_CLAUDE_MODEL_PROVIDER"] = "anthropic"
+            os.environ["SA_NAV_PROFILE_CLAUDE_MODEL_NAME"] = "claude-sonnet-5"
             os.environ["OPENAI_API_KEY"] = "must-not-be-used-for-anthropic"
             os.environ["ANTHROPIC_API_KEY"] = "anthropic-test-key"
 
@@ -314,7 +314,7 @@ class AnthropicTransportTests(unittest.TestCase):
         )
 
         with mock.patch(
-            "st_nav.common.model_client.urllib.request.urlopen",
+            "sa_nav.common.model_client.urllib.request.urlopen",
             return_value=response,
         ) as urlopen_mock:
             result = client.create(
@@ -391,7 +391,7 @@ class AnthropicTransportTests(unittest.TestCase):
         )
 
         with mock.patch(
-            "st_nav.common.anthropic_batch.urllib.request.urlopen",
+            "sa_nav.common.anthropic_batch.urllib.request.urlopen",
             side_effect=[created, streamed],
         ) as urlopen_mock:
             batch = client.create([prepared])
@@ -429,7 +429,7 @@ class AnthropicTransportTests(unittest.TestCase):
                     {"id": "msgbatch_test", "processing_status": "ended"},
                 ],
             ) as retrieve_mock,
-            mock.patch("st_nav.common.anthropic_batch.time.sleep") as sleep_mock,
+            mock.patch("sa_nav.common.anthropic_batch.time.sleep") as sleep_mock,
         ):
             ended = client.wait_until_ended(
                 "msgbatch_test",

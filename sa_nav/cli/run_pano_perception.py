@@ -13,7 +13,7 @@ from ._common import (
 
 ensure_project_root_on_path()
 
-from st_nav import GroundingIndex, PanoramaRenderer, PerceptionPipeline, ViewDetector, load_dotenv, resolve_model_environment
+from sa_nav import GroundingIndex, PanoramaRenderer, PerceptionPipeline, ViewDetector, load_dotenv, resolve_model_environment
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(

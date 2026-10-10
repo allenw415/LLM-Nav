@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from st_nav import GroundingIndex, Observation, RenderedView, SpatialAlignmentRefiner
-from st_nav.cli.run_spatial_alignment import (
+from sa_nav import GroundingIndex, Observation, RenderedView, SpatialAlignmentRefiner
+from sa_nav.cli.run_spatial_alignment import (
     load_manifest_observation,
     request_diagnostics,
     response_diagnostics,

@@ -6,4 +6,4 @@ Review-facing command examples for the navigation system.
 - `flows/`: end-to-end commands that exercise the full pipeline.
 
 Examples do not contain Python wrapper scripts. The runnable CLI adapters live
-under `st_nav.cli`, and non-runtime tools live under `tools/`.
+under `sa_nav.cli`, and non-runtime tools live under `tools/`.

@@ -42,7 +42,7 @@ CONDITIONS = (
     {
         "name": "with_trajectory",
         "direction_policy": "geometry-edge-visit",
-        "api_key_source": "ST_NAV_WITH_TRAJECTORY_API_KEY",
+        "api_key_source": "SA_NAV_WITH_TRAJECTORY_API_KEY",
     },
 )
 
@@ -183,7 +183,7 @@ def run_stage(dataset: list[dict], stage: dict) -> None:
             condition_api_key = os.environ.get(api_key_source)
             if not condition_api_key:
                 raise RuntimeError(f"Missing required .env variable: {api_key_source}")
-            process_environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = condition_api_key
+            process_environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = condition_api_key
         process = subprocess.Popen(
             evaluation_command(
                 test_ids=test_ids,

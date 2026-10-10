@@ -7,8 +7,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from st_nav.cli._common import load_json
-from st_nav.common.room_profiles import preferred_room_graph_path
+from sa_nav.cli._common import load_json
+from sa_nav.common.room_profiles import preferred_room_graph_path
 
 
 def load_eval_module():

@@ -6,7 +6,7 @@ import random
 import tempfile
 import unittest
 
-from st_nav.evaluation.navigation_batch import (
+from sa_nav.evaluation.navigation_batch import (
     build_cache_inventory,
     compute_navigation_spl_metrics,
     compute_step_budget,
@@ -15,7 +15,7 @@ from st_nav.evaluation.navigation_batch import (
     summarize_batch_results,
     sync_floor0_assets,
 )
-from st_nav.perception.renderer import MUSEUM_CAPTURE_LABELS, PanoramaRenderer
+from sa_nav.perception.renderer import MUSEUM_CAPTURE_LABELS, PanoramaRenderer
 
 
 def write_manifest(

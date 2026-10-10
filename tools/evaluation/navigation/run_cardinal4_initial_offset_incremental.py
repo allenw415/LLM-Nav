@@ -36,12 +36,12 @@ CONDITIONS = (
     {
         "name": "without_trajectory",
         "direction_policy": "geometry",
-        "api_key_source": "ST_NAV_PROFILE_GEMINI_API_KEY",
+        "api_key_source": "SA_NAV_PROFILE_GEMINI_API_KEY",
     },
     {
         "name": "with_trajectory",
         "direction_policy": "geometry-edge-visit",
-        "api_key_source": "ST_NAV_WITH_TRAJECTORY_API_KEY",
+        "api_key_source": "SA_NAV_WITH_TRAJECTORY_API_KEY",
     },
 )
 SMOKE_CASE_COUNT = 20
@@ -125,8 +125,8 @@ def stage_test_ids(dataset: list[dict], stage: dict) -> list[str]:
 
 
 def validate_api_keys() -> dict[str, str]:
-    if os.environ.get("ST_NAV_ACTIVE_PROFILE", "").strip().lower() != "gemini":
-        raise RuntimeError("The cardinal4 campaign requires ST_NAV_ACTIVE_PROFILE=gemini.")
+    if os.environ.get("SA_NAV_ACTIVE_PROFILE", "").strip().lower() != "gemini":
+        raise RuntimeError("The cardinal4 campaign requires SA_NAV_ACTIVE_PROFILE=gemini.")
     keys: dict[str, str] = {}
     for condition in CONDITIONS:
         source = condition["api_key_source"]
@@ -204,7 +204,7 @@ def _run_condition(
     output_dir.mkdir(parents=True, exist_ok=True)
     log_path = output_dir / "run.log"
     process_environment = os.environ.copy()
-    process_environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = api_key
+    process_environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = api_key
     with log_path.open("a", encoding="utf-8") as log_stream:
         log_stream.write(f"\n[{utc_now()}] launcher start {label}\n")
         log_stream.flush()
@@ -260,7 +260,7 @@ def run_condition_group(
         log_stream.write(f"\n[{utc_now()}] launcher start {label}\n")
         log_stream.flush()
         process_environment = os.environ.copy()
-        process_environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition["name"]]
+        process_environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = keys[condition["name"]]
         process = subprocess.Popen(
             evaluation_command(
                 test_ids=test_ids,

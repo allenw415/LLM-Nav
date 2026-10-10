@@ -30,9 +30,9 @@ class Cardinal4CampaignTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             experiment_root = Path(tmpdir) / "experiment"
             environment = {
-                "ST_NAV_ACTIVE_PROFILE": "gemini",
-                "ST_NAV_PROFILE_GEMINI_API_KEY": "without-secret",
-                "ST_NAV_WITH_TRAJECTORY_API_KEY": "with-secret",
+                "SA_NAV_ACTIVE_PROFILE": "gemini",
+                "SA_NAV_PROFILE_GEMINI_API_KEY": "without-secret",
+                "SA_NAV_WITH_TRAJECTORY_API_KEY": "with-secret",
                 "GMAPS_API_KEY": "maps-secret",
             }
             with mock.patch.object(campaign, "EXPERIMENT_ROOT", experiment_root), mock.patch.dict(
@@ -54,9 +54,9 @@ class Cardinal4CampaignTests(unittest.TestCase):
             with mock.patch.object(campaign, "EXPERIMENT_ROOT", Path(tmpdir)), mock.patch.dict(
                 os.environ,
                 {
-                    "ST_NAV_ACTIVE_PROFILE": "gemini",
-                    "ST_NAV_PROFILE_GEMINI_API_KEY": "same-secret",
-                    "ST_NAV_WITH_TRAJECTORY_API_KEY": "same-secret",
+                    "SA_NAV_ACTIVE_PROFILE": "gemini",
+                    "SA_NAV_PROFILE_GEMINI_API_KEY": "same-secret",
+                    "SA_NAV_WITH_TRAJECTORY_API_KEY": "same-secret",
                     "GMAPS_API_KEY": "maps-secret",
                 },
                 clear=True,

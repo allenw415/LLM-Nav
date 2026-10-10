@@ -14,7 +14,7 @@ from ._common import (
 
 ensure_project_root_on_path()
 
-from st_nav import (  # noqa: E402
+from sa_nav import (  # noqa: E402
     GroundingIndex,
     Observation,
     RenderedView,
@@ -23,10 +23,10 @@ from st_nav import (  # noqa: E402
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.common.model_client import extract_output_text  # noqa: E402
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.perception.renderer import normalize_heading, sanitize_name  # noqa: E402
-from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping  # noqa: E402
+from sa_nav.common.model_client import extract_output_text  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.perception.renderer import normalize_heading, sanitize_name  # noqa: E402
+from sa_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping  # noqa: E402
 
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -314,7 +314,7 @@ def main() -> int:
     grounding_path = artifacts_dir / "pano_room_grounding.json"
     started_at = time.perf_counter()
     payload: dict = {
-        "schema": "st_nav.single_call_spatial_alignment",
+        "schema": "sa_nav.single_call_spatial_alignment",
         "schema_version": 1,
         "status": "error",
         "mode": "direct_images_single_call",

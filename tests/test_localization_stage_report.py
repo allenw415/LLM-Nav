@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from st_nav.common.types import Observation
-from st_nav.spatial.localization import EvidenceScoreLocalizer
+from sa_nav.common.types import Observation
+from sa_nav.spatial.localization import EvidenceScoreLocalizer
 from tools.evaluation.navigation.evaluate_navigation_batch import BatchProgress
 from tools.evaluation.navigation.report_localization_stages import (
     apply_error_replacements,

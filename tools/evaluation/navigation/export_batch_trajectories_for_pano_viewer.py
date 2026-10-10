@@ -195,7 +195,7 @@ def build_episode(
     success = True if is_reference else bool(result and result.get("success"))
     reason = "reference_shortest_path" if is_reference else result.get("stop_reason")
     return {
-        "schema": "st_nav_navigation_episode",
+        "schema": "sa_nav_navigation_episode",
         "schema_version": 1,
         "trajectory_kind": trajectory_kind,
         "test_id": case["test_id"],
@@ -285,7 +285,7 @@ def markdown_table(entries: Sequence[dict[str, Any]]) -> str:
         "# Pano Viewer：2 展廳、高 detour ratio 測資",
         "",
         "此目錄包含 19 筆 `visited_room_count = 2`、`1.6 <= detour_ratio < 2.0` 的案例。",
-        "`actual/` 是 LLM-Nav 實際導航路徑；`reference/` 是資料集參考最短路徑。",
+        "`actual/` 是 SA-Nav 實際導航路徑；`reference/` 是資料集參考最短路徑。",
         "兩種 JSON 都能逐檔放進 Pano Viewer 的 Trajectory 面板。",
         "",
         "| 測資 | Ratio | 起點 → 目標 | 結果 | 步數 | 分類 |",

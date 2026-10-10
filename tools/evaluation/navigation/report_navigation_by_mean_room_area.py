@@ -127,7 +127,10 @@ def validate_paired_inputs(
 
 
 def load_area_catalog(payload: dict) -> tuple[dict[str, dict], set[str]]:
-    if payload.get("schema") != "st_nav.estimated_gallery_areas":
+    if payload.get("schema") not in {
+        "sa_nav.estimated_gallery_areas",
+        "st_nav.estimated_gallery_areas",
+    }:
         raise ValueError("Room-area data has an unsupported schema.")
     if payload.get("unit") != "m2":
         raise ValueError("Room-area data must use square metres.")

@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav_data.pano_room_grounding import rebuild_pano_room_grounding_from_batches, write_pano_room_grounding
+from sa_nav_data.pano_room_grounding import rebuild_pano_room_grounding_from_batches, write_pano_room_grounding
 
 DEFAULT_ARTIFACTS_DIR = PROJECT_ROOT / "dataset/sites/british_museum/normalized"
 

@@ -9,7 +9,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav_data.normalize import (
+from sa_nav_data.normalize import (
     BRITISH_MUSEUM_DIRECTION_OVERRIDES,
     BRITISH_MUSEUM_EXCLUDED_EDGES,
     BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS,
@@ -23,7 +23,7 @@ from st_nav_data.normalize import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Build normalized ST-Nav artifacts under dataset/."
+        description="Build normalized SA-Nav artifacts under dataset/."
     )
     parser.add_argument(
         "--explicit-map-path",

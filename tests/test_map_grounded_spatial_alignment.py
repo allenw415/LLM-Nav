@@ -7,8 +7,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from st_nav import Observation, RenderedView
-from st_nav.experiments.map_grounded_alignment import (
+from sa_nav import Observation, RenderedView
+from sa_nav.experiments.map_grounded_alignment import (
     MapGroundedSpatialAlignmentExperiment,
     _relax_json_schema,
     build_candidate_cards,

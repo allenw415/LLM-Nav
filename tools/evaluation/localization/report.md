@@ -10,7 +10,7 @@
 
 主要流程：
 - 從 `pano_room_grounding.json` 或既有輸出資料夾抽樣 pano。
-- 必要時呼叫 `st_nav.cli.run_pano_perception` 產生 per-pano JSON。
+- 必要時呼叫 `sa_nav.cli.run_pano_perception` 產生 per-pano JSON。
 - 讀取 `visual_localization.predicted_room_id`、room score distribution 與 optional spatial alignment 結果。
 - 輸出 top-k accuracy、per-room accuracy、missing output count 等 summary。
 
@@ -89,5 +89,5 @@ outputs/pano_perception_grounding_eval/summary.json
 
 ## 相關檔案
 
-- Evaluation script：[eval_localization.py](/home/allenw4/LLM-Nav/tools/evaluation/localization/eval_localization.py)
-- Evaluation README：[README.md](/home/allenw4/LLM-Nav/tools/evaluation/README.md)
+- Evaluation script：[eval_localization.py](eval_localization.py)
+- Evaluation README：[README.md](../README.md)

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from st_nav.common.types import BeliefState, CandidateAction, ReasoningInput, TaskSpec
-from st_nav.decision.action_policy import EdgeVisitActionPolicy, GreedyActionPolicy
-from st_nav.execution.episode_runner import EpisodeRunner
-from st_nav.pipeline.factory import NavigationPipelineConfig, build_navigation_pipeline
+from sa_nav.common.types import BeliefState, CandidateAction, ReasoningInput, TaskSpec
+from sa_nav.decision.action_policy import EdgeVisitActionPolicy, GreedyActionPolicy
+from sa_nav.execution.episode_runner import EpisodeRunner
+from sa_nav.pipeline.factory import NavigationPipelineConfig, build_navigation_pipeline
 
 
 class SimplifiedGeometryPolicyTests(unittest.TestCase):

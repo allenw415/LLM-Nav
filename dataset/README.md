@@ -5,8 +5,8 @@ The dataset is organized with two top-level concerns:
 - `sites/`: site-specific data assets that the system can load later
 - `pipelines/`: tooling and scripts used to generate or inspect those assets
 
-In the current repo layout, the dataset is consumed by `st_nav/`, while
-normalization and grounding-related preprocessing code lives in `st_nav_data/`
+In the current repo layout, the dataset is consumed by `sa_nav/`, while
+normalization and grounding-related preprocessing code lives in `sa_nav_data/`
 and executable tooling belongs in `tools/`.
 
 Example:

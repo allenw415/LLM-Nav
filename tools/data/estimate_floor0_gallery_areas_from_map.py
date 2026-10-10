@@ -220,7 +220,7 @@ def build_estimates(regions: dict, titles: dict[str, str | None]) -> tuple[dict,
 
 def write_json(path: Path, regions: dict, calibration: dict, rows: list[dict]) -> None:
     payload = {
-        "schema": "st_nav.estimated_gallery_areas",
+        "schema": "sa_nav.estimated_gallery_areas",
         "schema_version": 2,
         "site": "british_museum",
         "floor": "0",

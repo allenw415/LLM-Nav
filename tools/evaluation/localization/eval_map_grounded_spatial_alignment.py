@@ -12,21 +12,21 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import resolve_model_environment, resolve_task_num_ctx  # noqa: E402
-from st_nav.cli._common import load_json, render_json, resolve_project_path  # noqa: E402
-from st_nav.cli.run_spatial_alignment import (  # noqa: E402
+from sa_nav import resolve_model_environment, resolve_task_num_ctx  # noqa: E402
+from sa_nav.cli._common import load_json, render_json, resolve_project_path  # noqa: E402
+from sa_nav.cli.run_spatial_alignment import (  # noqa: E402
     angular_error_deg,
     expected_orientation_from_manifest,
     load_manifest_observation,
     response_diagnostics,
 )
-from st_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
-from st_nav.experiments.map_grounded_alignment import (  # noqa: E402
+from sa_nav.common.room_profiles import preferred_room_graph_path  # noqa: E402
+from sa_nav.experiments.map_grounded_alignment import (  # noqa: E402
     MapGroundedSpatialAlignmentExperiment,
     render_semantic_map,
     validate_map_regions,
 )
-from st_nav.perception.renderer import sanitize_name  # noqa: E402
+from sa_nav.perception.renderer import sanitize_name  # noqa: E402
 
 
 MODEL_ENV = resolve_model_environment(
@@ -633,7 +633,7 @@ def build_summary(
     selected_records = [record for record in records if record.get("pano_id") in selected_ids]
     completed = [record for record in selected_records if record.get("status") == "completed"]
     return {
-        "schema": "st_nav.map_grounded_bayesian_top5_evaluation",
+        "schema": "sa_nav.map_grounded_bayesian_top5_evaluation",
         "schema_version": 2,
         "sampling_mode": sampling_mode,
         "selected_count": len(selected_cases),

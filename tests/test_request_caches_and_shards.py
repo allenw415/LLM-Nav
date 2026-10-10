@@ -10,10 +10,10 @@ import time
 import unittest
 from unittest import mock
 
-from st_nav.common.prompts import build_visual_detection_localization_schema
-from st_nav.common.request_cache import model_transport_identity, request_fingerprint
-from st_nav.decision.instruction_parser import LLMInstructionParser
-from st_nav.perception.detector import VISUAL_CACHE_VERSION, ViewDetector
+from sa_nav.common.prompts import build_visual_detection_localization_schema
+from sa_nav.common.request_cache import model_transport_identity, request_fingerprint
+from sa_nav.decision.instruction_parser import LLMInstructionParser
+from sa_nav.perception.detector import VISUAL_CACHE_VERSION, ViewDetector
 from tools.evaluation.navigation import evaluate_navigation_batch as evaluator
 from tools.evaluation.navigation import repair_qwen3_vl_8b_no_manifest as qwen_repair
 from tools.evaluation.navigation import run_gemma4_12b_with_trajectory_715 as campaign
@@ -21,14 +21,14 @@ from tools.evaluation.navigation import run_qwen3_vl_8b_earth_resume_715 as qwen
 
 
 MODEL_ENV = {
-    "ST_NAV_ACTIVE_PROFILE": "cachetest",
-    "ST_NAV_PROFILE_CACHETEST_MODEL_PROVIDER": "ollama",
-    "ST_NAV_PROFILE_CACHETEST_MODEL_NAME": "gemma4:test",
-    "ST_NAV_PROFILE_CACHETEST_API_BASE": "http://127.0.0.1:11434/v1",
-    "ST_NAV_PROFILE_CACHETEST_API_KIND": "chat_completions",
-    "ST_NAV_PROFILE_CACHETEST_NUM_CTX": "16384",
-    "ST_NAV_PROFILE_CACHETEST_TEMPERATURE": "0",
-    "ST_NAV_PROFILE_CACHETEST_THINK": "false",
+    "SA_NAV_ACTIVE_PROFILE": "cachetest",
+    "SA_NAV_PROFILE_CACHETEST_MODEL_PROVIDER": "ollama",
+    "SA_NAV_PROFILE_CACHETEST_MODEL_NAME": "gemma4:test",
+    "SA_NAV_PROFILE_CACHETEST_API_BASE": "http://127.0.0.1:11434/v1",
+    "SA_NAV_PROFILE_CACHETEST_API_KIND": "chat_completions",
+    "SA_NAV_PROFILE_CACHETEST_NUM_CTX": "16384",
+    "SA_NAV_PROFILE_CACHETEST_TEMPERATURE": "0",
+    "SA_NAV_PROFILE_CACHETEST_THINK": "false",
 }
 
 

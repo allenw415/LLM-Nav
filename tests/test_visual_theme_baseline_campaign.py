@@ -47,21 +47,21 @@ class VisualThemeBaselineCampaignTests(unittest.TestCase):
             "GEMMA4_API_KEY_WORKER0": "first-secret",
             "GEMMA4_API_KEY_WORKER1": "second-secret",
             "GMAPS_API_KEY": "maps-secret",
-            "ST_NAV_ACTIVE_PROFILE": "ollama",
-            "ST_NAV_PROFILE": "ollama",
+            "SA_NAV_ACTIVE_PROFILE": "ollama",
+            "SA_NAV_PROFILE": "ollama",
         }
 
         worker0 = campaign.worker_environment(base, key_slot=0)
         worker1 = campaign.worker_environment(base, key_slot=1)
 
-        self.assertEqual(worker0["ST_NAV_API_KEY"], "first-secret")
-        self.assertEqual(worker1["ST_NAV_API_KEY"], "second-secret")
-        self.assertEqual(worker0["ST_NAV_MODEL_PROVIDER"], "gemini")
-        self.assertEqual(worker1["ST_NAV_MODEL_NAME"], "gemma-4-31b-it")
-        self.assertEqual(worker0["ST_NAV_ACTIVE_PROFILE"], "gemma4_worker")
-        self.assertEqual(worker1["ST_NAV_PROFILE"], "gemma4_worker")
+        self.assertEqual(worker0["SA_NAV_API_KEY"], "first-secret")
+        self.assertEqual(worker1["SA_NAV_API_KEY"], "second-secret")
+        self.assertEqual(worker0["SA_NAV_MODEL_PROVIDER"], "gemini")
+        self.assertEqual(worker1["SA_NAV_MODEL_NAME"], "gemma-4-31b-it")
+        self.assertEqual(worker0["SA_NAV_ACTIVE_PROFILE"], "gemma4_worker")
+        self.assertEqual(worker1["SA_NAV_PROFILE"], "gemma4_worker")
         self.assertEqual(
-            worker0["ST_NAV_HTTP_RETRY_BACKOFF_SECONDS"],
+            worker0["SA_NAV_HTTP_RETRY_BACKOFF_SECONDS"],
             str(campaign.HTTP_RETRY_BACKOFF_SECONDS),
         )
         for source_name in campaign.WORKER_KEY_ENV_NAMES:
@@ -142,8 +142,8 @@ class VisualThemeBaselineCampaignTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "worker1"):
                 campaign.validate_worker_generation_access(
                     {
-                        "worker0": {"ST_NAV_API_KEY": "working-key"},
-                        "worker1": {"ST_NAV_API_KEY": "depleted-key"},
+                        "worker0": {"SA_NAV_API_KEY": "working-key"},
+                        "worker1": {"SA_NAV_API_KEY": "depleted-key"},
                     }
                 )
         self.assertEqual(checked, ["working-key", "depleted-key"])

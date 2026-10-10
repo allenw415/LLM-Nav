@@ -13,7 +13,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.cli._common import (
+from sa_nav.cli._common import (
     PROJECT_ROOT,
     ensure_project_root_on_path,
     load_json,
@@ -25,7 +25,7 @@ from st_nav.cli._common import (
 
 ensure_project_root_on_path()
 
-from st_nav import (
+from sa_nav import (
     EvidenceScoreLocalizer,
     EntityDetection,
     GroundingIndex,
@@ -692,7 +692,7 @@ def run_perception(args: argparse.Namespace, *, sample: dict, output_path: Path)
     command = [
         sys.executable,
         "-m",
-        "st_nav.cli.run_pano_perception",
+        "sa_nav.cli.run_pano_perception",
         "--artifacts-dir",
         args.artifacts_dir,
         f"--pano-id={sample['pano_id']}",

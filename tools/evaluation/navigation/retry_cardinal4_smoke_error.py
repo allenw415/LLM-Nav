@@ -100,7 +100,7 @@ def main() -> int:
     retry_root.mkdir(parents=True, exist_ok=False)
     log_path = retry_root / "run.log"
     environment = os.environ.copy()
-    environment["ST_NAV_PROFILE_GEMINI_API_KEY"] = keys[TARGET_CONDITION]
+    environment["SA_NAV_PROFILE_GEMINI_API_KEY"] = keys[TARGET_CONDITION]
     condition = next(
         condition
         for condition in campaign.CONDITIONS

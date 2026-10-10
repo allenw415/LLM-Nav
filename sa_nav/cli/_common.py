@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from st_nav.common.room_profiles import preferred_room_graph_path
+from sa_nav.common.room_profiles import preferred_room_graph_path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -68,7 +68,7 @@ def load_normalized_artifacts(
     )
     loaded_grounding = None
     if grounding:
-        from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+        from sa_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 
         loaded_grounding = build_room_grounding_from_pano_room_mapping(
             loaded_room_graph or {},

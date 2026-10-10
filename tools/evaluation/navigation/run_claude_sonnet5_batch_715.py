@@ -15,15 +15,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import (  # noqa: E402
+from sa_nav import (  # noqa: E402
     AnthropicMessageBatchClient,
     PersistentAnthropicBatchBroker,
     load_dotenv,
 )
-from st_nav.common.anthropic_batch_gateway import (  # noqa: E402
+from sa_nav.common.anthropic_batch_gateway import (  # noqa: E402
     start_anthropic_batch_gateway_server,
 )
-from st_nav.evaluation import summarize_batch_results  # noqa: E402
+from sa_nav.evaluation import summarize_batch_results  # noqa: E402
 from tools.evaluation.navigation import (  # noqa: E402
     run_gemma4_12b_with_trajectory_715 as campaign,
 )
@@ -31,7 +31,7 @@ from tools.evaluation.navigation import (  # noqa: E402
 
 MODEL_NAME = "claude-sonnet-5"
 ANTHROPIC_API_BASE = "https://api.anthropic.com/v1"
-LOCAL_GATEWAY_API_KEY = "llm-nav-local-anthropic-batch"
+LOCAL_GATEWAY_API_KEY = "sa-nav-local-anthropic-batch"
 EVALUATOR = PROJECT_ROOT / "tools/evaluation/navigation/evaluate_navigation_batch.py"
 DEFAULT_TEST_SET = PROJECT_ROOT / (
     "outputs/navigation_paths/floor0_semantic_targets_topology_constrained/"
@@ -78,13 +78,13 @@ def worker_environment(base_environment: dict[str, str]) -> dict[str, str]:
     child = dict(base_environment)
     child.update(
         {
-            "ST_NAV_ACTIVE_PROFILE": "claude_batch_worker",
-            "ST_NAV_PROFILE": "claude_batch_worker",
-            "ST_NAV_MODEL_PROVIDER": "anthropic",
-            "ST_NAV_MODEL_NAME": MODEL_NAME,
-            "ST_NAV_API_KIND": "anthropic_messages",
-            "ST_NAV_TEMPERATURE": "0",
-            "ST_NAV_MAX_HTTP_RETRIES": str(MAX_HTTP_RETRIES),
+            "SA_NAV_ACTIVE_PROFILE": "claude_batch_worker",
+            "SA_NAV_PROFILE": "claude_batch_worker",
+            "SA_NAV_MODEL_PROVIDER": "anthropic",
+            "SA_NAV_MODEL_NAME": MODEL_NAME,
+            "SA_NAV_API_KIND": "anthropic_messages",
+            "SA_NAV_TEMPERATURE": "0",
+            "SA_NAV_MAX_HTTP_RETRIES": str(MAX_HTTP_RETRIES),
         }
     )
     return child

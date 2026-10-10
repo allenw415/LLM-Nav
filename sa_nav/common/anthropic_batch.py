@@ -193,7 +193,7 @@ class AnthropicMessageBatchClient:
         self.api_key = (
             api_key
             or os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("ST_NAV_API_KEY")
+            or os.environ.get("SA_NAV_API_KEY")
         )
         self.api_base = api_base.rstrip("/")
         self.workspace_id = workspace_id or os.environ.get("ANTHROPIC_WORKSPACE_ID")
@@ -271,7 +271,7 @@ class AnthropicMessageBatchClient:
         payload: dict | None = None,
     ) -> dict:
         if not self.api_key:
-            raise RuntimeError("Missing ANTHROPIC_API_KEY or ST_NAV_API_KEY.")
+            raise RuntimeError("Missing ANTHROPIC_API_KEY or SA_NAV_API_KEY.")
         url = f"{self.api_base}{path}"
         request = urllib.request.Request(
             url,
@@ -292,7 +292,7 @@ class AnthropicMessageBatchClient:
 
     def _headers(self) -> dict[str, str]:
         if not self.api_key:
-            raise RuntimeError("Missing ANTHROPIC_API_KEY or ST_NAV_API_KEY.")
+            raise RuntimeError("Missing ANTHROPIC_API_KEY or SA_NAV_API_KEY.")
         headers = {
             "Content-Type": "application/json",
             "x-api-key": self.api_key,

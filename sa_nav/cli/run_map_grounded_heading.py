@@ -11,10 +11,10 @@ from ._common import PROJECT_ROOT, ensure_project_root_on_path, load_json, rende
 
 ensure_project_root_on_path()
 
-from st_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
-from st_nav.cli.run_spatial_alignment import request_diagnostics, response_diagnostics  # noqa: E402
-from st_nav.common.env import DEFAULT_GEMINI_API_BASE  # noqa: E402
-from st_nav.experiments.map_grounded_heading import (  # noqa: E402
+from sa_nav import load_dotenv, resolve_model_environment, resolve_task_num_ctx  # noqa: E402
+from sa_nav.cli.run_spatial_alignment import request_diagnostics, response_diagnostics  # noqa: E402
+from sa_nav.common.env import DEFAULT_GEMINI_API_BASE  # noqa: E402
+from sa_nav.experiments.map_grounded_heading import (  # noqa: E402
     DIRECTION_TO_HEADING,
     MAP_MODES,
     MapGroundedHeadingExperiment,
@@ -22,7 +22,7 @@ from st_nav.experiments.map_grounded_heading import (  # noqa: E402
     render_passage_heading_map,
     validate_heading_map_regions,
 )
-from st_nav.perception.renderer import sanitize_name  # noqa: E402
+from sa_nav.perception.renderer import sanitize_name  # noqa: E402
 
 
 load_dotenv(PROJECT_ROOT / ".env")
@@ -193,7 +193,7 @@ def run_experiment(args: argparse.Namespace) -> dict:
     for repeat_index in range(1, args.repeat + 1):
         started = time.perf_counter()
         record: dict = {
-            "schema": "st_nav.map_grounded_heading_run",
+            "schema": "sa_nav.map_grounded_heading_run",
             "schema_version": 1,
             "status": "error",
             "current_room_id": current_room_id,
@@ -255,7 +255,7 @@ def run_experiment(args: argparse.Namespace) -> dict:
 
     metrics = summarize_runs(runs, expected_heading_deg=args.expected_heading_deg)
     summary = {
-        "schema": "st_nav.map_grounded_heading_summary",
+        "schema": "sa_nav.map_grounded_heading_summary",
         "schema_version": 1,
         "current_room_id": current_room_id,
         "target_room_id": target_room_id,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from st_nav.experiments.map_grounded_heading import (
+from sa_nav.experiments.map_grounded_heading import (
     DIRECTION_TO_HEADING,
     MapGroundedHeadingExperiment,
     build_heading_schema,

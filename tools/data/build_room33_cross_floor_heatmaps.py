@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav.spatial.routing import RoutePlanner  # noqa: E402
+from sa_nav.spatial.routing import RoutePlanner  # noqa: E402
 from tools.data.plot_thesis_candidate_heatmaps import (  # noqa: E402
     CandidateMetric,
     _atomic_write_json,

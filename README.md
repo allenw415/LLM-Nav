@@ -1,6 +1,6 @@
-# ST-Nav
+# SA-Nav
 
-Navigation using a spatial transforming method over Street View pano graphs and
+Navigation using Spatial Alignment over Street View panorama graphs and
 site-specific map assets.
 
 ## Current Structure
@@ -8,17 +8,25 @@ site-specific map assets.
 The repository is split into runtime code, review-facing examples, non-runtime
 tools, and persistent dataset assets:
 
-- `st_nav/`: runtime navigation modules
+- `sa_nav/`: runtime navigation modules
 - `examples/`: focused core demos and complete navigation-flow demos
 - `tools/`: evaluation, visualization, and data-preparation tooling
-- `st_nav_data/`: offline data preparation and grounding helpers
+- `sa_nav_data/`: offline data preparation and grounding helpers
 - `dataset/`: site assets and acquisition provenance
+
+## Naming
+
+The project name is **SA-Nav**. Python packages use `sa_nav` and
+`sa_nav_data`, and project-specific environment variables use the `SA_NAV_*`
+prefix. Existing experiment artifacts may still contain legacy `st_nav.*` or
+`llm_nav_*` identifiers; those recorded files are retained as immutable
+historical data, while newly generated artifacts use the SA-Nav naming.
 
 ## Repository Layout
 
 ```text
-ST-Nav/
-  st_nav/
+SA-Nav/
+  sa_nav/
     common/
     decision/
     spatial/
@@ -32,7 +40,7 @@ ST-Nav/
     data/
     evaluation/
     visualization/
-  st_nav_data/
+  sa_nav_data/
     normalize.py
     room_grounder.py
   dataset/
@@ -53,19 +61,19 @@ ST-Nav/
 
 ## Key Directories
 
-- `st_nav/`: runtime code for parsing, spatial reasoning, perception, and execution
-- `st_nav/execution/`: episode step loop after a task and source pano are known
-- `st_nav/pipeline/`: end-to-end workflow orchestration from instruction to final trace; use
+- `sa_nav/`: runtime code for parsing, spatial reasoning, perception, and execution
+- `sa_nav/execution/`: episode step loop after a task and source pano are known
+- `sa_nav/pipeline/`: end-to-end workflow orchestration from instruction to final trace; use
   `build_navigation_pipeline(...)` to assemble the standard runtime components
-- `st_nav/decision/`: instruction parsing and action policy modules
-- `st_nav/spatial/`: grounding, localization, routing, and state update logic
-- `st_nav/perception/`: rendering, detection, and perception providers
+- `sa_nav/decision/`: instruction parsing and action policy modules
+- `sa_nav/spatial/`: grounding, localization, routing, and state update logic
+- `sa_nav/perception/`: rendering, detection, and perception providers
 - `examples/core/`: demos for individual navigation capabilities
 - `examples/flows/`: demos for complete navigation flows
 - `tools/evaluation/`: benchmark and evaluation entrypoints
 - `tools/pano_viewer/`: panorama graph viewer source and exporter
 - `tools/data/`: dataset preparation, grounding, and normalization tools
-- `st_nav_data/`: offline data-centric code such as graph normalization and pano-to-room grounding
+- `sa_nav_data/`: offline data-centric code such as graph normalization and pano-to-room grounding
 - `dataset/sites/`: site-specific assets consumed by the navigation system
 - `dataset/sites/british_museum/explicit_map/`: manually curated semantic map
 - `dataset/sites/british_museum/pano_graph/`: processed Street View pano graph
@@ -84,7 +92,7 @@ Run the standalone eight-image alignment experiment without changing the
 navigation pipeline:
 
 ```bash
-python3 -m st_nav.cli.run_spatial_alignment \
+python3 -m sa_nav.cli.run_spatial_alignment \
   --pano-id JK44-iXUvic1mv3GUGMaUQ \
   --render-output-dir renders/room_grounding_fov90 \
   --candidate-top-k 5
@@ -107,7 +115,7 @@ eight clockwise panorama views. It reuses cached Top-5 room candidates but does
 not send their scores or ranks to the alignment VLM:
 
 ```bash
-python3 -m st_nav.cli.run_map_grounded_spatial_alignment \
+python3 -m sa_nav.cli.run_map_grounded_spatial_alignment \
   --pano-id JK44-iXUvic1mv3GUGMaUQ \
   --render-output-dir renders/room_grounding_fov90 \
   --candidate-top-k 5 \
@@ -141,7 +149,7 @@ Run one passage-heading case using only a north-up map plus the current and
 target room IDs:
 
 ```bash
-python3 -m st_nav.cli.run_map_grounded_heading \
+python3 -m sa_nav.cli.run_map_grounded_heading \
   --current-room-id "Room 6" \
   --target-room-id "Room 7" \
   --repeat 3
@@ -199,7 +207,7 @@ content difference are retained as experimental history.
 
 ## Notes
 
-- Runtime package exports live in `st_nav/__init__.py`.
+- Runtime package exports live in `sa_nav/__init__.py`.
 - Generated artifacts under `renders/`, `outputs/`, `artifacts/pano_viewer/`,
   legacy `artifacts/pano_visualization/`, and room grounding batch outputs are ignored by git.
 - Dataset layout details are documented in

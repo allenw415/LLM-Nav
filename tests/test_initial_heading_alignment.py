@@ -5,10 +5,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from st_nav.common.types import Observation, RenderedView
-from st_nav.spatial.engine import SpatialEngine
-from st_nav.spatial.grounding import GroundingIndex
-from st_nav.spatial.localization import SpatialAlignmentRefiner
+from sa_nav.common.types import Observation, RenderedView
+from sa_nav.spatial.engine import SpatialEngine
+from sa_nav.spatial.grounding import GroundingIndex
+from sa_nav.spatial.localization import SpatialAlignmentRefiner
 
 
 class InitialHeadingAlignmentTest(unittest.TestCase):

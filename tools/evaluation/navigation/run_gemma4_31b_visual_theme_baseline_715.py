@@ -15,9 +15,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import load_dotenv
-from st_nav.common.model_client import ModelResponseClient
-from st_nav.evaluation import summarize_batch_results
+from sa_nav import load_dotenv
+from sa_nav.common.model_client import ModelResponseClient
+from sa_nav.evaluation import summarize_batch_results
 from tools.evaluation.navigation import run_gemma4_12b_with_trajectory_715 as campaign
 
 
@@ -82,18 +82,18 @@ def worker_environment(base_environment: dict[str, str], *, key_slot: int) -> di
     # unrelated profile (for example Ollama) from .env. There are intentionally
     # no profile-scoped GEMMA4_WORKER settings, so resolution falls through to
     # the worker-specific generic settings below.
-    child["ST_NAV_ACTIVE_PROFILE"] = "gemma4_worker"
-    child["ST_NAV_PROFILE"] = "gemma4_worker"
+    child["SA_NAV_ACTIVE_PROFILE"] = "gemma4_worker"
+    child["SA_NAV_PROFILE"] = "gemma4_worker"
     child.update(
         {
-            "ST_NAV_MODEL_PROVIDER": "gemini",
-            "ST_NAV_MODEL_NAME": MODEL_NAME,
-            "ST_NAV_API_KEY": api_key.strip(),
-            "ST_NAV_API_BASE": GEMINI_API_BASE,
-            "ST_NAV_API_KIND": API_KIND,
-            "ST_NAV_TEMPERATURE": "0",
-            "ST_NAV_MAX_HTTP_RETRIES": str(MAX_HTTP_RETRIES),
-            "ST_NAV_HTTP_RETRY_BACKOFF_SECONDS": str(HTTP_RETRY_BACKOFF_SECONDS),
+            "SA_NAV_MODEL_PROVIDER": "gemini",
+            "SA_NAV_MODEL_NAME": MODEL_NAME,
+            "SA_NAV_API_KEY": api_key.strip(),
+            "SA_NAV_API_BASE": GEMINI_API_BASE,
+            "SA_NAV_API_KIND": API_KIND,
+            "SA_NAV_TEMPERATURE": "0",
+            "SA_NAV_MAX_HTTP_RETRIES": str(MAX_HTTP_RETRIES),
+            "SA_NAV_HTTP_RETRY_BACKOFF_SECONDS": str(HTTP_RETRY_BACKOFF_SECONDS),
         }
     )
     return child
@@ -117,7 +117,7 @@ def validate_worker_generation_access(
     for worker_name, environment in worker_environments.items():
         client = ModelResponseClient(
             provider="gemini",
-            api_key=environment["ST_NAV_API_KEY"],
+            api_key=environment["SA_NAV_API_KEY"],
             api_base=GEMINI_API_BASE,
             api_kind=API_KIND,
             request_timeout=60.0,

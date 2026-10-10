@@ -13,8 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import load_dotenv
-from st_nav.evaluation import summarize_batch_results
+from sa_nav import load_dotenv
+from sa_nav.evaluation import summarize_batch_results
 from tools.evaluation.navigation import run_gemma4_31b_visual_theme_baseline_715 as baseline
 
 

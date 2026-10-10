@@ -16,7 +16,7 @@ from ._common import (
 
 ensure_project_root_on_path()
 
-from st_nav import (
+from sa_nav import (
     EvidenceScoreLocalizer,
     EntityDetection,
     GroundingIndex,
@@ -28,9 +28,9 @@ from st_nav import (
     resolve_model_environment,
     resolve_task_num_ctx,
 )
-from st_nav.common.room_profiles import preferred_room_graph_path
-from st_nav_data.normalize import normalize_pano_graph, normalize_room_graph
-from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+from sa_nav.common.room_profiles import preferred_room_graph_path
+from sa_nav_data.normalize import normalize_pano_graph, normalize_room_graph
+from sa_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
 
 load_dotenv(PROJECT_ROOT / ".env")
 MODEL_ENV = resolve_model_environment(

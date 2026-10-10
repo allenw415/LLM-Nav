@@ -10,8 +10,8 @@ import shutil
 import tempfile
 from typing import Iterable, Sequence
 
-from st_nav.common.model_client import MODEL_TELEMETRY_COUNTER_KEYS
-from st_nav.perception.renderer import (
+from sa_nav.common.model_client import MODEL_TELEMETRY_COUNTER_KEYS
+from sa_nav.perception.renderer import (
     expected_capture_headings,
     expected_capture_labels,
     manifest_cache_miss_reason,

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from st_nav.common.types import BeliefState, CandidateAction, Observation, PolicyOutput, TaskSpec
-from st_nav.execution.episode_runner import EpisodeRunner
-from st_nav.pipeline.factory import NavigationPipelineConfig
-from st_nav.spatial.state import StateEstimator
+from sa_nav.common.types import BeliefState, CandidateAction, Observation, PolicyOutput, TaskSpec
+from sa_nav.execution.episode_runner import EpisodeRunner
+from sa_nav.pipeline.factory import NavigationPipelineConfig
+from sa_nav.spatial.state import StateEstimator
 
 
 class _GroundingIndex:

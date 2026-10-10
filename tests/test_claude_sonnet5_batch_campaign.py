@@ -59,9 +59,9 @@ class ClaudeSonnet5BatchCampaignTests(unittest.TestCase):
         environment = campaign.worker_environment({"KEEP": "yes"})
 
         self.assertEqual(environment["KEEP"], "yes")
-        self.assertEqual(environment["ST_NAV_MODEL_PROVIDER"], "anthropic")
-        self.assertEqual(environment["ST_NAV_MODEL_NAME"], "claude-sonnet-5")
-        self.assertEqual(environment["ST_NAV_API_KIND"], "anthropic_messages")
+        self.assertEqual(environment["SA_NAV_MODEL_PROVIDER"], "anthropic")
+        self.assertEqual(environment["SA_NAV_MODEL_NAME"], "claude-sonnet-5")
+        self.assertEqual(environment["SA_NAV_API_KIND"], "anthropic_messages")
 
 
 if __name__ == "__main__":

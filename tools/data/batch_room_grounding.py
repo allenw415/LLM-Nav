@@ -11,10 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from st_nav import PanoramaRenderer, load_dotenv
-from st_nav_data.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
-from st_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
-from st_nav_data.room_grounder import (
+from sa_nav import PanoramaRenderer, load_dotenv
+from sa_nav_data.normalize import BRITISH_MUSEUM_EXPERIMENT_ROOM_IDS
+from sa_nav_data.pano_room_grounding import build_room_grounding_from_pano_room_mapping
+from sa_nav_data.room_grounder import (
     ModelRoomGrounder,
     build_compact_pano_room_mapping,
     build_manual_annotation_records,
